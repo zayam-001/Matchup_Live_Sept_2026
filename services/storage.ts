@@ -73,19 +73,19 @@ try {
     try {
         db = initializeFirestore(app, {
           localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-        });
+        }, (firebaseConfig as any).firestoreDatabaseId);
     } catch (e: any) {
         if (e.message && e.message.includes('already been called')) {
-            db = getFirestore(app);
+            db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
         } else {
             console.warn("⚠️ Failed to initialize persistent local cache. Falling back to memory local cache.", e);
             try {
                 db = initializeFirestore(app, {
                     localCache: memoryLocalCache()
-                });
+                }, (firebaseConfig as any).firestoreDatabaseId);
             } catch (err: any) {
                 if (err.message && err.message.includes('already been called')) {
-                    db = getFirestore(app);
+                    db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
                 } else {
                     throw err;
                 }
