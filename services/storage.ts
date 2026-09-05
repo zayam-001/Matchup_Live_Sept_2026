@@ -72,7 +72,8 @@ try {
     // Enable offline persistence and fix connection issues in sandboxed environments
     try {
         db = initializeFirestore(app, {
-          localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+          localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+          experimentalForceLongPolling: true
         }, (firebaseConfig as any).firestoreDatabaseId);
     } catch (e: any) {
         if (e.message && e.message.includes('already been called')) {
@@ -81,7 +82,8 @@ try {
             console.warn("⚠️ Failed to initialize persistent local cache. Falling back to memory local cache.", e);
             try {
                 db = initializeFirestore(app, {
-                    localCache: memoryLocalCache()
+                    localCache: memoryLocalCache(),
+                    experimentalForceLongPolling: true
                 }, (firebaseConfig as any).firestoreDatabaseId);
             } catch (err: any) {
                 if (err.message && err.message.includes('already been called')) {
