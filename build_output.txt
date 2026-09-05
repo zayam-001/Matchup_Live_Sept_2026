@@ -1,0 +1,52 @@
+
+> match-up-t2@0.0.0 build
+> vite build
+
+vite v6.2.0 building for production...
+transforming...
+✓ 3115 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                                        5.78 kB │ gzip:   2.57 kB
+dist/assets/barlow-vietnamese-400-normal-BFeobeCK.woff                 6.09 kB
+dist/assets/barlow-condensed-vietnamese-700-normal-DhIzd8Tb.woff       6.10 kB
+dist/assets/barlow-vietnamese-500-normal-GNfB7rCE.woff                 6.15 kB
+dist/assets/bebas-neue-latin-ext-400-normal-HFKRJXnW.woff              7.52 kB
+dist/assets/barlow-vietnamese-400-normal-Dpl4UHAZ.woff2                7.59 kB
+dist/assets/barlow-condensed-vietnamese-700-normal-DYeBwlKR.woff2      7.64 kB
+dist/assets/barlow-vietnamese-500-normal-zTViEIzf.woff2                7.67 kB
+dist/assets/bebas-neue-latin-ext-400-normal-DWiEslNC.woff2             8.93 kB
+dist/assets/bebas-neue-latin-400-normal-Bi-ndsyu.woff                 11.18 kB
+dist/assets/barlow-condensed-latin-ext-700-normal-BIHFfxf0.woff       11.99 kB
+dist/assets/barlow-latin-ext-400-normal-CvBsJvxq.woff                 12.31 kB
+dist/assets/barlow-latin-ext-500-normal-CJPcKP2Q.woff                 12.41 kB
+dist/assets/bebas-neue-latin-400-normal-9mHNbWWO.woff2                13.77 kB
+dist/assets/barlow-latin-ext-400-normal-HxX4XjxC.woff2                14.27 kB
+dist/assets/barlow-latin-ext-500-normal-DOaysfXq.woff2                14.42 kB
+dist/assets/barlow-condensed-latin-ext-700-normal-CwuXbfVR.woff2      14.64 kB
+dist/assets/barlow-condensed-latin-700-normal-Dmwat-ge.woff           18.82 kB
+dist/assets/barlow-latin-500-normal-C1h8hMer.woff                     19.52 kB
+dist/assets/barlow-latin-400-normal-fsAxiSwU.woff                     19.58 kB
+dist/assets/barlow-latin-500-normal-BPAOfeC8.woff2                    22.01 kB
+dist/assets/barlow-latin-400-normal-qiz4-Cze.woff2                    22.20 kB
+dist/assets/barlow-condensed-latin-700-normal-v1xN8_Wq.woff2          22.44 kB
+dist/assets/open-sauce-sans-latin-700-normal-CK0NdHF9.woff2           24.99 kB
+dist/assets/open-sauce-sans-latin-500-normal-BHO6Eik-.woff2           25.09 kB
+dist/assets/open-sauce-sans-latin-600-normal-CojrWn5c.woff2           25.11 kB
+dist/assets/open-sauce-sans-latin-800-normal-sc-qgB3L.woff2           25.62 kB
+dist/assets/open-sauce-sans-latin-900-normal-017Xqxyn.woff2           25.82 kB
+dist/assets/open-sauce-sans-latin-400-normal-BqhVZsU3.woff            30.84 kB
+dist/assets/open-sauce-sans-latin-700-normal-DLJpII39.woff            31.67 kB
+dist/assets/open-sauce-sans-latin-600-normal-wuqHl-r0.woff            31.82 kB
+dist/assets/open-sauce-sans-latin-500-normal-GTntgBUe.woff            32.01 kB
+dist/assets/open-sauce-sans-latin-800-normal-DdMndq2z.woff            32.56 kB
+dist/assets/open-sauce-sans-latin-900-normal-7qcGr8rK.woff            32.80 kB
+dist/assets/open-sauce-sans-latin-400-normal-VgbLXiRr.woff2           50.14 kB
+dist/assets/index-Bc4g-j33.css                                       213.71 kB │ gzip:  28.66 kB
+dist/assets/matchCompletion-CwLjwajC.js                                1.20 kB │ gzip:   0.59 kB
+dist/assets/analyticsEngine-gROL0Qmb.js                                4.70 kB │ gzip:   1.62 kB
+dist/assets/purify.es-BgtpMKW3.js                                     22.77 kB │ gzip:   8.79 kB
+dist/assets/index.es-D7QdIww_.js                                     159.56 kB │ gzip:  53.52 kB
+dist/assets/html2canvas.esm-QH1iLAAe.js                              201.50 kB │ gzip:  48.04 kB
+dist/assets/index-D0mjYB5R.js                                      3,821.56 kB │ gzip: 952.72 kB
+✓ built in 48.27s

@@ -1,0 +1,275 @@
+/* Page — full 1920×1080 transparent canvas with flexible scaling */
+.obsPage {
+  width: 100%;
+  height: 100vh;
+  max-width: 1920px;
+  max-height: 1080px;
+  position: relative;
+  background: transparent;
+  overflow: hidden;
+  margin: 0 auto;
+}
+
+/* Card — bottom-left corner, fixed width */
+.obsCard {
+  position: absolute;
+  bottom: 48px;
+  left: 48px;
+  width: 650px;
+  border-radius: 10px;
+  overflow: hidden;
+  font-family: 'Bebas Neue', sans-serif;
+  box-shadow: 0 12px 60px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.06);
+  will-change: transform;
+}
+
+/* ── HEADER ─────────────────────────────────────────────── */
+.obsHdr {
+  background: #1A56DB;
+  padding: 8px 22px 8px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Travelling shimmer on header */
+.obsHdrShimmer {
+  position: absolute;
+  top: 0; left: -100%; bottom: 0;
+  width: 55%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.13), transparent);
+  animation: hdrShimmer 4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes hdrShimmer {
+  0%   { left: -100%; }
+  100% { left: 220%;  }
+}
+
+.obsLogoWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 120px;
+  background: #2563EB;
+  padding: 0 10px;
+  perspective: 1000px;
+  animation: wrapPulse 5s ease-in-out infinite;
+}
+@keyframes wrapPulse {
+  0%, 100% { background: #2563EB; }
+  50% { background: #1D4ED8; }
+}
+
+.obsLogoSvg {
+  width: 80px;
+  height: 80px;
+  will-change: filter, transform;
+  transform-style: preserve-3d;
+  animation: logoBreathe 5s ease-in-out infinite, flipLogo 4s infinite ease-in-out;
+}
+@keyframes logoBreathe {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(255,255,255,0.2)); }
+  50%       { filter: drop-shadow(0 0 16px rgba(255,255,255,0.55)); }
+}
+@keyframes flipLogo {
+  0% { transform: rotateY(0deg); }
+  100% { transform: rotateY(360deg); }
+}
+
+.obsHdrRight {
+  text-align: right;
+  line-height: 1.15;
+}
+.obsCourtTxt {
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.82);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  display: block;
+}
+.obsMatchTitle {
+  font-size: 28px;
+  color: #ffffff;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
+/* ── BODY ───────────────────────────────────────────────── */
+.obsBody {
+  background: #0c1220;
+  display: flex;
+  align-items: stretch;
+}
+.obsTeams {
+  flex: 1;
+  min-width: 0;
+}
+.obsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 22px;
+  gap: 16px;
+}
+.obsRow:first-child {
+  border-bottom: 2px solid rgba(255,255,255,0.07);
+}
+.obsTname {
+  font-size: 34px;
+  color: #ffffff;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.obsSets {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.obsSbox {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 28px;
+  color: #ffffff;
+  line-height: 1;
+  background: rgba(255,255,255,0.07);
+  border: 2px solid rgba(255,255,255,0.15);
+  will-change: transform;
+  transition: background 0.2s, border-color 0.2s;
+}
+.win {
+  background: rgba(26,86,219,0.55);
+  border-color: #4a7dfa;
+}
+.liveScoreValue {
+  color: #E65C31; /* Highlight the live score points specially */
+  font-weight: bold;
+}
+
+/* ── FOOTER ─────────────────────────────────────────────── */
+.obsFoot {
+  background: #0c1220;
+  padding: 8px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 2px solid rgba(255,255,255,0.05);
+}
+
+/* Full badge flashes — whole LIVE indicator dims and recovers */
+.obsLive {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: liveFlash 2.4s ease-in-out infinite;
+}
+@keyframes liveFlash {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.28; }
+}
+
+.liveDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ff3333;
+  flex-shrink: 0;
+  animation: dotScale 2.4s ease-in-out infinite;
+}
+@keyframes dotScale {
+  0%, 100% { transform: scale(1);    box-shadow: 0 0 10px rgba(255,51,51,0.8); }
+  50%       { transform: scale(0.6); box-shadow: none; }
+}
+
+.liveTxt {
+  font-family: 'Inter', sans-serif;
+  font-size: 19px;
+  font-weight: 800;
+  color: #ff3333;
+  letter-spacing: 0.18em;
+}
+.obsFootInfo {
+  font-family: 'Inter', sans-serif;
+  font-size: 17px;
+  color: rgba(255,255,255,0.28);
+  letter-spacing: 0.05em;
+}
+
+/* ── STING LAYER ────────────────────────────────────────── */
+/* Sits absolutely over the card — controlled entirely by GSAP */
+.stingLayer {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 12, 28, 0.96);
+  display: none;              /* GSAP sets to flex when active */
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 50;
+}
+
+/* Horizontal rule that draws in from left */
+.stingRule {
+  height: 4px;
+  background: #1A56DB;
+  width: 0%;
+  border-radius: 2px;
+}
+
+/* Logo + tagline group */
+.stingBody {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  opacity: 0;
+}
+
+.stingLogo {
+  width: 96px;
+  height: 96px;
+  flex-shrink: 0;
+}
+
+.stingWords {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stingTaglineTop {
+  font-family: 'Inter', sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  color: rgba(100, 160, 255, 0.9);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  display: block;
+  opacity: 0;
+}
+
+.stingTaglineBot {
+  font-family: 'Inter', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: rgba(100, 160, 255, 0.6);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  display: block;
+  opacity: 0;
+}

@@ -1,0 +1,1 @@
+sed -i 's/if (format === TournamentFormat.ROUND_ROBIN && stageUpper !== "GROUP") {/const stageUpper = m.stage?.toUpperCase();\n        if (format === TournamentFormat.ROUND_ROBIN \&\& stageUpper !== "GROUP") {/g' services/storage.ts

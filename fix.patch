@@ -1,0 +1,32 @@
+--- services/storage.ts
++++ services/storage.ts
+@@ -2580,24 +2580,24 @@
+     if (db) {
+         const tRef = doc(db, "tournaments", tId);
+         const tSnap = await getDoc(tRef);
+         if (tSnap.exists()) {
+             const t = tSnap.data() as Tournament;
+-            const isAmericano = t.format === 'AMERICANO';
++            const isAmericanoMode = t.format === 'AMERICANO' || t.format === 'MEXICANO';
+             const updatedTeams = t.teams.map(team => {
+                 if (team.id === teamId) {
+-                    const updated = { ...team, name };
+-                    if (updated.player1) updated.player1.name = player1Name;
+-                    if (updated.player2) updated.player2.name = player2Name;
++                    // Safely create a deep clone to avoid mutating Firestore cached objects
++                    const updated = JSON.parse(JSON.stringify(team));
++                    updated.name = name;
++                    if (updated.player1) updated.player1.name = player1Name;
++                    if (updated.player2 && !isAmericanoMode && player2Name !== undefined) updated.player2.name = player2Name;
+                     return updated;
+                 }
+                 return team;
+             });
+-            await updateDoc(tRef, { teams: updatedTeams });
++            await updateDoc(tRef, cleanData({ teams: updatedTeams }));
+ 
+             const formatPlayerNames = (p1?: string, p2?: string) => {
+-                if (isAmericano) return p1 || '';
++                if (isAmericanoMode) return p1 || '';
+                 return [p1, p2].filter(Boolean).join(' & ');
+             };
