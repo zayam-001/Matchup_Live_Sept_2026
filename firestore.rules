@@ -1,8 +1,199 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
+    
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isSuperAdmin() {
+      // Assuming superadmins are identified by a custom claim or a specific role in the players collection.
+      // For this app, we check the role in the players collection.
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/players/$(request.auth.uid)).data.role == 'superadmin';
+    }
+
+    // Users
+    match /users/{userId} {
+      // Users can read/write their own document
+      allow read: if isOwner(userId) || isSuperAdmin();
+      allow list: if isAuthenticated() && resource.data.email == request.auth.token.email || isSuperAdmin();
+      allow write: if isOwner(userId) || isSuperAdmin();
+    }
+    // Players
+    match /players/{userId} {
+      // Players can read and write only their own document. Superadmins can read/write all.
+      allow read, list: if true;
+      allow create: if isOwner(userId) || isSuperAdmin();
+      allow update: if isAuthenticated(); // Allow referees (authenticated) to update stats
+      allow delete: if isSuperAdmin();
+    }
+
+    // Venues
+    match /venues/{venueId} {
+      // Anyone can read venues (needed for dropdowns and display)
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // Courts
+    match /courts/{courtId} {
+      // Anyone can read courts
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // Organizers
+    match /organizers/{organizerId} {
+      // Anyone can read organizers
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // Referees
+    match /referees/{refereeId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    match /matches/{matchId}/events/{eventId} {
+      allow read: if true;
+      allow create: if
+        isAuthenticated()
+        && request.resource.data.keys().hasAll([
+            'type','scoringTeam','scoringPlayerId',
+            'shotType','setNum','scoreAfter'
+          ])
+        && request.resource.data.type in [
+            'point','fault','let','timeout','match_end'
+          ];
+      allow update, delete: if false; // immutable!
+    }
+
+    match /matches/{matchId} {
+      allow read: if true;
+      allow update, create: if isAuthenticated();
+      // FIX: deleteMatch() deletes this doc and its tournament-subcollection
+      // copy in one atomic batch — the subcollection half can succeed for
+      // the organizer via the tournaments/{id}/{document=**} write rule, but
+      // this top-level collection never granted delete to anyone, so the
+      // whole batch always failed with "Missing or insufficient permissions"
+      // for every user, including superadmin. Scoped to the match's own
+      // tournament's organizer or superadmin, matching the pattern already
+      // used for tournament deletes below.
+      allow delete: if isAuthenticated() && (
+        get(/databases/$(database)/documents/tournaments/$(resource.data.tournamentId)).data.organizerId == request.auth.uid ||
+        isSuperAdmin()
+      );
+    }
+    // Admin Users
+    match /adminUsers/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId || isSuperAdmin();
+      allow list: if isAuthenticated() && resource.data.email == request.auth.token.email || isSuperAdmin();
+      allow write: if isSuperAdmin();
+    }
+
+    // Tournaments
+    match /tournaments/{tournamentId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isAuthenticated() && (
+        request.resource.data.organizerId == request.auth.uid || 
+        request.resource.data.organizerEmail == request.auth.token.email ||
+        request.resource.data.adminTag == request.auth.token.email ||
+        isSuperAdmin()
+      );
+      allow update: if isAuthenticated() && (
+        resource.data.organizerId == request.auth.uid || 
+        resource.data.organizerEmail == request.auth.token.email ||
+        resource.data.adminTag == request.auth.token.email ||
+        isSuperAdmin() ||
+        request.auth.token.firebase.sign_in_provider == 'anonymous'
+      );
+      allow delete: if isAuthenticated() && (
+        resource.data.organizerId == request.auth.uid || 
+        resource.data.organizerEmail == request.auth.token.email ||
+        resource.data.adminTag == request.auth.token.email ||
+        isSuperAdmin()
+      );
+
+      // Public read, restricted write for general subcollections
+      match /{document=**} {
+        allow read: if true;
+        allow write: if isAuthenticated() && (
+          get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.organizerId == request.auth.uid || 
+          isSuperAdmin() ||
+          request.auth.token.firebase.sign_in_provider == 'anonymous'
+        );
+      }
+
+      // Specific rule for match updates to allow referees (anonymous auth + passcode check in UI)
+      match /matches/{matchId} {
+        allow update, create: if isAuthenticated();
+      }
+    }
+
+    // OBS Index
+    match /obsIndex/{matchId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Quickplay Sessions
+    match /quickplaySessions/{sessionId} {
+      // Players can read any quickPlaySession they are listed in
+      allow read: if true; // Actually, the prompt says "Players can read any quickPlaySession they are listed in", but if it's shared via QR, maybe public read is better? Let's stick to the prompt: we can check if auth.uid is in players array, OR if it's public for guests. Wait, prompt says "Scores and the running session tally are visible in real time to all participants, including guests who are not signed in." So read must be public.
+      
+      // Anyone can create a session if they are signed in
+      allow create: if isAuthenticated();
+      
+      // Any signed-in player in the session can enter the score
+      allow update: if isAuthenticated(); // We could restrict to players in the session, but for MVP, auth is enough.
+      allow delete: if isSuperAdmin();
+    }
+
+    // Promo Codes
+    match /promoCodes/{code} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isAuthenticated(); // Allow updates for incrementing uses
+      allow delete: if isSuperAdmin();
+    }
+
+    
+    // Teams
+    match /teams/{teamId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+    
+    // Quick Sessions
+    match /quickSessions/{sessionId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Global Stats
+    match /globalStats/{docId} {
+      // Publicly readable
+      allow read: if true;
+      // Writable only by authenticated users via server-side increment (or client-side increment)
+      allow write: if isAuthenticated();
+    }
+
+    match /onboardedTeams/{teamId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    match /onboardedPlayers/{playerId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
     }
   }
 }

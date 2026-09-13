@@ -1,6 +1,6 @@
 {
   "firestore": {
-    "database": "ai-studio-matchupcompk-000e1464-9437-40ff-9865-3555fd0331b5",
+    "database": "(default)",
     "rules": "firestore.rules"
   },
   "hosting": {
