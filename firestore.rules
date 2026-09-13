@@ -52,7 +52,27 @@ service cloud.firestore {
     match /organizers/{organizerId} {
       // Anyone can read organizers
       allow read: if true;
-      allow write: if isSuperAdmin();
+      // FIX (found live via local testing of the real app): deductOrganiserCredits/
+      // refundOrganiserCredits run as the ORGANIZER'S OWN session (self-service
+      // credit spend when creating a tournament), not as a superadmin —
+      // write:if isSuperAdmin() made every real organizer's tournament
+      // creation fail with "Failed to deduct credits" even with credits
+      // available. An organizer may now update ONLY their own
+      // matchCreditsRemaining/matchCreditsUsed split, and only in a way that
+      // conserves the total (remaining+used must stay unchanged) — covers
+      // both deduction and refund while making it impossible for an
+      // organizer to grant themselves new credits by crafting an arbitrary
+      // client write. Every other field stays superadmin-only.
+      allow update: if isSuperAdmin() || (
+        isOwner(organizerId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['matchCreditsRemaining', 'matchCreditsUsed']) &&
+        request.resource.data.matchCreditsRemaining is number &&
+        request.resource.data.matchCreditsUsed is number &&
+        request.resource.data.matchCreditsRemaining >= 0 &&
+        (request.resource.data.matchCreditsRemaining + request.resource.data.matchCreditsUsed) ==
+          (resource.data.matchCreditsRemaining + resource.data.matchCreditsUsed)
+      );
+      allow create, delete: if isSuperAdmin();
     }
 
     // Referees
