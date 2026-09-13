@@ -749,7 +749,7 @@ export const Auth: React.FC<{
                                             {tournamentId ? (
                                                 <div className="bg-surface-panel p-4 rounded-xl border border-brand/20 mb-4">
                                                     <div className="text-xs font-bold uppercase tracking-widest text-brand mb-1">Tournament</div>
-                                                    <div className="text-white font-bold">{tournaments.find(t => t.id === tournamentId)?.name || "Loading..."}</div>
+                                                    <div className="text-white font-bold">{tournaments.find(t => t.id === tournamentId || t.slug === tournamentId)?.name || "Loading..."}</div>
                                                 </div>
                                             ) : (
                                                 <div>

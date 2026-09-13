@@ -1217,7 +1217,11 @@ export const getOrganiserCredits = async (uid: string) => {
         return { matchCreditsRemaining: 100, matchCreditsUsed: 0 }; // Default mock
     }
     try {
-        const docRef = doc(db, 'organisers', uid);
+        // BUG FIX (found live via local testing): canonical collection is
+        // 'organizers' (American spelling) — this read the legacy
+        // 'organisers' collection, which has no real data and no rule
+        // block, so this always failed with permission-denied.
+        const docRef = doc(db, 'organizers', uid);
         const snap = await getDoc(docRef);
         if (snap.exists()) {
             return snap.data();
@@ -1240,23 +1244,30 @@ export const deductOrganiserCredits = async (uid: string, creditsToDeduct: numbe
         return true;
     }
     try {
-        const docRef = doc(db, 'organisers', uid);
-        const snap = await getDoc(docRef);
-        if (!snap.exists()) return false;
-        
-        const data = snap.data();
-        const currentRemaining = data.matchCreditsRemaining || 0;
-        const currentUsed = data.matchCreditsUsed || 0;
-        
-        if (currentRemaining < creditsToDeduct) {
-            return false;
-        }
+        // BUG FIX: same 'organisers'->'organizers' fix as getOrganiserCredits
+        // above. Also made atomic via runTransaction — the previous plain
+        // getDoc()+updateDoc() pair was a lost-update race: two concurrent
+        // deductions could both read the same starting balance and the
+        // second write would silently clobber the first's deduction.
+        const docRef = doc(db, 'organizers', uid);
+        return await runTransaction(db, async (tx) => {
+            const snap = await tx.get(docRef);
+            if (!snap.exists()) return false;
 
-        await updateDoc(docRef, {
-            matchCreditsRemaining: currentRemaining - creditsToDeduct,
-            matchCreditsUsed: currentUsed + creditsToDeduct
+            const data = snap.data();
+            const currentRemaining = data.matchCreditsRemaining || 0;
+            const currentUsed = data.matchCreditsUsed || 0;
+
+            if (currentRemaining < creditsToDeduct) {
+                return false;
+            }
+
+            tx.update(docRef, {
+                matchCreditsRemaining: currentRemaining - creditsToDeduct,
+                matchCreditsUsed: currentUsed + creditsToDeduct
+            });
+            return true;
         });
-        return true;
     } catch (err) {
         console.error("Failed to deduct credits", err);
         return false;
@@ -1273,19 +1284,23 @@ export const refundOrganiserCredits = async (uid: string, creditsToRefund: numbe
         return true;
     }
     try {
-        const docRef = doc(db, 'organisers', uid);
-        const snap = await getDoc(docRef);
-        if (!snap.exists()) return false;
-        
-        const data = snap.data();
-        const currentRemaining = data.matchCreditsRemaining || 0;
-        const currentUsed = data.matchCreditsUsed || 0;
+        // BUG FIX: same 'organisers'->'organizers' fix, made atomic for the
+        // same lost-update race reason as deductOrganiserCredits above.
+        const docRef = doc(db, 'organizers', uid);
+        return await runTransaction(db, async (tx) => {
+            const snap = await tx.get(docRef);
+            if (!snap.exists()) return false;
 
-        await updateDoc(docRef, {
-            matchCreditsRemaining: currentRemaining + creditsToRefund,
-            matchCreditsUsed: Math.max(0, currentUsed - creditsToRefund)
+            const data = snap.data();
+            const currentRemaining = data.matchCreditsRemaining || 0;
+            const currentUsed = data.matchCreditsUsed || 0;
+
+            tx.update(docRef, {
+                matchCreditsRemaining: currentRemaining + creditsToRefund,
+                matchCreditsUsed: Math.max(0, currentUsed - creditsToRefund)
+            });
+            return true;
         });
-        return true;
     } catch (err) {
         console.error("Failed to refund credits", err);
         return false;
@@ -1516,7 +1531,7 @@ export const enrollTeamManually = async (tId: string, team: Omit<Team, 'id' | 's
             // Send confirmation emails
             const mailCollection = collection(db, 'mail');
             const players = [newTeam.player1, newTeam.player2].filter(p => !!p.email);
-            
+
             for (const player of players) {
                 await addDoc(mailCollection, {
                     to: player.email,
@@ -3442,6 +3457,17 @@ export const triggerBroadcastEvent = async (...args: any[]) => {
 
 
 export const loginReferee = async (...args: any[]) => {
+    // FIX (found live via local testing): this was a no-op stub, so a referee
+    // who entered the correct passcode got a client-side "authenticated" flag
+    // (tracked only in localStorage) but no real Firebase Auth session ever
+    // formed. Every subsequent Firestore write the referee makes (starting a
+    // match, submitting a score) requires isAuthenticated() and silently
+    // failed with permission-denied for anyone opening the referee link fresh
+    // (no pre-existing session in that browser) — i.e. every real referee
+    // scanning the QR code at the venue.
+    if (auth && !auth.currentUser) {
+        await signInAnonymously(auth);
+    }
     return true;
 };
 
