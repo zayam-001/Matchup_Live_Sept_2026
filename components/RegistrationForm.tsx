@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { subscribeToTournaments, subscribeToTournament, registerTeam, getPlayerSquads, uploadSystemImage } from '../services/storage';
+import { toast } from './Toast';
 import { Tournament, Sponsor, SponsorTier, Squad } from '../types';
 import { User, Phone, Mail, Users, CheckCircle, Camera, ChevronRight, MapPin, AlertCircle, Plus, Search, Calendar, Trophy } from 'lucide-react';
 import { Card } from './ui/Card';
@@ -155,9 +156,9 @@ export const RegistrationForm: React.FC<{ initialTournamentId?: string }> = ({ i
             }
         });
         setSubmitted(true);
-    } catch (err) {
-        alert("Error registering team.");
+    } catch (err: any) {
         console.error(err);
+        toast.error("Couldn't register your team", err?.message || "Please check your details and try again.");
     }
     setLoading(false);
   };

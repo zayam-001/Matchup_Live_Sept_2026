@@ -5,7 +5,7 @@ import { db, auth } from '../services/storage';
 import { collection, doc, getDoc } from 'firebase/firestore';
 import { motion } from 'motion/react';
 import { SkillLevel, Tournament } from '../types';
-import { ArrowRight, Trophy, Shield, Activity, Loader2, User, Lock, ChevronRight, Eye, EyeOff } from 'lucide-react';
+import { ArrowRight, Trophy, Shield, Activity, Loader2, User, Lock, ChevronRight, Eye, EyeOff, Mail } from 'lucide-react';
 
 export const Auth: React.FC<{ 
     initialMode: 'player' | 'operations', 
@@ -630,27 +630,31 @@ export const Auth: React.FC<{
 
                                     <div>
                                         <label className="block text-xs font-bold uppercase tracking-widest text-content-muted mb-2">Email Address</label>
-                                        <input 
-                                            required 
-                                            type="email" 
-                                            value={googleUser ? googleUser.email : email}
-                                            onChange={(e) => setEmail(e.target.value)}
-                                            disabled={!!googleUser}
-                                            className={`w-full bg-surface-ground border border-white/10 rounded-xl p-4 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all ${googleUser ? 'opacity-50 cursor-not-allowed' : ''}`} 
-                                            placeholder="player@example.com" 
-                                        />
+                                        <div className="relative">
+                                            <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                                            <input
+                                                required
+                                                type="email"
+                                                value={googleUser ? googleUser.email : email}
+                                                onChange={(e) => setEmail(e.target.value)}
+                                                disabled={!!googleUser}
+                                                className={`w-full bg-surface-ground border border-white/10 rounded-xl p-4 pl-12 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all ${googleUser ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                placeholder="player@example.com"
+                                            />
+                                        </div>
                                     </div>
 
                                     <div>
                                         <label className="block text-xs font-bold uppercase tracking-widest text-content-muted mb-2">Password</label>
                                         <div className="relative">
-                                            <input 
-                                                required 
-                                                type={showPassword ? "text" : "password"} 
+                                            <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                                            <input
+                                                required
+                                                type={showPassword ? "text" : "password"}
                                                 value={password}
                                                 onChange={(e) => setPassword(e.target.value)}
-                                                className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 pr-12 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all" 
-                                                placeholder="••••••••" 
+                                                className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 pl-12 pr-12 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all"
+                                                placeholder="••••••••"
                                             />
                                             <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white focus:outline-none">
                                                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
@@ -718,25 +722,29 @@ export const Auth: React.FC<{
                                         <>
                                             <div>
                                                 <label className="block text-xs font-bold uppercase tracking-widest text-content-muted mb-2">Admin Email</label>
-                                                <input 
-                                                    required 
-                                                    type="email" 
-                                                    value={opEmail}
-                                                    onChange={(e) => setOpEmail(e.target.value)}
-                                                    className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all" 
-                                                    placeholder="admin@example.com" 
-                                                />
+                                                <div className="relative">
+                                                    <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                                                    <input
+                                                        required
+                                                        type="email"
+                                                        value={opEmail}
+                                                        onChange={(e) => setOpEmail(e.target.value)}
+                                                        className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 pl-12 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all"
+                                                        placeholder="admin@example.com"
+                                                    />
+                                                </div>
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-bold uppercase tracking-widest text-content-muted mb-2">Password</label>
                                                 <div className="relative">
-                                                    <input 
-                                                        required 
-                                                        type={showOpPassword ? "text" : "password"} 
+                                                    <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                                                    <input
+                                                        required
+                                                        type={showOpPassword ? "text" : "password"}
                                                         value={opPassword}
                                                         onChange={(e) => setOpPassword(e.target.value)}
-                                                        className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 pr-12 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all" 
-                                                        placeholder="••••••••" 
+                                                        className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 pl-12 pr-12 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all"
+                                                        placeholder="••••••••"
                                                     />
                                                     <button type="button" onClick={() => setShowOpPassword(!showOpPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white focus:outline-none">
                                                         {showOpPassword ? <EyeOff size={20} /> : <Eye size={20} />}
@@ -775,13 +783,14 @@ export const Auth: React.FC<{
                                             <div>
                                                 <label className="block text-xs font-bold uppercase tracking-widest text-content-muted mb-2">Referee Passcode</label>
                                                 <div className="relative">
-                                                    <input 
-                                                        required 
-                                                        type={showOpPasscode ? "text" : "password"} 
+                                                    <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                                                    <input
+                                                        required
+                                                        type={showOpPasscode ? "text" : "password"}
                                                         value={opPasscode}
                                                         onChange={(e) => setOpPasscode(e.target.value)}
-                                                        className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 pr-12 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all" 
-                                                        placeholder="Enter tournament passcode" 
+                                                        className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 pl-12 pr-12 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all"
+                                                        placeholder="Enter tournament passcode"
                                                     />
                                                     <button type="button" onClick={() => setShowOpPasscode(!showOpPasscode)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white focus:outline-none">
                                                         {showOpPasscode ? <EyeOff size={20} /> : <Eye size={20} />}

@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Sheet } from './ui/Sheet';
 import { uploadSystemImage } from '../services/storage';
+import { toast } from './Toast';
 import { Loader2 } from 'lucide-react';
 import { Tournament, Team } from '../types';
 
@@ -34,7 +35,7 @@ export const ManualEnrollmentModal: React.FC<{
               setPhoto(url);
           } catch (err) {
               console.error(err);
-              alert("Failed to upload photo");
+              toast.error("Photo upload failed", "Please try a different photo.");
           }
       }
   };
@@ -75,7 +76,7 @@ export const ManualEnrollmentModal: React.FC<{
         onClose();
     } catch (e) {
         console.error("Failed to enroll", e);
-        alert(`Failed to enroll ${isAmericanoMode ? 'player' : 'team'}. Try again.`);
+        toast.error(`Couldn't enroll this ${isAmericanoMode ? 'player' : 'team'}`, "Please check the details and try again.");
     } finally {
         setIsSubmitting(false);
     }

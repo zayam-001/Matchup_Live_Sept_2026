@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../services/storage';
+import { isTestTournament } from '../components/PublicLandingStats';
 
 export interface UpcomingTournament {
   id: string;
@@ -30,7 +31,11 @@ export const useTournaments = () => {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const allTournaments = snapshot.docs.map(doc => {
+      // FIX (client feedback: landing page needs to show real, actual
+      // tournaments): internal QA/dev tournaments were showing up in the
+      // public "Upcoming Tournaments" list right alongside real client
+      // events - a real visitor had no way to tell them apart.
+      const allTournaments = snapshot.docs.filter(doc => !isTestTournament(doc.data())).map(doc => {
         const data = doc.data();
         return {
           id: doc.id,

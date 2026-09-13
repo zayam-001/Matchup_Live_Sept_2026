@@ -13,6 +13,7 @@ import '@fontsource/barlow-condensed/700.css';
 import './index.css';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ToastContainer } from './components/Toast';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Failed to find the root element');
@@ -23,6 +24,7 @@ root.render(
   <React.StrictMode>
     <ErrorBoundary>
       <App />
+      <ToastContainer />
     </ErrorBoundary>
   </React.StrictMode>
 );

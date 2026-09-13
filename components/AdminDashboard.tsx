@@ -18,6 +18,7 @@ import { ManualEnrollmentModal } from './ManualEnrollmentModal';
 import { MatchResultCard } from './MatchResultCard';
 import { TeamDetailsOverlay } from './TeamDetailsOverlay';
 import { ReplaceTeamModal } from './ReplaceTeamModal';
+import { toast } from './Toast';
 import { TournamentLeaderboardTab } from './TournamentLeaderboardTab';
 import { EditTeamSheet } from './EditTeamSheet';
 import { StandingsOverlayExporter } from './StandingsOverlayExporter';
@@ -610,7 +611,7 @@ const getTournamentCredits = (t: any) => {
           setDeleteTarget(null);
       } catch (err) {
           console.error("Delete failed:", err);
-          alert("Failed to delete tournament. Please try again.");
+          toast.error("Couldn't delete this tournament", "Please try again.");
       }
   };
 
@@ -628,7 +629,7 @@ const getTournamentCredits = (t: any) => {
           setRetireTarget(null);
       } catch (err) {
           console.error("Retire failed:", err);
-          alert("Failed to retire tournament. Please try again.");
+          toast.error("Couldn't retire this tournament", "Please try again.");
       }
   };
 
@@ -1509,7 +1510,7 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
              const creditsRequired = calculatedMatches;
              const remaining = orgCredits?.matchCreditsRemaining || 0;
              if (creditsRequired > remaining) {
-                 alert(`Insufficient match credits! This tournament requires ${creditsRequired} credits, but you only have ${remaining} available. Configure less teams or upgrade your package.`);
+                 toast.error("Not enough match credits", `This tournament needs ${creditsRequired} credits, but you only have ${remaining}. Reduce the team count or upgrade your package.`);
                  return;
              }
         }
@@ -1556,7 +1557,7 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
                         const id = await createTournament(payload);
                         onCreate(id);
                      } else {
-                         alert("Failed to deduct credits. Did you run out while creating?");
+                         toast.error("Couldn't deduct match credits", "You may have run out of credits while creating this tournament.");
                      }
                  } else {
                     const id = await createTournament(payload);
@@ -1565,8 +1566,7 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
             }
         } catch (err) {
             console.error("Failed to save tournament:", err);
-            // Improve error message for user
-            alert("An error occurred while saving. Please try again.");
+            toast.error("Couldn't save this tournament", "Please try again.");
         } finally {
             setIsSubmitting(false);
         }
@@ -2432,11 +2432,13 @@ const PlayerEditModal = ({ player, playerIndex, team, tId, onClose }: { player: 
                    onClose();
                }).catch(e => {
                    console.error(e);
+                   toast.error("Couldn't save player changes", "Please try again.");
                    setIsSaving(false);
                })
             });
         } catch (error) {
             console.error('Failed to update player:', error);
+            toast.error("Couldn't save player changes", "Please try again.");
             setIsSaving(false);
         }
     };
@@ -3153,8 +3155,10 @@ const StandingsTab = ({ tournament, categoryId }: any) => {
                                 try {
                                     const matchesToPass = (categoryMatches && categoryMatches.length > 0) ? categoryMatches : (globalMatches || []);
                                     await checkAndHealTournamentStats(tournament, matchesToPass, categoryId, true);
+                                    toast.success("Standings refreshed");
                                 } catch (err) {
                                     console.error("Error force syncing standings:", err);
+                                    toast.error("Couldn't refresh standings", "Please try again.");
                                 } finally {
                                     setIsRecalculating(false);
                                 }
@@ -3832,6 +3836,7 @@ const AutoMatchSuggestions = ({ tournament, matches, categoryId }: { tournament:
             setSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
         } catch (e) {
             console.error("Failed to accept suggestion:", e);
+            toast.error("Couldn't create this match", "Please try again.");
         }
     };
 
@@ -4837,7 +4842,7 @@ const KnockoutTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                             setDeletingMatch(null);
                         } catch (e) {
                             console.error("Failed to delete match:", e);
-                            alert("Failed to delete match. Please try again.");
+                            toast.error("Couldn't delete this match", "Please try again.");
                         }
                     }}
                 />
@@ -5120,6 +5125,7 @@ const TeamSelector = ({ tournament, categoryId, value, onChange, label, classNam
             setShowDropdown(false);
         } catch (e) {
             console.error(e);
+            toast.error("Couldn't add this team", "Please try again.");
         } finally {
             setIsSaving(false);
         }
@@ -5141,6 +5147,7 @@ const TeamSelector = ({ tournament, categoryId, value, onChange, label, classNam
             setAdHocName('');
         } catch (e) {
             console.error(e);
+            toast.error("Couldn't add this team", "Please try again.");
         } finally {
             setIsSaving(false);
         }

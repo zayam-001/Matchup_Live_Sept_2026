@@ -1,4 +1,5 @@
 import { firebaseConfig } from "../lib/firebase";
+import { toast } from "../components/Toast";
 import { initializeApp } from "firebase/app";
 
 import { getAuth, signInWithPopup, GoogleAuthProvider, signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword, updatePassword, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';
@@ -636,7 +637,15 @@ export const loginPlayer = async (email: string, password?: string) => {
                 return userSnap.data();
             }
         } catch (error) {
+            // FIX (client feedback: failures only showed up in the
+            // console): sign-in itself succeeded here, so it's correct to
+            // still let the user in rather than blocking login over a
+            // transient read failure - but silently falling back to the raw
+            // Firebase Auth user (which has none of the app's profile
+            // fields: name, skill level, phone, etc.) used to give no
+            // indication why the dashboard would then look empty/broken.
             console.error("Error fetching player from Firestore:", error);
+            toast.warning("Signed in, but your profile didn't fully load", "Some details may be missing until you refresh.");
         }
     }
 
@@ -963,7 +972,17 @@ export const updatePlayerProfile = async (playerId: string, updates: any) => {
                 await syncSingleStandalonePlayerToGlobal(updatedPlayer);
             }
         } catch (error) {
+            // FIX (client feedback: failures only showed up in the console):
+            // this used to swallow the error and fall through to `return
+            // updatedPlayer`, which was already set from the localStorage
+            // mutation above - so the caller always saw a "successful"
+            // profile update and closed the edit form even when the actual
+            // Firestore write failed. The edit looked saved on this device
+            // but silently never reached the database. Re-throw so the
+            // caller can show an error and keep the form open for a retry.
             console.error("Error updating player in Firestore:", error);
+            toast.error("Profile changes didn't save", "Please check your connection and try again.");
+            throw error;
         }
     }
 
@@ -3005,7 +3024,17 @@ export const updateMatchScore = async (tId: string, mId: string, newScore: Score
                }
            })();
         } catch(e) {
+           // FIX (client feedback: errors only ever showed up in the console):
+           // this was swallowed with no re-throw and the call site
+           // (RefereeInterface) doesn't attach a .catch, so a referee's tap
+           // updated the local UI optimistically while the point silently
+           // never reached Firestore - the score just quietly drifted out of
+           // sync with what spectators/OBS/the admin dashboard saw, with no
+           // indication anything was wrong. Surface it and re-throw so the
+           // referee UI can show a real error and the tap can be retried.
            console.error("Score update failed", e);
+           toast.error("Score didn't save", "Check your connection and try that point again.");
+           throw e;
         }
 
         // Bracket advancement is now handled in updateMatchDetails to avoid duplicate writes and quota errors.
@@ -3285,8 +3314,115 @@ export const deleteMatch = async (tId: string, mId: string) => {
         }
     }
 };
-export const replaceTeamInTournament = async (tId: any, oldTeamId: any, newTeam: any, ...args: any[]) => {
-    console.log('Replacing', oldTeamId, 'with', newTeam);
+// FIX (found via error-handling audit, confirmed as the worst finding): this
+// was a complete no-op stub - it never touched Firestore at all. Since
+// ReplaceTeamModal's onConfirm never threw, every "Replace Team" action in
+// the app silently succeeded from the organizer's point of view (the modal
+// closed, no alert fired) while nothing was actually replaced anywhere:
+// the outgoing team stayed in the roster, standings, and every scheduled
+// match untouched. Implemented for real, mirroring the existing
+// editTeamInTournament transaction pattern: swaps the team entry (reusing an
+// existing waitlisted team or creating a new one, either way carrying over
+// the outgoing team's group assignment and status), repoints every match
+// that referenced the old team id/name (both the tournament's own matches
+// subcollection and the top-level matches collection used by
+// spectator/referee/OBS views), and removes the outgoing team's standings
+// document so it stops appearing in group tables.
+export const replaceTeamInTournament = async (
+    tId: string,
+    oldTeamId: string,
+    incomingTeamData: { teamId?: string; teamName: string; player1Name: string; player2Name?: string }
+) => {
+    if (!db) return;
+
+    let newTeamId = incomingTeamData.teamId;
+
+    await runTransaction(db, async (transaction) => {
+        const tRef = doc(db, "tournaments", tId);
+        const tSnap = await transaction.get(tRef);
+        if (!tSnap.exists()) throw new Error("Tournament not found");
+
+        const t = tSnap.data() as Tournament;
+        const outgoing = (t.teams || []).find(team => team.id === oldTeamId);
+        if (!outgoing) throw new Error("Outgoing team not found in this tournament");
+
+        const isAmericanoMode = t.format === 'AMERICANO' || t.format === 'MEXICANO';
+        const isReusingExisting = !!incomingTeamData.teamId;
+
+        const replacementTeam: any = isReusingExisting
+            ? JSON.parse(JSON.stringify((t.teams || []).find(team => team.id === incomingTeamData.teamId)))
+            : {
+                id: genId(),
+                name: incomingTeamData.teamName,
+                player1: { id: genId(), name: incomingTeamData.player1Name },
+                player2: isAmericanoMode ? undefined : { id: genId(), name: incomingTeamData.player2Name || '' },
+                registeredAt: new Date().toISOString(),
+              };
+
+        newTeamId = replacementTeam.id;
+        replacementTeam.groupId = outgoing.groupId;
+        replacementTeam.status = 'ACCEPTED';
+
+        // Drop the outgoing team, and drop the incoming team's old waitlist
+        // entry if it already existed elsewhere in the array, then add the
+        // replacement in the outgoing team's place.
+        const withoutOldEntries = (t.teams || []).filter(team => team.id !== oldTeamId && team.id !== replacementTeam.id);
+        const outgoingIndex = (t.teams || []).findIndex(team => team.id === oldTeamId);
+        const updatedTeams = [
+            ...withoutOldEntries.slice(0, outgoingIndex),
+            replacementTeam,
+            ...withoutOldEntries.slice(outgoingIndex),
+        ];
+
+        transaction.update(tRef, cleanData({ teams: updatedTeams }));
+
+        const formatPlayerNames = (p1?: string, p2?: string) => {
+            if (isAmericanoMode) return p1 || '';
+            return [p1, p2].filter(Boolean).join(' & ');
+        };
+        const newPlayerNames = formatPlayerNames(replacementTeam.player1?.name, replacementTeam.player2?.name);
+
+        const matchesQuerySnap = await getDocs(query(collection(db, "matches"), where("tournamentId", "==", tId)));
+        matchesQuerySnap.docs.forEach(d => {
+            const m = d.data();
+            const updatePayload: any = {};
+            let needsUpdate = false;
+            if (m.team1Id === oldTeamId) {
+                updatePayload.team1Id = replacementTeam.id;
+                updatePayload.team1Name = replacementTeam.name;
+                updatePayload.team1PlayerNames = newPlayerNames;
+                needsUpdate = true;
+            }
+            if (m.team2Id === oldTeamId) {
+                updatePayload.team2Id = replacementTeam.id;
+                updatePayload.team2Name = replacementTeam.name;
+                updatePayload.team2PlayerNames = newPlayerNames;
+                needsUpdate = true;
+            }
+            if (needsUpdate) {
+                transaction.update(doc(db, "matches", d.id), cleanData(updatePayload));
+                transaction.update(doc(db, "tournaments", tId, "matches", d.id), cleanData(updatePayload));
+            }
+        });
+
+        const oldStandingsRef = doc(db, "tournaments", tId, "standings", oldTeamId);
+        const oldStandingsSnap = await transaction.get(oldStandingsRef);
+        if (oldStandingsSnap.exists()) {
+            transaction.delete(oldStandingsRef);
+        }
+    });
+
+    try {
+        const tRef = doc(db, "tournaments", tId);
+        const tSnap = await getDoc(tRef);
+        if (tSnap.exists()) {
+            await checkAndHealTournamentStats(tSnap.data() as Tournament, [], null, true);
+        }
+    } catch (err) {
+        console.error("Auto-heal failed after replaceTeamInTournament", err);
+    }
+
+    return newTeamId;
 };
 export const editTeamInTournament = async (tId: string, teamId: string, name: string, player1Name: string, player2Name: string) => {
     if (db) {
@@ -3441,18 +3577,56 @@ export const startMatch = async (tId: any, mId: any, courtId?: string | null, co
             await batch.commit();
         } catch (e) {
             console.error("Batch failed for startMatch, falling back to individual updates", e);
-            await updateDoc(doc(db, "tournaments", tId, "matches", mId), updates);
-            await updateDoc(doc(db, "matches", mId), updates).catch(() => {});
+            try {
+                // This write (the tournament's own copy of the match) is the
+                // one that actually matters - if it fails there's no sense
+                // pretending the match started, so let this one throw.
+                await updateDoc(doc(db, "tournaments", tId, "matches", mId), updates);
+            } catch (primaryErr) {
+                // FIX (client feedback: failures only showed up in the
+                // console): this used to be re-thrown with nothing telling
+                // the referee, whose "Start Match" modal had already closed
+                // by the time this ran - they'd assume the match was live
+                // when it never actually started.
+                console.error("startMatch fallback write failed", primaryErr);
+                toast.error("Couldn't start the match", "The match wasn't marked as started - please try again.");
+                throw primaryErr;
+            }
+            // These are secondary mirrors (public matches list, OBS index)
+            // used for spectator/broadcast views - worth a heads-up if they
+            // fail, but not worth blocking the referee over since scoring
+            // still works off the primary document above.
+            await updateDoc(doc(db, "matches", mId), updates).catch((mirrorErr) => {
+                console.warn("startMatch: public matches mirror write failed", mirrorErr);
+            });
             const obsIndexRef = doc(db, "obsIndex", mId);
-            await setDoc(obsIndexRef, { tournamentId: tId, matchId: mId, timestamp: new Date().toISOString() }).catch(() => {});
+            await setDoc(obsIndexRef, { tournamentId: tId, matchId: mId, timestamp: new Date().toISOString() }).catch((obsErr) => {
+                console.warn("startMatch: OBS index write failed", obsErr);
+            });
         }
     }
 };
 export const addRefereeTag = async (tId: any, mId: any, tag: any) => {
     console.log('tag', tag);
 };
-export const triggerBroadcastEvent = async (...args: any[]) => {
-    console.log('broadcast', event);
+// FIX (found via error-handling audit): this was a no-op stub that also
+// referenced an undefined `event` variable instead of its actual payload
+// argument, so referee-triggered broadcast callouts (e.g. "SET POINT",
+// "MATCH POINT") never reached Firestore and never showed up on the OBS
+// overlay/broadcast/spectator views that read a match's activeBroadcastEvent
+// field - matching the same field already used for score-update events in
+// updateMatchScore above.
+export const triggerBroadcastEvent = async (tId: string, mId: string, eventPayload: any) => {
+    if (!db) return;
+    try {
+        const payload = { activeBroadcastEvent: eventPayload };
+        const batch = writeBatch(db);
+        batch.set(doc(db, "tournaments", tId, "matches", mId), payload, { merge: true });
+        batch.set(doc(db, "matches", mId), payload, { merge: true });
+        await batch.commit();
+    } catch (e) {
+        console.error("triggerBroadcastEvent failed", e);
+    }
 };
 
 

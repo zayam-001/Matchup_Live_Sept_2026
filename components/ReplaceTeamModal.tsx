@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Match, Team, Tournament, MatchStatus } from '../types';
 import { Sheet } from './ui/Sheet';
+import { toast } from './Toast';
 import { ChevronRight, ChevronLeft, AlertTriangle, Replace, RefreshCw, Plus, Users } from 'lucide-react';
 
 function Input({ label, value, onChange, type="text", placeholder }: any) {
@@ -79,10 +80,11 @@ export const ReplaceTeamModal: React.FC<ReplaceTeamModalProps> = ({
                 player2Name: tournament.teams?.find(t => t.id === selectedExistingTeamId)?.player2.name || 'P2',
             };
             await onConfirm(incomingTeamData);
+            toast.success("Team replaced", `${outgoingTeam.name} has been replaced across the schedule and standings.`);
             onClose();
         } catch (e) {
             console.error(e);
-            alert("Failed to replace team.");
+            toast.error("Couldn't replace this team", "Please try again.");
         } finally {
             setIsSubmitting(false);
         }

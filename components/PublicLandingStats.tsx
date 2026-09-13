@@ -2,6 +2,27 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, getDocs, onSnapshot, collectionGroup } from 'firebase/firestore';
 import { db } from '../services/storage';
 
+// Internal QA/dev tournaments (created for testing, not real client events)
+// polluted these stats - e.g. one QA run alone added a fully-scheduled
+// 8-team tournament to the public "tournaments hosted" count. Filtering by
+// name/organizer keeps the platform's public numbers honest without needing
+// to delete the underlying test data.
+export const isTestTournament = (data: any): boolean => {
+    const name = String(data?.name || '').trim().toLowerCase();
+    const organizerEmail = String(data?.organizerEmail || '').trim().toLowerCase();
+    if (organizerEmail.includes('qa-test') || organizerEmail.includes('@example.com')) return true;
+    if (/^(qa\b|test\b|test\d|test-)/i.test(name)) return true;
+    return false;
+};
+
+// Bulk-seeded placeholder accounts (name literally "Player 123") from early
+// development/demo data - these aren't real signups and shouldn't count
+// toward a public "active players" number.
+const isPlaceholderPlayer = (data: any): boolean => {
+    const name = String(data?.name || data?.playerName || '').trim();
+    return /^Player \d+$/i.test(name);
+};
+
 export const usePlatformStats = () => {
     const [stats, setStats] = useState({
         activePlayers: 0,
@@ -13,55 +34,59 @@ export const usePlatformStats = () => {
         monthlyTournaments: 0,
         userGrowth: 0
     });
-    
+
     useEffect(() => {
         let mounted = true;
         if (!db) return;
 
-        let activePlayerCount = 0;
-        let totalMatches = 0;
-        let liveMatches = 0;
-        let tournamentsHosted = 0;
-        
         const unsubPlayers = onSnapshot(collection(db, 'onboardedPlayers'), (snap) => {
-            activePlayerCount = snap.size;
+            const realPlayers = snap.docs.filter(d => !isPlaceholderPlayer(d.data()));
             if (mounted) {
-                setStats(prev => ({ ...prev, activePlayers: activePlayerCount }));
+                setStats(prev => ({ ...prev, activePlayers: realPlayers.length }));
             }
         });
 
         const unsubMatches = onSnapshot(collectionGroup(db, 'matches'), (snap) => {
-            totalMatches = snap.size;
-            liveMatches = snap.docs.filter(m => {
+            // FIX (client feedback: stats should reflect real, actual
+            // activity): this counted every match doc regardless of status,
+            // so "matches organized"/"total matches played" included
+            // matches that were merely scheduled and never played - a
+            // tournament with a full future schedule inflated this the
+            // moment it was created. Now only matches that actually
+            // finished count.
+            const completedMatches = snap.docs.filter(m => {
+                const status = String(m.data().status || '').toUpperCase();
+                return status === 'COMPLETED' || status === 'FINISHED';
+            }).length;
+            const liveMatches = snap.docs.filter(m => {
                 const data = m.data();
                 return data.status === 'IN_PROGRESS' || data.status === 'live';
             }).length;
             if (mounted) {
-                setStats(prev => ({ ...prev, totalMatchesPlayed: totalMatches, matchesLive: liveMatches }));
+                setStats(prev => ({ ...prev, totalMatchesPlayed: completedMatches, matchesLive: liveMatches }));
             }
         });
 
         const unsubTournaments = onSnapshot(collection(db, 'tournaments'), (snap) => {
-            tournamentsHosted = snap.size;
+            const realTournaments = snap.docs.filter(d => !isTestTournament(d.data()));
             if (mounted) {
-                setStats(prev => ({ ...prev, tournamentsHosted }));
+                setStats(prev => ({ ...prev, tournamentsHosted: realTournaments.length }));
             }
         });
 
         const fetchStats = async () => {
             try {
-                const teamsSnap = await getDocs(collection(db, 'teams'));
-                
                 let clubs = new Set();
                 let monthlyT = 0;
-                
+
                 const now = new Date();
                 const oneMonthAgo = new Date();
                 oneMonthAgo.setMonth(now.getMonth() - 1);
-                
+
                 const tSnap = await getDocs(collection(db, 'tournaments'));
                 for (const doc of tSnap.docs) {
                     const data = doc.data();
+                    if (isTestTournament(data)) continue;
                     if (data.venue) clubs.add(data.venue);
                     if (data.createdAt) {
                         const cDate = new Date(data.createdAt);
@@ -70,13 +95,35 @@ export const usePlatformStats = () => {
                         monthlyT++; // assume recent if no date
                     }
                 }
-                
+
+                // FIX (client feedback: numbers/stats need to be real, not
+                // fake): this was a hardcoded `38` regardless of actual
+                // platform activity. Computed instead from real
+                // onboardedPlayers signup timestamps: growth over the
+                // trailing 30 days vs. the 30 days before that, excluding
+                // placeholder seed accounts.
+                const playersSnap = await getDocs(collection(db, 'onboardedPlayers'));
+                const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+                let recentCount = 0;
+                let priorCount = 0;
+                for (const doc of playersSnap.docs) {
+                    const data = doc.data();
+                    if (isPlaceholderPlayer(data)) continue;
+                    const onboardedAt = data.onboardedAt ? new Date(data.onboardedAt) : null;
+                    if (!onboardedAt || isNaN(onboardedAt.getTime())) continue;
+                    if (onboardedAt > oneMonthAgo) recentCount++;
+                    else if (onboardedAt > sixtyDaysAgo) priorCount++;
+                }
+                const userGrowth = priorCount > 0
+                    ? Math.round(((recentCount - priorCount) / priorCount) * 100)
+                    : (recentCount > 0 ? 100 : 0);
+
                 if (mounted) {
                     setStats(prev => ({
                         ...prev,
                         activeClubs: clubs.size,
                         monthlyTournaments: monthlyT,
-                        userGrowth: 38 // static or calc from historical data
+                        userGrowth
                     }));
                 }
             } catch (e) {
@@ -86,8 +133,8 @@ export const usePlatformStats = () => {
 
         fetchStats();
 
-        return () => { 
-            mounted = false; 
+        return () => {
+            mounted = false;
             unsubPlayers();
             unsubMatches();
             unsubTournaments();

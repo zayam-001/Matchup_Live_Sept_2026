@@ -3,6 +3,7 @@ import { subscribeToTournaments, subscribeToTournament, updateMatchScore, addRef
 import { addPoint } from '../services/scoreEngine';
 import { Match, MatchStatus, Tournament, SponsorTier } from '../types';
 import { Lock, Play, RotateCcw, AlertCircle, Award, Check, X, Trophy, ChevronRight, Edit2, Clock, MapPin, ChevronLeft, Loader2, Eye, EyeOff, ChevronDown, ChevronUp } from 'lucide-react';
+import { toast } from './Toast';
 import { Card } from './ui/Card';
 import { Badge } from './ui/Badge';
 import { Sheet } from './ui/Sheet';
@@ -29,7 +30,7 @@ const ScoringControl = ({ match: initialMatch, teams, tournamentId, isAmericano,
                 onBack(); // Go back so the user sees it as live in the list
             } catch (err) {
                 console.error('Failed to resume match:', err);
-                alert('Failed to resume match. Please try again.');
+                toast.error("Couldn't resume the match", "Please try again.");
             }
         }
     };
@@ -349,7 +350,7 @@ const ScoringControl = ({ match: initialMatch, teams, tournamentId, isAmericano,
                     onRequestChange={async (req) => {
                          const { submitScoreChangeRequest } = await import('../services/storage');
                          await submitScoreChangeRequest(tournamentId, req);
-                         alert("Your change request has been submitted. The organiser will review it.");
+                         toast.success("Change request submitted", "The organiser will review it.");
                     }}
                 />
             </div>
@@ -474,10 +475,10 @@ export const RefereeInterface: React.FC<{ initialTournamentId?: string, initialA
         setAuthenticated(true);
       } catch (err) {
         console.error(err);
-        alert("Failed to authenticate with backend.");
+        toast.error("Couldn't sign in", "Please check your connection and try again.");
       }
     } else {
-      alert("Invalid Passcode");
+      toast.error("Invalid passcode", "Double-check the tournament passcode and try again.");
     }
   };
 
@@ -675,7 +676,7 @@ export const RefereeInterface: React.FC<{ initialTournamentId?: string, initialA
                         const updatedMatches = (prev.matches || []).map(item => item.id === m.id ? { ...item, ...m } : item);
                         return { ...prev, matches: updatedMatches };
                     });
-                    updateMatchScore(selectedTournament.id, m.id, m.score, m.status, m.winnerTeamId);
+                    updateMatchScore(selectedTournament.id, m.id, m.score, m.status, m.winnerTeamId).catch(() => {});
                 }}
                 onBack={() => setSelectedMatch(null)}
                 onShowBanner={() => setShowBanner(true)}
@@ -821,13 +822,13 @@ const RefereeCategoryView = ({
                             }
                         } else {
                             if (!m.team1Id || !m.team2Id) {
-                                alert("Cannot start match: One or both teams are TBD. Please complete the teams first.");
+                                toast.warning("Can't start this match yet", "One or both teams are still TBD - complete the teams first.");
                                 return;
                             }
                             const t1Data = selectedTournament.teams.find(t => t.id === m.team1Id);
                             const t2Data = selectedTournament.teams.find(t => t.id === m.team2Id);
                             if (!t1Data || !t2Data) {
-                                alert("Cannot start match: One or both teams are missing from the roster.");
+                                toast.warning("Can't start this match", "One or both teams are missing from the roster.");
                                 return;
                             }
                             if (isScheduled) {
@@ -947,22 +948,31 @@ const RefereeCategoryView = ({
                     onClose={() => setStartingMatch(null)}
                     onStart={async (courtId, courtName, conflictAcknowledged) => {
                         const mToStart = startingMatch.match;
-                        setStartingMatch(null);
+                        // FIX (client feedback: failures only showed up in the
+                        // console): the modal used to close immediately,
+                        // before the write even started, so a failed start
+                        // looked identical to a successful one - the referee
+                        // had no idea the match never actually went live.
+                        // Now it stays open until the write settles; storage.ts
+                        // shows a toast on failure so this isn't silent either
+                        // way.
                         try {
                             await startMatch(selectedTournament.id, mToStart.id, courtId, courtName, null, conflictAcknowledged);
-                            const updatedMatch = { 
-                                ...mToStart, 
-                                status: MatchStatus.IN_PROGRESS, 
-                                courtId: courtId || mToStart.scheduledCourtId || 'TBD', 
-                                courtName: courtName || 'TBD', 
-                                court: courtName || 'TBD', 
+                            const updatedMatch = {
+                                ...mToStart,
+                                status: MatchStatus.IN_PROGRESS,
+                                courtId: courtId || mToStart.scheduledCourtId || 'TBD',
+                                courtName: courtName || 'TBD',
+                                court: courtName || 'TBD',
                                 actualCourtId: courtId,
                                 conflictAcknowledged: conflictAcknowledged || null,
-                                obsEnabled: true 
+                                obsEnabled: true
                             };
                             setSelectedMatch(updatedMatch);
                         } catch (err) {
                             console.error("Failed to start match", err);
+                        } finally {
+                            setStartingMatch(null);
                         }
                     }}
                 />

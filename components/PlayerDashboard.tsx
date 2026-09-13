@@ -4,6 +4,7 @@ import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
 import { Sheet } from './ui/Sheet';
 import { PlayerProfile, Tournament, Squad } from '../types';
+import { toast } from './Toast';
 import { subscribeToTournaments, getPlayerSquads, createSquad, deleteSquad, updatePlayerProfile, rateMatchOpponent, getPlayerById, subscribeToPlayerQuickplaySessions, subscribeToPlayer, subscribeToVenues, uploadProfilePicture } from '../services/storage';
 import { GoogleGenAI } from '@google/genai';
 import { Trophy, Calendar, Users, Activity, Settings, LogOut, ChevronRight, MapPin, Plus, Trash2, User, Phone, Mail, Search, Star, Share2, Play, Loader2, Download } from 'lucide-react';
@@ -93,7 +94,7 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
                     link.click();
                 } catch (err) {
                     console.error('Failed to generate scorecard image', err);
-                    alert("Generating Image failed, try again later.");
+                    toast.error("Couldn't generate the scorecard image", "Please try again.");
                 } finally {
                     setDownloadingSessionId(null);
                     // Keep the session active for a moment in case it takes time to clean up
@@ -224,18 +225,23 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
     const handleSaveProfile = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!player) return;
-        const updated = await updatePlayerProfile(player.id, { 
-            fullName: editName, 
-            phone: editPhone, 
-            skillLevel: editSkillLevel,
-            birthday: editBirthday,
-            photoUrl: editPhotoUrl,
-            cnic: editCnic,
-            homeTeam: editHomeTeam
-        });
-        if (updated) {
-            setPlayer(updated);
-            setShowProfileEdit(false);
+        try {
+            const updated = await updatePlayerProfile(player.id, {
+                fullName: editName,
+                phone: editPhone,
+                skillLevel: editSkillLevel,
+                birthday: editBirthday,
+                photoUrl: editPhotoUrl,
+                cnic: editCnic,
+                homeTeam: editHomeTeam
+            });
+            if (updated) {
+                setPlayer(updated);
+                setShowProfileEdit(false);
+            }
+        } catch (err) {
+            // updatePlayerProfile already shows a toast on failure - just
+            // keep the edit sheet open here so the user can retry.
         }
     };
 
@@ -244,7 +250,7 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
         const file = e.target.files[0];
         
         if (file.size > 2 * 1024 * 1024) {
-            alert("Photo must be smaller than 2MB");
+            toast.warning("Photo too large", "Please choose a photo smaller than 2MB.");
             return;
         }
 
@@ -567,22 +573,22 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
             });
         } else {
             navigator.clipboard.writeText(text);
-            alert('Stats copied to clipboard!');
+            toast.success('Stats copied to clipboard');
         }
     };
 
     const handleChangePassword = async () => {
         if (!player || !player.email) {
-            alert('Email not found. Cannot reset password.');
+            toast.error("Can't reset password", "No email address is on file for this account.");
             return;
         }
         try {
             const { getAuth, sendPasswordResetEmail } = await import('firebase/auth');
             await sendPasswordResetEmail(getAuth(), player.email);
-            alert(`A password reset link has been sent to ${player.email}`);
+            toast.success("Password reset link sent", `Check ${player.email} for the link.`);
         } catch (err: any) {
             console.error(err);
-            alert('Failed to send reset email: ' + err.message);
+            toast.error("Couldn't send reset email", err?.message);
         }
     };
 
@@ -606,7 +612,7 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
 
         // Check file size (limit to 1MB for Firestore base64)
         if (file.size > 1024 * 1024) {
-            alert("Photo must be smaller than 1MB");
+            toast.warning("Photo too large", "Please choose a photo smaller than 1MB.");
             return;
         }
 

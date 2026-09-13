@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ScoreState, Team } from '../types';
 import { RotateCcw, ChevronLeft, Crown, AlertCircle, X, Plus, Target, Trophy, Clock, Lock, Loader2, Check } from 'lucide-react';
+import { toast } from './Toast';
 import { motion, AnimatePresence } from 'motion/react';
 import { recordAtomicPoint, undoLastAtomicPoint } from '../services/refereeActions';
 import { updateMatchScore } from '../services/storage';
@@ -300,7 +301,7 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
         // Revert the last atomic point in the database (e.g. player stats)
         undoLastAtomicPoint(matchId).catch(err => console.error("Failed to undo atomic point:", err));
     } else {
-        alert("Cannot undo events from previous sessions.");
+        toast.warning("Can't undo that point", "It happened in a previous scoring session.");
     }
   };
 
@@ -695,7 +696,7 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
                 onClick={() => {
                    const obsUrl = `https://matchup.com.pk/#obs/${tournamentId}/${matchId}`;
                    navigator.clipboard.writeText(obsUrl);
-                   alert('OBS link copied to clipboard:\n' + obsUrl);
+                   toast.success('OBS link copied', obsUrl);
                 }} 
                 className="text-white text-[10px] sm:text-[11px] font-bold uppercase tracking-wider bg-transparent border border-white/20 hover:bg-white/5 py-1.5 px-2 rounded-lg flex items-center transition-colors whitespace-nowrap hidden sm:flex"
               >
@@ -717,8 +718,8 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
                     onClick={() => {
                        const obsUrl = `https://matchup.com.pk/#obs/${tournamentId}/${matchId}`;
                        navigator.clipboard.writeText(obsUrl);
-                       alert('OBS link copied to clipboard:\n' + obsUrl);
-                    }} 
+                       toast.success('OBS link copied', obsUrl);
+                    }}
                     className="flex-1 mr-2 bg-transparent text-white border border-white/20 px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-widest hover:bg-white/5 transition-colors text-center sm:hidden block whitespace-nowrap"
                   >
                      OBS Link
@@ -1117,7 +1118,7 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
                               });
                             } catch (err) {
                                console.error('Failed to submit match end:', err);
-                               alert('Failed to submit match end. Please try again.');
+                               toast.error("Couldn't finish the match", "Please try again.");
                             } finally {
                               setIsSubmitting(false);
                             }
@@ -1270,7 +1271,7 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
                                    setShowEndMatchModal(false);
                                } catch (err) {
                                    console.error('Failed to end match:', err);
-                                   alert('Failed to end match. Please try again.');
+                                   toast.error("Couldn't end the match", "Please try again.");
                                }
                            }
                            setIsSubmittingEndMatch(false);
