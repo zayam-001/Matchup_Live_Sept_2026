@@ -91,6 +91,20 @@ service cloud.firestore {
         isSuperAdmin()
       );
     }
+
+    // FIX (found live, local testing of the real app): PublicLandingStats.tsx
+    // runs collectionGroup(db, 'matches') to power the public landing page's
+    // live match/tournament counters. A collection-group query needs its own
+    // rule matching the recursive `{path=**}/matches/{id}` pattern — being
+    // reachable via the top-level /matches rule above, or via the
+    // tournaments/{id}/{document=**} wildcard, is NOT sufficient for
+    // collection-group reads, only for reading one specific document by its
+    // full path. Without this, the landing page threw permission-denied on
+    // load for every visitor.
+    match /{path=**}/matches/{matchId} {
+      allow read: if true;
+    }
+
     // Admin Users
     match /adminUsers/{userId} {
       allow read: if isAuthenticated() && request.auth.uid == userId || isSuperAdmin();
