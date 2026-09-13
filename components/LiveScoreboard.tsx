@@ -1295,22 +1295,52 @@ const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClos
     });
 
     return createPortal(
-        <div className="fixed inset-0 z-[11000] bg-[#0d0d0f] text-white flex flex-col font-sans selection:bg-[#4D78FF]/30 overflow-hidden">
+        // SAFE-ZONE FIX (found live testing this real app): this rendered
+        // content flush to the true edges of the viewport, but many
+        // TVs/LCD panels driven over HDMI apply their own overscan crop
+        // (commonly 3-5% per edge) that this page has no way to detect —
+        // so names, the close button, and score boxes got cut off on a
+        // real court-side display even though the page looked fine in a
+        // browser tab. Percentage-based padding on the outer frame keeps
+        // everything inside a safe area that scales with the actual
+        // screen size, instead of the old fixed pixel padding (p-6/p-12)
+        // which was a negligible fraction of a large TV's resolution.
+        <div className="fixed inset-0 z-[11000] bg-[#0d0d0f] text-white flex flex-col font-sans selection:bg-[#4D78FF]/30 overflow-hidden p-[3%] sm:p-[4%] gap-4">
             {/* Minimal floating exit button */}
-            <button 
-                onClick={onClose} 
-                className="fixed top-4 right-4 z-[12000] p-3 hover:bg-white/20 bg-black/60 rounded-full transition-colors border border-white/10 shrink-0 cursor-pointer shadow-xl backdrop-blur-md opacity-40 hover:opacity-100"
+            <button
+                onClick={onClose}
+                className="fixed top-[3%] right-[3%] sm:top-[4%] sm:right-[4%] z-[12000] p-3 hover:bg-white/20 bg-black/60 rounded-full transition-colors border border-white/10 shrink-0 cursor-pointer shadow-xl backdrop-blur-md opacity-40 hover:opacity-100"
                 title="Close Broadcast Mode"
             >
                 <X size={20} className="text-white" />
             </button>
 
             {/* Main Stage */}
-            <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-12">
+            <main className="flex-1 overflow-y-auto overflow-x-hidden">
                 {selectedMatchId === 'ALL' && liveMatches.length > 0 ? (
-                    <div className={`grid grid-cols-1 md:grid-cols-2 ${liveMatches.length > 3 ? 'lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 auto-rows-fr' : 'lg:grid-cols-3'} gap-4 md:gap-8`}>
+                    // UI FIX (found live testing this real app): with only
+                    // 1-2 live matches, this forced lg:grid-cols-3 and always
+                    // compact=true, leaving matches small and top-left with
+                    // most of the screen empty black space - exactly the
+                    // "tiny card on a real TV" complaint reported earlier for
+                    // the sibling Vercel build, ported here since the
+                    // single-match "activeMatch" branch below is never
+                    // actually reachable (nothing ever sets selectedMatchId
+                    // to a specific match). Column count now tracks the
+                    // actual number of live matches, and h-full +
+                    // auto-rows-fr makes the grid (and every card in it,
+                    // since BroadcastMatchCard is already h-full) stretch to
+                    // fill the whole stage instead of sitting at its own
+                    // content height; compact mode only kicks in once there
+                    // are enough matches that full-size cards wouldn't fit.
+                    <div className={`grid h-full auto-rows-fr gap-4 md:gap-8 ${
+                        liveMatches.length === 1 ? 'grid-cols-1' :
+                        liveMatches.length === 2 ? 'grid-cols-1 md:grid-cols-2' :
+                        liveMatches.length === 3 ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' :
+                        'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
+                    }`}>
                         {liveMatches.map(m => (
-                            <BroadcastMatchCard key={m.id} match={m} teams={tournament.teams} categories={tournament.categories} tournament={tournament} compact={true} />
+                            <BroadcastMatchCard key={m.id} match={m} teams={tournament.teams} categories={tournament.categories} tournament={tournament} compact={liveMatches.length > 2} />
                         ))}
                     </div>
                 ) : activeMatch ? (
@@ -1513,11 +1543,11 @@ const BroadcastMatchCard = ({ match: initialMatch, teams, compact, categories, t
             
             <div className="flex flex-col gap-6 relative z-10 flex-1 justify-center min-h-0">
                 <div className="flex justify-between items-center gap-4 group">
-                    <div className={`font-black uppercase leading-[1.1] text-white break-words ${compact ? "text-base" : "text-lg md:text-xl lg:text-2xl"}`}>
+                    <div className={`font-black uppercase leading-[1.1] text-white break-words ${compact ? "text-base" : "text-2xl md:text-4xl lg:text-5xl xl:text-6xl"}`}>
                         {formatNameHtml(t1P1Name, t1P2Name, t1FullName)}
                         {isT1Serving && <span className="w-2 h-2 bg-[#E65C31] rounded-full inline-block ml-2 mb-1 shadow-[0_0_10px_#E65C31]" />}
                     </div>
-                    <div className={`bg-white/5 rounded font-mono font-bold text-white shrink-0 ${compact ? "px-3 py-1.5 text-base" : "px-3 py-1.5 lg:px-4 lg:py-2 text-lg lg:text-xl"}`}>
+                    <div className={`bg-white/5 rounded font-mono font-bold text-white shrink-0 ${compact ? "px-3 py-1.5 text-base" : "px-5 py-2 lg:px-8 lg:py-4 text-4xl lg:text-6xl"}`}>
                         {activeScore.p1Points === "0" ? "00" : activeScore.p1Points}
                     </div>
                 </div>
@@ -1527,11 +1557,11 @@ const BroadcastMatchCard = ({ match: initialMatch, teams, compact, categories, t
                 </div>
                 
                 <div className="flex justify-between items-center gap-4 group">
-                    <div className={`font-black uppercase leading-[1.1] text-white break-words ${compact ? "text-base" : "text-lg md:text-xl lg:text-2xl"}`}>
+                    <div className={`font-black uppercase leading-[1.1] text-white break-words ${compact ? "text-base" : "text-2xl md:text-4xl lg:text-5xl xl:text-6xl"}`}>
                         {formatNameHtml(t2P1Name, t2P2Name, t2FullName)}
                         {isT2Serving && <span className="w-2 h-2 bg-[#E65C31] rounded-full inline-block ml-2 mb-1 shadow-[0_0_10px_#E65C31]" />}
                     </div>
-                    <div className={`bg-white/5 rounded font-mono font-bold text-white shrink-0 ${compact ? "px-3 py-1.5 text-base" : "px-3 py-1.5 lg:px-4 lg:py-2 text-lg lg:text-xl"}`}>
+                    <div className={`bg-white/5 rounded font-mono font-bold text-white shrink-0 ${compact ? "px-3 py-1.5 text-base" : "px-5 py-2 lg:px-8 lg:py-4 text-4xl lg:text-6xl"}`}>
                         {activeScore.p2Points === "0" ? "00" : activeScore.p2Points}
                     </div>
                 </div>
@@ -1549,15 +1579,15 @@ const BroadcastMatchCard = ({ match: initialMatch, teams, compact, categories, t
                     )}
                 </div>
                 <div className="grid grid-cols-2 gap-[1px] bg-white/10 mt-1">
-                    <div className={`bg-[#16161a] text-center flex flex-col items-center ${compact ? "py-1.5" : "py-3 lg:py-4"}`}>
+                    <div className={`bg-[#16161a] text-center flex flex-col items-center ${compact ? "py-1.5" : "py-4 lg:py-6"}`}>
                         <div className="font-mono text-[0.6rem] lg:text-[0.65rem] uppercase tracking-[0.15em] opacity-50 text-white">Sets</div>
-                        <div className={`font-black font-mono text-white mt-1 ${compact ? "text-lg" : "text-xl lg:text-2xl"}`}>
+                        <div className={`font-black font-mono text-white mt-1 ${compact ? "text-lg" : "text-3xl lg:text-5xl"}`}>
                             {activeScore.p1Sets} - {activeScore.p2Sets}
                         </div>
                     </div>
-                    <div className={`bg-[#16161a] text-center flex flex-col items-center ${compact ? "py-1.5" : "py-3 lg:py-4"}`}>
+                    <div className={`bg-[#16161a] text-center flex flex-col items-center ${compact ? "py-1.5" : "py-4 lg:py-6"}`}>
                         <div className="font-mono text-[0.6rem] lg:text-[0.65rem] uppercase tracking-[0.15em] opacity-50 text-white">Games</div>
-                        <div className={`font-black font-mono text-white mt-1 ${compact ? "text-lg" : "text-xl lg:text-2xl"}`}>
+                        <div className={`font-black font-mono text-white mt-1 ${compact ? "text-lg" : "text-3xl lg:text-5xl"}`}>
                             {activeScore.p1Games} - {activeScore.p2Games}
                         </div>
                     </div>
