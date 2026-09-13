@@ -171,7 +171,18 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAuthenticated();
     }
-    
+
+    // FIX (found live, local testing of the real app): the public landing
+    // page's GlobalLeaderboard queries this top-level collection, but it
+    // had no rule block at all, so it was denied by default for every
+    // visitor. Written by finalizePlayerTournamentGlobalPoints when a
+    // tournament's results get folded into the global leaderboard — same
+    // public-read / authenticated-write shape as globalStats/teams above.
+    match /leaderboard/{playerId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
     // Quick Sessions
     match /quickSessions/{sessionId} {
       allow read: if true;
