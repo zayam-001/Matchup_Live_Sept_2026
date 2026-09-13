@@ -240,5 +240,18 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAuthenticated();
     }
+
+    // FIX (found live via local testing of the real app): enrollTeamManually
+    // (and other flows) write here to queue confirmation emails via
+    // Firebase's "Trigger Email" extension, but this collection had no rule
+    // block at all in the reverted baseline — it fell to default-deny,
+    // silently failing "Enroll Team" for every organizer. Clients only ever
+    // create a doc here (the extension's own backend, running with admin
+    // privileges, is what actually sends and updates delivery status); no
+    // client should ever read, update, or delete a queued message.
+    match /mail/{mailId} {
+      allow create: if isAuthenticated() && request.auth.token.firebase.sign_in_provider != 'anonymous';
+      allow read, update, delete: if false;
+    }
   }
 }
