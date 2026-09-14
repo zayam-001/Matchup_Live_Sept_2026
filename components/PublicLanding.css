@@ -564,7 +564,12 @@ html { scroll-padding-top: 105px; }
    horizontally-scrollable card row, no pin, no reserved empty space. */
 .feature-story { position: relative; height: auto !important; min-height: auto !important; padding: 40px 0 80px; overflow: hidden; }
 .feature-pin { position: relative; top: auto; height: auto; min-height: 0; display: block; overflow: visible; }
-.feature-track { width: auto; display: flex; overflow-x: auto; transform: none !important; padding-block: 20px; scrollbar-width: thin; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
+/* width intentionally left as the base rule's max-content (not overridden
+   here) - a flex container with width:auto shrinks to fit its parent, which
+   was squeezing every card narrower than its intended 400px and clipping
+   long titles ("LEADERBOARDS", "TOURNAMENT MANAGEMENT"). max-content keeps
+   cards full-size and lets overflow-x handle the rest via scrolling. */
+.feature-track { display: flex; overflow-x: auto; transform: none !important; padding-block: 20px; scrollbar-width: thin; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
 .feature-card { transform: none !important; opacity: 1 !important; transition: border-color .35s ease, box-shadow .35s ease; }
 .feature-card.is-near-center { border-color: rgba(229,92,48,.36); box-shadow: 0 35px 95px rgba(0,0,0,.48), 0 0 55px rgba(229,92,48,.08); }
 .feature-progress span { transform-origin: left center; will-change: transform; }
