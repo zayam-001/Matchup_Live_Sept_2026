@@ -200,7 +200,13 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
       strB = matchState.isTiebreak ? pB.toString() : (sequence[pB] || "0");
 
       if (!matchState.isTiebreak && pA >= 3 && pB >= 3) {
-        if (pA === pB) { strA = "40"; strB = "40"; }
+        // FIX: this persisted string is what OBS overlay, Broadcast Mode,
+        // and the public spectator view all read (getTennisScore below only
+        // controls the referee's own local display) - it never checked
+        // goldenPoint here, so "SP" (Star Point / golden point at deuce)
+        // always got written to Firestore as plain "40"/"40" and never
+        // showed up anywhere but the referee's own screen.
+        if (pA === pB) { strA = matchState.goldenPoint ? "SP" : "40"; strB = matchState.goldenPoint ? "SP" : "40"; }
         else if (!matchState.goldenPoint) {
           if (pA > pB) { strA = "Ad"; strB = "40"; }
           if (pB > pA) { strA = "40"; strB = "Ad"; }
