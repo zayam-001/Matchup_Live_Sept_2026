@@ -2141,6 +2141,49 @@ export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Matc
         return { teamName, player1: player1 || 'TBD', player2 };
     };
 
+    // FIX (client feedback: "Points & Action History" was showing raw
+    // internal event strings like "T2|1789408183828|2|winner|bandeja"
+    // verbatim instead of readable text): this is the pipe-delimited
+    // encoding MatchScoringSystem writes to score.history
+    // (team|timestamp|playerIndex|tag|finisher). The formatted `timeline`
+    // field this panel prefers isn't populated by the current scoring
+    // flow, so it was always falling through to rendering that raw string
+    // directly. Parses it the same way the broadcast ticker elsewhere in
+    // this file already does, resolving real player names via
+    // getTeamNamesAndPlayers instead of showing the raw encoding.
+    const formatHistoryEntry = (raw: string, match: any): string => {
+        if (raw.startsWith('START_SET_NORMAL') || raw.startsWith('START_SET_SUPER')) {
+            return 'New set started';
+        }
+        const parts = raw.split('|');
+        const type = parts[0];
+        if (type !== 'T1' && type !== 'T2') return raw;
+
+        const playerIdx = parseInt(parts[2] || '1');
+        const tag = parts[3];
+        const finisher = parts[4];
+
+        const team = type === 'T1'
+            ? getTeamNamesAndPlayers(match?.team1Id, match?.team1Name, match?.team1PlayerNames)
+            : getTeamNamesAndPlayers(match?.team2Id, match?.team2Name, match?.team2PlayerNames);
+        const who = (playerIdx === 1 ? team.player1 : team.player2) || team.teamName;
+
+        let actionStr = 'Point won';
+        if (finisher === 'smash') actionStr = 'Smash winner';
+        else if (finisher === 'vibora') actionStr = 'Vibora winner';
+        else if (finisher === 'drop' || finisher === 'drop shot') actionStr = 'Drop shot winner';
+        else if (finisher === 'bandeja') actionStr = 'Bandeja winner';
+        else if (finisher === 'volley') actionStr = 'Volley winner';
+        else if (finisher === 'net') actionStr = 'Net error';
+        else if (finisher === 'glass') actionStr = 'Glass error';
+        else if (finisher === 'double fault') actionStr = 'Double fault';
+        else if (finisher === 'grill') actionStr = 'Grill error';
+        else if (tag === 'winner') actionStr = 'Winner';
+        else if (tag === 'error') actionStr = 'Unforced error';
+
+        return `${who} — ${actionStr}`;
+    };
+
     return (
         <div className="w-full">
             <div className="flex flex-col gap-3">
@@ -2359,7 +2402,7 @@ export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Matc
                                                 <div key={idx} className="flex gap-3 bg-white/[0.02] border border-white/5 rounded-xl p-3 items-center">
                                                     <div className="h-1.5 w-1.5 rounded-full bg-[#4D78FF] shrink-0" />
                                                     <p className="text-xs text-white/90 font-medium leading-relaxed">
-                                                        {desc}
+                                                        {formatHistoryEntry(desc, activeModalMatch)}
                                                     </p>
                                                 </div>
                                             ))
