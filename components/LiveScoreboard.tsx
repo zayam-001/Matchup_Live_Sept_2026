@@ -335,7 +335,7 @@ const BroadcastOverlay = ({ event }: { event: any }) => {
 };
 
 const TournamentList = ({ tournaments, onSelect }: any) => {
-    const [activeCategoryTab, setActiveCategoryTab] = useState<'all' | 'live' | 'upcoming' | 'completed'>('all');
+    const [activeCategoryTab, setActiveCategoryTab] = useState<'all' | 'live' | 'ongoing' | 'upcoming' | 'completed'>('all');
     const [liveMatchTournamentIds, setLiveMatchTournamentIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
@@ -379,19 +379,37 @@ const TournamentList = ({ tournaments, onSelect }: any) => {
         if (t.status === 'ACTIVE' && hasLiveMatch) {
             return 'live';
         }
+        // FIX: a tournament whose start date has already passed but has no
+        // match live right this second (between rounds, waiting on a court,
+        // etc.) isn't accurately "Upcoming" either - that label means it
+        // hasn't started yet. Give it its own "Ongoing" bucket instead of
+        // forcing a binary live/upcoming choice.
+        if (t.status === 'ACTIVE' && t.startDate && new Date(t.startDate) <= now) {
+            return 'ongoing';
+        }
         return 'upcoming';
     };
 
     const categorized = React.useMemo(() => {
         const live: Tournament[] = [];
+        const ongoing: Tournament[] = [];
         const upcoming: Tournament[] = [];
         const completed: Tournament[] = [];
 
         tournaments.forEach((t: Tournament) => {
             const cat = categorizeTournament(t);
             if (cat === 'live') live.push(t);
+            else if (cat === 'ongoing') ongoing.push(t);
             else if (cat === 'upcoming') upcoming.push(t);
             else completed.push(t);
+        });
+
+        // Most-recently-started first, since that's the one most likely to
+        // still have rounds left to play.
+        ongoing.sort((a, b) => {
+            if (!a.startDate) return 1;
+            if (!b.startDate) return -1;
+            return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
         });
 
         upcoming.sort((a, b) => {
@@ -406,11 +424,11 @@ const TournamentList = ({ tournaments, onSelect }: any) => {
             return new Date(b.endDate).getTime() - new Date(a.endDate).getTime();
         });
 
-        return { live, upcoming, completed };
+        return { live, ongoing, upcoming, completed };
     }, [tournaments, liveMatchTournamentIds]);
 
     const featuredTournament = React.useMemo(() => {
-        return categorized.live[0] || categorized.upcoming[0] || categorized.completed[0] || null;
+        return categorized.live[0] || categorized.ongoing[0] || categorized.upcoming[0] || categorized.completed[0] || null;
     }, [categorized]);
 
     const formatMonthYear = (dateStr?: string) => {
@@ -427,6 +445,7 @@ const TournamentList = ({ tournaments, onSelect }: any) => {
     const tabs: any[] = [
         { id: 'all', label: 'All Tournaments' },
         { id: 'live', label: 'Live Now', count: categorized.live.length, isLive: true },
+        { id: 'ongoing', label: 'Ongoing', count: categorized.ongoing.length },
         { id: 'upcoming', label: 'Upcoming', count: categorized.upcoming.length },
         { id: 'completed', label: 'Completed', count: categorized.completed.length }
     ];
@@ -560,6 +579,25 @@ const TournamentList = ({ tournaments, onSelect }: any) => {
                                     key={t.id}
                                     tournament={t}
                                     variant="live"
+                                    onClick={() => onSelect(t.id)}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {(activeCategoryTab === 'all' || activeCategoryTab === 'ongoing') && categorized.ongoing.length > 0 && (
+                    <div className="animate-in fade-in duration-500">
+                        <div className="flex items-center gap-3 mb-6">
+                            <span className="h-2.5 w-2.5 bg-[#E65C31] rounded-full" />
+                            <h2 className="text-lg font-black uppercase tracking-[0.2em] text-white">Ongoing Tournaments</h2>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {categorized.ongoing.map((t: Tournament) => (
+                                <TournamentBannerCard
+                                    key={t.id}
+                                    tournament={t}
+                                    variant="ongoing"
                                     onClick={() => onSelect(t.id)}
                                 />
                             ))}

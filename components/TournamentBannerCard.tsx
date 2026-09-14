@@ -6,7 +6,7 @@ import { motion } from 'motion/react';
 
 interface TournamentBannerCardProps {
   tournament: Tournament;
-  variant: 'live' | 'upcoming' | 'completed';
+  variant: 'live' | 'ongoing' | 'upcoming' | 'completed';
   onClick: () => void;
 }
 
@@ -16,6 +16,7 @@ export const TournamentBannerCard: React.FC<TournamentBannerCardProps> = ({
   onClick,
 }) => {
   const isLive = variant === 'live';
+  const isOngoing = variant === 'ongoing';
   const isUpcoming = variant === 'upcoming';
   const isCompleted = variant === 'completed';
 
@@ -40,6 +41,8 @@ export const TournamentBannerCard: React.FC<TournamentBannerCardProps> = ({
   // Geometric gradient background for placeholder
   const placeholderGradient = isLive
     ? 'from-[#4D78FF]/25 via-[#111113] to-[#1B1B1E]'
+    : isOngoing
+    ? 'from-[#E65C31]/15 via-[#111113] to-[#1B1B1E]'
     : isUpcoming
     ? 'from-[#4D78FF]/10 via-[#111113] to-[#1B1B1E]'
     : 'from-[#1B1B1E] via-[#111113] to-[#1B1B1E]';
@@ -82,6 +85,11 @@ export const TournamentBannerCard: React.FC<TournamentBannerCardProps> = ({
               Live Now
             </span>
           )}
+          {isOngoing && (
+            <span className="flex items-center gap-1 bg-[#E65C31]/15 text-[#E65C31] border border-[#E65C31]/30 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-md">
+              Underway
+            </span>
+          )}
           {isUpcoming && (
             <span className="flex items-center gap-1 bg-white/10 text-white border border-white/10 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-md">
               Upcoming
@@ -112,8 +120,8 @@ export const TournamentBannerCard: React.FC<TournamentBannerCardProps> = ({
         {/* Cinematic Card Meta Content (Bottom overlay) */}
         <div className="absolute bottom-0 inset-x-0 p-5 z-10 flex flex-col justify-end">
           <div className="space-y-1">
-            <span className="text-[10px] text-[#4D78FF] font-black uppercase tracking-widest block font-mono">
-              {isLive ? `● Live • ${(tournament.teams || []).length} Teams` : isUpcoming ? `Upcoming • ${formattedStartDate}` : 'Tournament Finished'}
+            <span className={`text-[10px] font-black uppercase tracking-widest block font-mono ${isOngoing ? 'text-[#E65C31]' : 'text-[#4D78FF]'}`}>
+              {isLive ? `● Live • ${(tournament.teams || []).length} Teams` : isOngoing ? `Underway since ${formattedStartDate}` : isUpcoming ? `Upcoming • ${formattedStartDate}` : 'Tournament Finished'}
             </span>
             <h3 className="text-base md:text-lg font-black text-white uppercase tracking-wider line-clamp-1 group-hover:text-[#4D78FF] transition-colors leading-tight">
               {tournament.name}
