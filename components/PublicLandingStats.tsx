@@ -39,10 +39,30 @@ export const usePlatformStats = () => {
         let mounted = true;
         if (!db) return;
 
-        const unsubPlayers = onSnapshot(collection(db, 'onboardedPlayers'), (snap) => {
-            const realPlayers = snap.docs.filter(d => !isPlaceholderPlayer(d.data()));
+        const unsubPlayers = onSnapshot(collection(db, 'leaderboard'), (snap) => {
+            const rawEntries = snap.docs.map(doc => {
+                const d = doc.data();
+                return {
+                    name: (d.playerName || 'Unknown').trim(),
+                    matchesPlayed: d.matchesPlayed || 0,
+                    lastUpdatedMs: d.lastUpdated?.toMillis ? d.lastUpdated.toMillis() : 0,
+                };
+            });
+            const byName = new Map();
+            for (const entry of rawEntries) {
+                const key = entry.name.toLowerCase();
+                const existing = byName.get(key);
+                if (!existing) {
+                    byName.set(key, entry);
+                    continue;
+                }
+                const entryIsBetter = entry.matchesPlayed !== existing.matchesPlayed
+                    ? entry.matchesPlayed > existing.matchesPlayed
+                    : entry.lastUpdatedMs > existing.lastUpdatedMs;
+                if (entryIsBetter) byName.set(key, entry);
+            }
             if (mounted) {
-                setStats(prev => ({ ...prev, activePlayers: realPlayers.length }));
+                setStats(prev => ({ ...prev, activePlayers: byName.size }));
             }
         });
 
