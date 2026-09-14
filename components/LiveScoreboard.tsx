@@ -6,7 +6,7 @@ import { useMatchResult } from '../hooks/useMatchResult';
 import { useTournamentDoc } from '../hooks/useTournamentDoc';
 import { useTournamentMatches } from '../hooks/useTournamentMatches';
 import { MatchStatus, Tournament, TournamentFormat, RoundRobinType, Team, Match, SponsorTier, MatchEvent } from '../types';
-import { ChevronRight, Play, Info, Trophy, History, Timer, MapPin, Award, X, Activity, ChevronDown, Users, Mic, DollarSign, Tv, Calendar, Check, LayoutGrid, List } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Play, Info, Trophy, History, Timer, MapPin, Award, X, Activity, ChevronDown, Users, Mic, DollarSign, Tv, Calendar, Check, LayoutGrid, List } from 'lucide-react';
 import { Avatar } from './ui/Avatar';
 import { Card } from './ui/Card';
 import { Logo } from './ui/Logo';
@@ -370,7 +370,13 @@ const TournamentList = ({ tournaments, onSelect }: any) => {
         }
         const hasLiveMatchRealtime = liveMatchTournamentIds.has(t.id);
         const hasLiveMatch = hasLiveMatchRealtime || t.matches?.some(m => m.status === MatchStatus.IN_PROGRESS || String(m.status).toUpperCase() === 'LIVE' || String(m.status).toUpperCase() === 'IN_PROGRESS');
-        if (t.status === 'ACTIVE' && (hasLiveMatch || (t.startDate && new Date(t.startDate) <= now))) {
+        // FIX: this used to also count a tournament as "live" purely because
+        // its start date had passed, even with zero matches actually in
+        // progress - so any ongoing multi-day event sat in "Live Now" the
+        // entire time between matches, or even before the first match of
+        // the day had been started. "Live" should only mean an actual match
+        // is being played right now.
+        if (t.status === 'ACTIVE' && hasLiveMatch) {
             return 'live';
         }
         return 'upcoming';
@@ -1258,6 +1264,14 @@ const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClos
     useEffect(() => {
         if (!selectedMatchId && liveMatches.length > 0) {
             setSelectedMatchId('ALL');
+            return;
+        }
+        // If the specific match being viewed full-screen just ended (or
+        // otherwise dropped out of the live list), fall back to the grid
+        // instead of showing "no live matches" while other matches are
+        // still actually live.
+        if (selectedMatchId !== 'ALL' && !liveMatches.some(m => m.id === selectedMatchId)) {
+            setSelectedMatchId('ALL');
         }
     }, [liveMatches, selectedMatchId]);
 
@@ -1340,16 +1354,42 @@ const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClos
                         'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
                     }`}>
                         {liveMatches.map(m => (
-                            <BroadcastMatchCard key={m.id} match={m} teams={tournament.teams} categories={tournament.categories} tournament={tournament} compact={liveMatches.length > 2} />
+                            // FEATURE (requested): with multiple matches live
+                            // at once there was no way to focus on just one -
+                            // clicking a card now switches to that match's
+                            // full-screen view (wires up the selectedMatchId
+                            // state that already existed but nothing ever
+                            // set). A single live match is already full-screen
+                            // via the grid above, so the click affordance only
+                            // shows once there's actually something to switch
+                            // between.
+                            <div
+                                key={m.id}
+                                onClick={liveMatches.length > 1 ? () => setSelectedMatchId(m.id) : undefined}
+                                className={liveMatches.length > 1 ? 'cursor-pointer transition-transform hover:scale-[1.015]' : ''}
+                                title={liveMatches.length > 1 ? 'Click to view this match full-screen' : undefined}
+                            >
+                                <BroadcastMatchCard match={m} teams={tournament.teams} categories={tournament.categories} tournament={tournament} compact={liveMatches.length > 2} />
+                            </div>
                         ))}
                     </div>
                 ) : activeMatch ? (
-                    <div className="h-full flex flex-col xl:flex-row items-center xl:items-stretch justify-center gap-8 max-w-7xl mx-auto w-full min-h-0">
-                        <div className="flex-1 w-full flex flex-col justify-center min-h-0 shrink-0 xl:shrink">
-                            <BroadcastMatchCard match={activeMatch} teams={tournament.teams} categories={tournament.categories} tournament={tournament} />
-                        </div>
-                        <div className="w-full xl:w-[420px] min-h-[400px] xl:min-h-0 flex flex-col shrink-0">
-                            <MatchTimeline matches={[activeMatch]} teams={tournament.teams || []} />
+                    <div className="h-full flex flex-col min-h-0">
+                        {liveMatches.length > 1 && (
+                            <button
+                                onClick={() => setSelectedMatchId('ALL')}
+                                className="self-start mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-4 py-2 transition-colors shrink-0"
+                            >
+                                <ChevronLeft size={14} /> All {liveMatches.length} Live Matches
+                            </button>
+                        )}
+                        <div className="flex-1 flex flex-col xl:flex-row items-center xl:items-stretch justify-center gap-8 max-w-7xl mx-auto w-full min-h-0">
+                            <div className="flex-1 w-full flex flex-col justify-center min-h-0 shrink-0 xl:shrink">
+                                <BroadcastMatchCard match={activeMatch} teams={tournament.teams} categories={tournament.categories} tournament={tournament} />
+                            </div>
+                            <div className="w-full xl:w-[420px] min-h-[400px] xl:min-h-0 flex flex-col shrink-0">
+                                <MatchTimeline matches={[activeMatch]} teams={tournament.teams || []} />
+                            </div>
                         </div>
                     </div>
                 ) : (
@@ -1542,8 +1582,14 @@ const BroadcastMatchCard = ({ match: initialMatch, teams, compact, categories, t
             )}
             
             <div className="flex flex-col gap-6 relative z-10 flex-1 justify-center min-h-0">
+                {/* FIX: the name column had no min-w-0, so a flex item's
+                    default min-width (auto) refused to let long/wrapping
+                    names shrink to fit - they pushed past the card edge and
+                    got clipped by the container instead of wrapping cleanly
+                    inside it. min-w-0 lets flex-basis actually shrink; the
+                    score box keeps shrink-0 so it never gets squeezed. */}
                 <div className="flex justify-between items-center gap-4 group">
-                    <div className={`font-black uppercase leading-[1.1] text-white break-words ${compact ? "text-base" : "text-2xl md:text-4xl lg:text-5xl xl:text-6xl"}`}>
+                    <div className={`min-w-0 flex-1 font-black uppercase leading-[1.15] text-white break-words ${compact ? "text-base" : "text-xl md:text-3xl lg:text-4xl xl:text-5xl"}`}>
                         {formatNameHtml(t1P1Name, t1P2Name, t1FullName)}
                         {isT1Serving && <span className="w-2 h-2 bg-[#E65C31] rounded-full inline-block ml-2 mb-1 shadow-[0_0_10px_#E65C31]" />}
                     </div>
@@ -1551,13 +1597,13 @@ const BroadcastMatchCard = ({ match: initialMatch, teams, compact, categories, t
                         {activeScore.p1Points === "0" ? "00" : activeScore.p1Points}
                     </div>
                 </div>
-                
+
                 <div className="h-[1px] bg-white/10 w-full relative">
-                    <div className="absolute left-0 -top-[10px] text-[0.6rem] font-black bg-[#16161a] pr-2.5 text-[#4D78FF] uppercase">VS</div>
+                    <div className={`absolute left-0 -top-[12px] font-black bg-[#16161a] pr-2.5 text-[#4D78FF] uppercase ${compact ? "text-[0.6rem]" : "text-sm lg:text-base"}`}>VS</div>
                 </div>
-                
+
                 <div className="flex justify-between items-center gap-4 group">
-                    <div className={`font-black uppercase leading-[1.1] text-white break-words ${compact ? "text-base" : "text-2xl md:text-4xl lg:text-5xl xl:text-6xl"}`}>
+                    <div className={`min-w-0 flex-1 font-black uppercase leading-[1.15] text-white break-words ${compact ? "text-base" : "text-xl md:text-3xl lg:text-4xl xl:text-5xl"}`}>
                         {formatNameHtml(t2P1Name, t2P2Name, t2FullName)}
                         {isT2Serving && <span className="w-2 h-2 bg-[#E65C31] rounded-full inline-block ml-2 mb-1 shadow-[0_0_10px_#E65C31]" />}
                     </div>

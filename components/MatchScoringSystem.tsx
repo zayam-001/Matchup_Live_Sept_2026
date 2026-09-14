@@ -612,12 +612,21 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
   };
 
   return (
-    <div className="relative w-full min-h-full md:h-full flex flex-col bg-black overflow-y-auto md:overflow-hidden pb-12 md:pb-0">
+    // FIX (client feedback: perfect on mobile, but on laptop/desktop it
+    // couldn't scroll - had to browser-zoom out just to reach the second
+    // team member's score panel): md:overflow-hidden assumed the whole
+    // scoring layout would always fit within one viewport height on
+    // desktop with nothing cut off. It doesn't at typical laptop heights
+    // once server/tag controls are showing for all 4 players, and unlike
+    // mobile there was no scroll fallback - content past the viewport
+    // edge was just clipped and inaccessible. Now scrolls on desktop too,
+    // same as mobile already did.
+    <div className="relative w-full min-h-full md:h-full flex flex-col bg-black overflow-y-auto pb-12 md:pb-6">
       <div className="w-full flex justify-center py-2 bg-[#1A1A1A] hidden">
          <div className="w-12 h-1.5 rounded-full bg-white/20" />
       </div>
 
-      <div className="w-full flex flex-col relative bg-[#0A0A0A] min-h-full md:h-full overflow-y-auto md:overflow-hidden">
+      <div className="w-full flex flex-col relative bg-[#0A0A0A] min-h-full md:min-h-0">
         
         <header className="py-2 min-h-[3.5rem] sm:min-h-[4rem] shrink-0 border-b border-white/5 bg-[#111] flex justify-between items-center px-4 z-10 w-full relative">
           
@@ -805,7 +814,7 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
           </div>
         </section>
 
-        <main className="grid grid-cols-2 gap-0 relative z-0 border-y border-white/5 overflow-visible md:overflow-hidden md:flex-[1] min-h-[360px] md:min-h-0">
+        <main className="grid grid-cols-2 gap-0 relative z-0 border-y border-white/5 overflow-visible md:flex-[1] min-h-[360px] md:min-h-fit">
           <div className="flex flex-col md:h-full border-r border-white/5">
             {renderPlayerCard('p1')}
             <div className="h-[1px] bg-white/5 w-full hidden" />

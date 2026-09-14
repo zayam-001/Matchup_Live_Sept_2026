@@ -552,11 +552,20 @@ html { scroll-padding-top: 105px; }
 .scroll-cue--prototype { z-index: 8; }
 .scroll-cue--prototype b { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid rgba(229,92,48,.24); border-radius: 999px; color: var(--accent); transform: rotate(90deg); }
 
-/* The vertical page distance drives a genuinely pinned horizontal feature story. */
-.feature-story { --feature-height: 2600px; position: relative; height: var(--feature-height); min-height: 190vh; padding: 0; overflow: visible; }
-.feature-pin { position: sticky; top: 0; height: 100vh; min-height: 680px; display: flex; align-items: center; overflow: hidden; perspective: 1400px; }
-.feature-track { flex: 0 0 auto; transform: translate3d(0,0,0); will-change: transform; padding-block: 65px; }
-.feature-card { transform-style: preserve-3d; will-change: transform, opacity; transition: border-color .35s ease, box-shadow .35s ease; }
+/* FIX (client feedback: a whole empty blue section sat before "Your game.
+   Measured." on desktop): this scroll-jack effect reserved --feature-height
+   (JS-computed, at minimum ~2.4x the viewport height) of vertical scroll
+   distance so a horizontal card row could "pin" in place and translate
+   sideways as you scrolled past it. The pinned cards fill only 100vh of
+   that reserved space, so scrolling through the rest of it - which is most
+   of it - showed nothing but the plain background gradient. Disabled for
+   all screen sizes now (matching the mobile behavior below, which never
+   used the scroll-jack to begin with): natural height, a normal
+   horizontally-scrollable card row, no pin, no reserved empty space. */
+.feature-story { position: relative; height: auto !important; min-height: auto !important; padding: 40px 0 80px; overflow: hidden; }
+.feature-pin { position: relative; top: auto; height: auto; min-height: 0; display: block; overflow: visible; }
+.feature-track { width: auto; display: flex; overflow-x: auto; transform: none !important; padding-block: 20px; scrollbar-width: thin; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
+.feature-card { transform: none !important; opacity: 1 !important; transition: border-color .35s ease, box-shadow .35s ease; }
 .feature-card.is-near-center { border-color: rgba(229,92,48,.36); box-shadow: 0 35px 95px rgba(0,0,0,.48), 0 0 55px rgba(229,92,48,.08); }
 .feature-progress span { transform-origin: left center; will-change: transform; }
 
