@@ -1421,12 +1421,15 @@ const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClos
                                 <ChevronLeft size={14} /> All {liveMatches.length} Live Matches
                             </button>
                         )}
-                        <div className="flex-1 flex flex-col xl:flex-row items-center xl:items-stretch justify-center gap-8 max-w-7xl mx-auto w-full min-h-0">
-                            <div className="flex-1 w-full flex flex-col justify-center min-h-0 shrink-0 xl:shrink">
+                        {/* Just the scoreboard, full-width - no side "Action Log" panel.
+                            This single-match view was previously unreachable code (nothing
+                            ever set selectedMatchId to a real match), so the MatchTimeline
+                            panel that used to sit here had never actually been seen live
+                            until the click-to-select feature exposed it - not something
+                            anyone asked for in this broadcast context. */}
+                        <div className="flex-1 flex items-center justify-center max-w-5xl mx-auto w-full min-h-0">
+                            <div className="w-full flex flex-col justify-center min-h-0">
                                 <BroadcastMatchCard match={activeMatch} teams={tournament.teams} categories={tournament.categories} tournament={tournament} />
-                            </div>
-                            <div className="w-full xl:w-[420px] min-h-[400px] xl:min-h-0 flex flex-col shrink-0">
-                                <MatchTimeline matches={[activeMatch]} teams={tournament.teams || []} />
                             </div>
                         </div>
                     </div>
