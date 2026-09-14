@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogIn, LogOut, Users } from 'lucide-react';
+import { LogIn, LogOut, Users, X } from 'lucide-react';
 import { MenuToggleIcon } from './menu-toggle-icon';
+import { MatchupLogo } from '../MatchupLogo';
 import { cn } from '../../lib/utils';
 
 interface NavigationMenuProps {
@@ -143,29 +144,57 @@ export const NavigationMenu: React.FC<NavigationMenuProps> = ({
             animate="open"
             exit="closed"
             variants={menuVariants}
-            className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[9998] flex flex-col justify-center items-center pointer-events-auto overflow-y-auto text-center"
+            className="fixed inset-0 bg-[#050818]/97 backdrop-blur-xl z-[9998] flex flex-col pointer-events-auto overflow-y-auto"
           >
-            <ul className="flex flex-col gap-4 sm:gap-6 md:gap-8 w-full px-6 py-20 h-full justify-center max-w-5xl mx-auto">
+            {/* Brand-consistent glow accent, matching the hero/final-cta treatment elsewhere on the site */}
+            <div className="pointer-events-none absolute top-[-20%] right-[-10%] w-[60vw] h-[60vw] max-w-[700px] max-h-[700px] rounded-full bg-[#E65C31]/10 blur-[120px]" />
+
+            <div className="relative z-10 flex items-center justify-between px-6 sm:px-10 pt-8">
+              <MatchupLogo className="h-7 sm:h-8 w-auto opacity-90" />
+              <button
+                onClick={() => setIsOpen(false)}
+                aria-label="Close menu"
+                className="p-3 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <ul className="relative z-10 flex flex-col w-full px-6 sm:px-10 py-14 flex-1 justify-center max-w-3xl mx-auto">
               {menuItems.map((item, i) => (
                 <li
                   key={item.id}
                   className={cn(
-                    "transition-all duration-500 transform w-full flex justify-center",
+                    "transition-all duration-500 transform border-t border-white/10 first:border-t-0",
                     isOpen ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"
                   )}
-                  style={{ transitionDelay: `${i * 100}ms` }}
+                  style={{ transitionDelay: `${i * 80}ms` }}
                 >
                   <button
                     onClick={item.onClick}
-                    className={cn(
-                      "group relative flex items-center justify-center gap-4 text-3xl sm:text-4xl md:text-5xl lg:text-6xl leading-none font-black tracking-tighter uppercase text-white/50 hover:text-white transition-all duration-300 font-sans",
-                      item.isActive && "text-white"
-                    )}
+                    className="group relative flex items-center gap-4 sm:gap-6 w-full py-5 sm:py-6 text-left"
                   >
-                    <span className="w-12 h-12 sm:w-14 sm:h-14 md:w-20 md:h-20 lg:w-28 lg:h-28 text-primary opacity-0 -translate-x-8 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 flex flex-shrink-0 items-center justify-center [&>svg]:w-full [&>svg]:h-full absolute -left-16 sm:-left-20 md:-left-28 lg:-left-36">
+                    <span className="text-xs sm:text-sm font-mono font-bold text-[#E65C31] w-8 shrink-0">
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                    <span
+                      className={cn(
+                        "flex-1 text-3xl sm:text-4xl md:text-5xl leading-none font-black tracking-tighter uppercase transition-colors duration-300 font-sans",
+                        item.isActive ? "text-white" : "text-white/45 group-hover:text-white"
+                      )}
+                    >
+                      {item.label}
+                    </span>
+                    <span
+                      className={cn(
+                        "w-10 h-10 sm:w-12 sm:h-12 rounded-full border flex items-center justify-center shrink-0 transition-all duration-300 [&>svg]:w-4 [&>svg]:h-4 sm:[&>svg]:w-5 sm:[&>svg]:h-5",
+                        item.isActive
+                          ? "bg-[#E65C31] border-[#E65C31] text-white"
+                          : "bg-white/5 border-white/10 text-white/40 group-hover:border-[#E65C31]/50 group-hover:text-[#E65C31] group-hover:translate-x-1"
+                      )}
+                    >
                       {item.icon}
                     </span>
-                    {item.label}
                   </button>
                 </li>
               ))}
