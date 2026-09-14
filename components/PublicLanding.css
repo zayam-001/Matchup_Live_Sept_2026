@@ -478,7 +478,7 @@
   .intro-grid, .section-heading, .performance-grid, .community-grid, .app-shell { grid-template-columns: 1fr; gap: 34px; }
   .intro-grid { align-items: start; }
   .feature-story { min-height: auto; padding-bottom: 70px; }
-  .feature-track { width: auto; overflow-x: auto; scroll-snap-type: x mandatory; padding-inline: 15px 40px; }
+  .feature-track { width: auto; overflow-x: auto; scroll-snap-type: x mandatory; padding-inline: 15px 40px; scrollbar-width: none; -ms-overflow-style: none; }
   .feature-card { min-width: min(390px, calc(100vw - 50px)); min-height: 500px; scroll-snap-align: start; }
   .leaderboard-head { align-items: flex-start; flex-direction: column; }
   .leaderboard-filters { width: 100%; }
@@ -568,10 +568,12 @@ html { scroll-padding-top: 105px; }
    scroll container - its own overflow-x is what should scroll, not an
    ancestor's. flex-shrink:0 on the cards stops them from being squeezed to
    fit (the previous clipping bug); together, content wider than the row
-   now genuinely overflows *within* feature-track and scrolls via its own
-   scrollbar instead of either clipping (overflow:hidden further up) or
-   shrinking every card to fit on screen. */
-.feature-track { width: 100%; display: flex; overflow-x: auto; transform: none !important; padding-block: 20px; scrollbar-width: thin; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
+   now genuinely overflows *within* feature-track and scrolls smoothly.
+   The native scrollbar bar is hidden cleanly across all browsers while
+   maintaining full touch, drag, and trackpad scroll functionality. */
+.feature-track { width: 100%; display: flex; overflow-x: auto; transform: none !important; padding-block: 20px; scrollbar-width: none; -ms-overflow-style: none; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; cursor: grab; }
+.feature-track:active { cursor: grabbing; }
+.feature-track::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .feature-card { flex-shrink: 0; transform: none !important; opacity: 1 !important; transition: border-color .35s ease, box-shadow .35s ease; }
 .feature-card.is-near-center { border-color: rgba(229,92,48,.36); box-shadow: 0 35px 95px rgba(0,0,0,.48), 0 0 55px rgba(229,92,48,.08); }
 .feature-progress span { transform-origin: left center; will-change: transform; }
@@ -583,7 +585,7 @@ html { scroll-padding-top: 105px; }
     .pl-root { overflow-x: hidden; }
     .feature-story { height: auto !important; min-height: auto; padding: 20px 0 76px; overflow: hidden; }
     .feature-pin { position: relative; top: auto; height: auto; min-height: 0; display: block; overflow: visible; }
-    .feature-track { width: auto; overflow-x: auto; transform: none !important; padding-block: 20px; scrollbar-width: thin; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
+    .feature-track { width: auto; overflow-x: auto; transform: none !important; padding-block: 20px; scrollbar-width: none; -ms-overflow-style: none; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
     .feature-card { transform: none !important; opacity: 1 !important; }
     .site-nav.is-scrolled { top: 6px; }
 }

@@ -219,6 +219,66 @@ export const PublicLanding: React.FC<{ onNavigate: (tab: string) => void }> = ({
   };
   window.addEventListener('pointermove', pointerMove, { passive: true });
 
+  // Feature track drag and wheel scrolling (replaces visible scrollbar while preserving all functionality)
+  let isDown = false;
+  let startX = 0;
+  let scrollLeft = 0;
+  let hasDragged = false;
+
+  const handleMouseDown = (e: MouseEvent) => {
+    if (!featureTrack) return;
+    isDown = true;
+    hasDragged = false;
+    startX = e.pageX - featureTrack.offsetLeft;
+    scrollLeft = featureTrack.scrollLeft;
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDown || !featureTrack) return;
+    const x = e.pageX - featureTrack.offsetLeft;
+    const walk = x - startX;
+    if (Math.abs(walk) > 4) {
+      hasDragged = true;
+      e.preventDefault();
+      featureTrack.scrollLeft = scrollLeft - walk;
+    }
+  };
+
+  const handleMouseUp = () => {
+    isDown = false;
+  };
+
+  const handleClickCapture = (e: MouseEvent) => {
+    if (hasDragged) {
+      e.preventDefault();
+      e.stopPropagation();
+      hasDragged = false;
+    }
+  };
+
+  const handleWheel = (e: WheelEvent) => {
+    if (!featureTrack) return;
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      const maxScroll = featureTrack.scrollWidth - featureTrack.clientWidth;
+      if (maxScroll > 5) {
+        const canScrollLeft = featureTrack.scrollLeft > 0 && e.deltaY < 0;
+        const canScrollRight = featureTrack.scrollLeft < maxScroll - 1 && e.deltaY > 0;
+        if (canScrollLeft || canScrollRight) {
+          e.preventDefault();
+          featureTrack.scrollLeft += e.deltaY;
+        }
+      }
+    }
+  };
+
+  if (featureTrack) {
+    featureTrack.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    featureTrack.addEventListener('click', handleClickCapture, true);
+    featureTrack.addEventListener('wheel', handleWheel, { passive: false });
+  }
+
   const scrollEl = document.getElementById('main-scroll-container') || window;
   scrollEl.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', restartRenderLoop, { passive: true });
@@ -235,11 +295,18 @@ export const PublicLanding: React.FC<{ onNavigate: (tab: string) => void }> = ({
   
   return () => {
      const scrollEl = document.getElementById('main-scroll-container') || window;
-      scrollEl.removeEventListener('scroll', onScroll);
+     scrollEl.removeEventListener('scroll', onScroll);
      window.removeEventListener('resize', restartRenderLoop);
      window.removeEventListener('load', restartRenderLoop);
      window.removeEventListener('pointermove', pointerMove);
      mobileQuery.removeEventListener?.('change', restartRenderLoop);
+     if (featureTrack) {
+       featureTrack.removeEventListener('mousedown', handleMouseDown);
+       window.removeEventListener('mousemove', handleMouseMove);
+       window.removeEventListener('mouseup', handleMouseUp);
+       featureTrack.removeEventListener('click', handleClickCapture, true);
+       featureTrack.removeEventListener('wheel', handleWheel);
+     }
      cancelAnimationFrame(rafId);
      if (rObs) rObs.disconnect();
   };
