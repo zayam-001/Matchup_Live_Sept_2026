@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogIn, LogOut, Users, X } from 'lucide-react';
+import { LogIn, LogOut, Users } from 'lucide-react';
 import { MenuToggleIcon } from './menu-toggle-icon';
 import { MatchupLogo } from '../MatchupLogo';
 import { cn } from '../../lib/utils';
@@ -151,13 +151,6 @@ export const NavigationMenu: React.FC<NavigationMenuProps> = ({
 
             <div className="relative z-10 flex items-center justify-between px-6 sm:px-10 pt-8">
               <MatchupLogo className="h-7 sm:h-8 w-auto opacity-90" />
-              <button
-                onClick={() => setIsOpen(false)}
-                aria-label="Close menu"
-                className="p-3 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors"
-              >
-                <X size={20} />
-              </button>
             </div>
 
             <ul className="relative z-10 flex flex-col w-full px-6 sm:px-10 py-14 flex-1 justify-center max-w-3xl mx-auto">
