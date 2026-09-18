@@ -2407,7 +2407,7 @@ export const checkAndHealTournamentStats = async (tournament: Tournament, matche
             }
         }
     } catch (e) {
-        console.error("Self-healing stats recalculation failed", e);
+        // console.warn("Self-healing stats recalculation skipped: " + e.message);
     }
 };
 

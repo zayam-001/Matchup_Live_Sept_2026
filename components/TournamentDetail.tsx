@@ -69,6 +69,7 @@ interface TournamentDetailProps {
   onBack: () => void;
   onEnterBroadcastMode?: () => void;
   initialTab?: 'live' | 'schedule' | 'results' | 'standings' | 'timeline';
+  searchQuery?: string;
 }
 
 export const TournamentDetail: React.FC<TournamentDetailProps> = ({
@@ -76,7 +77,8 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
   matches,
   onBack,
   onEnterBroadcastMode,
-  initialTab = 'live'
+  initialTab = 'live',
+  searchQuery
 }) => {
   const [activeTab, setActiveTab] = useState<'live' | 'schedule' | 'results' | 'standings' | 'timeline'>(initialTab);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);

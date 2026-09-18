@@ -6,7 +6,7 @@ import { useMatchResult } from '../hooks/useMatchResult';
 import { useTournamentDoc } from '../hooks/useTournamentDoc';
 import { useTournamentMatches } from '../hooks/useTournamentMatches';
 import { MatchStatus, Tournament, TournamentFormat, RoundRobinType, Team, Match, SponsorTier, MatchEvent } from '../types';
-import { ChevronRight, ChevronLeft, Play, Info, Trophy, History, Timer, MapPin, Award, X, Activity, ChevronDown, Users, Mic, DollarSign, Tv, Calendar, Check, LayoutGrid, List } from 'lucide-react';
+import { Search, Filter, ChevronRight, ChevronLeft, Play, Info, Trophy, History, Timer, MapPin, Award, X, Activity, ChevronDown, Users, Mic, DollarSign, Tv, Calendar, Check, LayoutGrid, List } from 'lucide-react';
 import { Avatar } from './ui/Avatar';
 import { Card } from './ui/Card';
 import { Logo } from './ui/Logo';
@@ -102,6 +102,9 @@ const formatFullDateOnly = (time: any) => {
 
 export const formatCleanName = (name: string | undefined | null): string => { if (!name) return ''; return name.replace(/^&\s*/, '').replace(/\s*&$/, '').trim(); };
 export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCategoryId?: string }> = ({ initialTournamentId, initialCategoryId }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'upcoming'>('all');
+  const [sportFilter, setSportFilter] = useState<'all' | 'padel'>('all');
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(initialTournamentId || null);
   const [isBroadcastMode, setIsBroadcastMode] = useState(false);
@@ -193,51 +196,56 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
     }
   }, [activeTournament, tournamentMatches, selectedCategoryId, prevCategory, loadingMatches]);
 
-  if (!selectedTournamentId) return <TournamentList tournaments={tournaments} onSelect={handleSelectTournament} />;
-  if (loadingTournament) return <div className="text-center p-10 text-gray-500">Loading...</div>;
-  if (!activeTournament) return <div className="text-center p-10 text-gray-400">Tournament not found</div>;
-
-  const matchesToDisplay = (activeTournament.categories && activeTournament.categories.length > 0) && selectedCategoryId
-        ? tournamentMatches.filter((m: any) => isMatchInCategory(m, selectedCategoryId, activeTournament))
-        : tournamentMatches;
-
-  const teamsToDisplay = (activeTournament.categories && activeTournament.categories.length > 0) && selectedCategoryId
-        ? (activeTournament.teams || []).filter((t: any) => isTeamInCategory(t, selectedCategoryId, activeTournament))
-        : (activeTournament.teams || []);
-
-  const liveMatches = matchesToDisplay.filter((m: any) => 
-    (m.status === MatchStatus.IN_PROGRESS || String(m.status).toUpperCase() === 'LIVE' || String(m.status).toUpperCase() === 'IN_PROGRESS') && 
-    !m.winnerTeamId
-  );
-  const completedMatches = matchesToDisplay
-    .filter((m: any) => (m.status === MatchStatus.COMPLETED || String(m.status).toUpperCase() === 'FINISHED' || String(m.status).toUpperCase() === 'COMPLETED') || !!m.winnerTeamId)
-    .sort((a: any, b: any) => getMatchTimestamp(b) - getMatchTimestamp(a));
   
-  const upcomingMatches = matchesToDisplay
-    .filter((m: any) => m.status === MatchStatus.SCHEDULED || !m.status || String(m.status).toUpperCase() === 'SCHEDULED')
-    .sort((a: any, b: any) => getMatchTimestamp(a) - getMatchTimestamp(b));
-
-  const latestFinished = completedMatches.length > 0 ? completedMatches[0] : null;
-
-  // Process Sponsors
-  const sponsors = activeTournament.sponsors || [];
-  const titleSponsor = sponsors.find((s: any) => typeof s !== 'string' && s.tier === SponsorTier.TITLE);
-  // Gold and Platinum get Live Match placement
-  const premiumSponsors = sponsors.filter((s: any) => typeof s !== 'string' && (s.tier === SponsorTier.GOLD || s.tier === SponsorTier.PLATINUM || s.tier === SponsorTier.TITLE));
-  // All non-title sponsors go to marquee (including legacy strings)
-  const marqueeSponsors = sponsors.filter((s: any) => typeof s === 'string' || s.tier !== SponsorTier.TITLE);
-
   if (isBroadcastMode && activeTournament) {
       return <BroadcastMode tournament={activeTournament} onClose={() => setIsBroadcastMode(false)} />;
   }
-
+  
   return (
-    <TournamentDetail
-      tournament={activeTournament}
-      matches={tournamentMatches}
-      onBack={() => handleSelectTournament(null)}
-      onEnterBroadcastMode={() => setIsBroadcastMode(true)}
-    />
+    <div className="relative min-h-screen">
+      {/* Sticky Search Bar */}
+      <div className="sticky top-[72px] md:top-[88px] z-40 bg-[#111113]/80 backdrop-blur-xl border-b border-white/5 py-4 px-4 md:px-8 mb-4">
+          <div className="max-w-7xl mx-auto space-y-3">
+              <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-content-muted" size={20} />
+                  <input 
+                      type="text" 
+                      placeholder="Search tournaments or specific matches..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      className="w-full bg-[#1B1B1E]/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white font-bold tracking-wide focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all placeholder:text-content-muted/50"
+                  />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                  <Filter size={14} className="text-content-muted mr-2" />
+                  <button onClick={() => setDateFilter('all')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${dateFilter === 'all' ? 'bg-brand text-content-inverse' : 'bg-surface-elevated text-content-muted hover:bg-white/10'}`}>All Dates</button>
+                  <button onClick={() => setDateFilter('today')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${dateFilter === 'today' ? 'bg-brand text-content-inverse' : 'bg-surface-elevated text-content-muted hover:bg-white/10'}`}>Today</button>
+                  <button onClick={() => setDateFilter('upcoming')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${dateFilter === 'upcoming' ? 'bg-brand text-content-inverse' : 'bg-surface-elevated text-content-muted hover:bg-white/10'}`}>Upcoming</button>
+                  
+                  <div className="w-px h-4 bg-white/10 mx-1" />
+                  
+                  <button onClick={() => setSportFilter('all')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${sportFilter === 'all' ? 'bg-[#10B981] text-[#111113]' : 'bg-surface-elevated text-content-muted hover:bg-white/10'}`}>All Sports</button>
+                  <button onClick={() => setSportFilter('padel')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${sportFilter === 'padel' ? 'bg-[#10B981] text-[#111113]' : 'bg-surface-elevated text-content-muted hover:bg-white/10'}`}>Padel</button>
+              </div>
+          </div>
+      </div>
+
+      {!selectedTournamentId ? (
+          <TournamentList tournaments={tournaments} onSelect={handleSelectTournament} searchQuery={searchQuery} dateFilter={dateFilter} sportFilter={sportFilter} />
+      ) : loadingTournament ? (
+          <div className="text-center p-10 text-gray-500">Loading...</div>
+      ) : !activeTournament ? (
+          <div className="text-center p-10 text-gray-400">Tournament not found</div>
+      ) : (
+          <TournamentDetail
+            tournament={activeTournament}
+            matches={tournamentMatches}
+            onBack={() => handleSelectTournament(null)}
+            onEnterBroadcastMode={() => setIsBroadcastMode(true)}
+            searchQuery={searchQuery}
+          />
+      )}
+    </div>
   );
 }
 
@@ -1096,7 +1104,7 @@ export const StandingsTable = ({ tournamentId, categoryId, initialTeams, onTeamS
     // Self-heal DB stats in background when tournament & matches exist
     useEffect(() => {
         if (tournament && matches && matches.length > 0) {
-            checkAndHealTournamentStats(tournament, matches, categoryId);
+            // checkAndHealTournamentStats(tournament, matches, categoryId); // Disabled in LiveScoreboard to prevent permission errors for spectators
         }
     }, [tournament, matches, categoryId]);
 

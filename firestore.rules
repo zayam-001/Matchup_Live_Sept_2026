@@ -161,6 +161,8 @@ service cloud.firestore {
         allow read: if true;
         allow write: if isAuthenticated() && (
           get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.organizerId == request.auth.uid || 
+          get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.organizerEmail == request.auth.token.email ||
+          get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.adminTag == request.auth.token.email ||
           isSuperAdmin() ||
           request.auth.token.firebase.sign_in_provider == 'anonymous'
         );

@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+const fs = require('fs');
+const content = `import React, { useState, useRef } from 'react';
 import { X, Upload, CheckCircle, AlertCircle, Download, Link as LinkIcon, UploadCloud, Loader2 } from 'lucide-react';
 import { Tournament } from '../types';
 
@@ -25,8 +26,8 @@ export const downloadTeamUploadTemplate = (isAmericanoMode: boolean) => {
 
   const csvContent = [
     headers.join(","),
-    ...sampleRows.map(row => row.map(cell => `"${cell}"`).join(","))
-  ].join("\n");
+    ...sampleRows.map(row => row.map(cell => \`"\${cell}"\`).join(","))
+  ].join("\\n");
 
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const link = document.createElement("a");
@@ -97,7 +98,7 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
         }
 
         try {
-            const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+            const lines = text.split(/\\r?\\n/).filter(line => line.trim() !== '');
             if (lines.length < 2) {
                 throw new Error("CSV must contain a header row and at least one data row.");
             }
@@ -246,7 +247,7 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
     };
 
     const handleFile = (file: File) => {
-        if (!file.name.match(/\.(csv|xlsx|xls)$/i)) {
+        if (!file.name.match(/\\.(csv|xlsx|xls)$/i)) {
             setError("Please upload a valid .csv, .xlsx, or .xls file.");
             return;
         }
@@ -274,8 +275,8 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
         
         // Mock successful parse of a template
         const mockTemplate = isAmericanoMode ? 
-            "PLAYER NAME,Player phone,Player email,Player CNIC\nJohn Doe,+923001234567,john@example.com,\nJane Smith,+923331112222,jane@example.com," :
-            "TEAM NAME,PLAYER 01,Player 1 phone,Player 1 email,PLAYER 02,Player 2 phone,Player 2 email\nSmashers,Ali,+92300123,ali@example.com,Bilal,+92321123,bilal@example.com";
+            "PLAYER NAME,Player phone,Player email,Player CNIC\\nJohn Doe,+923001234567,john@example.com,\\nJane Smith,+923331112222,jane@example.com," :
+            "TEAM NAME,PLAYER 01,Player 1 phone,Player 1 email,PLAYER 02,Player 2 phone,Player 2 email\\nSmashers,Ali,+92300123,ali@example.com,Bilal,+92321123,bilal@example.com";
             
         processCSVText(mockTemplate);
     };
@@ -330,11 +331,11 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
                             <div className="flex flex-col gap-4">
                                 <label className="text-sm font-bold text-white">Upload File</label>
                                 <div 
-                                    className={`relative flex flex-col items-center justify-center p-10 border-2 border-dashed rounded-xl transition-all duration-200 cursor-pointer ${
+                                    className={\`relative flex flex-col items-center justify-center p-10 border-2 border-dashed rounded-xl transition-all duration-200 cursor-pointer \${
                                         dragActive 
                                         ? 'border-[#4D78FF] bg-[#4D78FF]/5 shadow-[0_0_30px_rgba(77,120,255,0.15)]' 
                                         : 'border-white/20 bg-[#15181e] hover:border-white/40 hover:bg-[#1a1d24]'
-                                    }`}
+                                    }\`}
                                     onDragEnter={handleDrag}
                                     onDragLeave={handleDrag}
                                     onDragOver={handleDrag}
@@ -352,7 +353,7 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
                                             }
                                         }}
                                     />
-                                    <UploadCloud size={36} className={`mb-3 transition-colors ${dragActive ? 'text-[#4D78FF]' : 'text-content-muted'}`} />
+                                    <UploadCloud size={36} className={\`mb-3 transition-colors \${dragActive ? 'text-[#4D78FF]' : 'text-content-muted'}\`} />
                                     <p className="text-sm text-white font-medium mb-1">Drag and drop your file here</p>
                                     <p className="text-xs text-content-muted mb-4">Supports .csv, .xlsx, .xls</p>
                                     <span className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-xs font-semibold text-white hover:bg-white/10 transition-colors pointer-events-none">
@@ -416,7 +417,7 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
                                 <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
                                     <div 
                                         className="h-full bg-[#4D78FF] transition-all duration-300 ease-out"
-                                        style={{ width: `${parseProgress}%` }}
+                                        style={{ width: \`\${parseProgress}%\` }}
                                     />
                                 </div>
                             </div>
@@ -440,11 +441,11 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
                                         {uploadStats.players}
                                     </span>
                                 </div>
-                                <div className={`border rounded-xl p-4 flex flex-col ${uploadStats.invalid > 0 ? 'bg-red-500/5 border-red-500/20' : 'bg-[#10B981]/5 border-[#10B981]/20'}`}>
-                                    <span className={`text-xs font-semibold uppercase tracking-wider mb-1 ${uploadStats.invalid > 0 ? 'text-red-400' : 'text-[#10B981]'}`}>
+                                <div className={\`border rounded-xl p-4 flex flex-col \${uploadStats.invalid > 0 ? 'bg-red-500/5 border-red-500/20' : 'bg-[#10B981]/5 border-[#10B981]/20'}\`}>
+                                    <span className={\`text-xs font-semibold uppercase tracking-wider mb-1 \${uploadStats.invalid > 0 ? 'text-red-400' : 'text-[#10B981]'}\`}>
                                         Validation Errors
                                     </span>
-                                    <span className={`text-2xl font-bold flex items-baseline gap-2 ${uploadStats.invalid > 0 ? 'text-red-400' : 'text-[#10B981]'}`}>
+                                    <span className={\`text-2xl font-bold flex items-baseline gap-2 \${uploadStats.invalid > 0 ? 'text-red-400' : 'text-[#10B981]'}\`}>
                                         {uploadStats.invalid} <span className="text-sm font-normal opacity-70">rows</span>
                                     </span>
                                 </div>
@@ -462,7 +463,7 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
                                     </thead>
                                     <tbody className="divide-y divide-white/5 text-content-primary">
                                         {preview.map((row, i) => (
-                                            <tr key={i} className={`hover:bg-white/[0.02] transition-colors ${!row.isValid ? 'bg-red-500/[0.02]' : ''}`}>
+                                            <tr key={i} className={\`hover:bg-white/[0.02] transition-colors \${!row.isValid ? 'bg-red-500/[0.02]' : ''}\`}>
                                                 <td className="px-4 py-3 text-center border-r border-white/5">
                                                     {row.isValid ? (
                                                         <CheckCircle size={16} className="text-[#10B981] mx-auto" />
@@ -472,20 +473,20 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
                                                 </td>
                                                 {!isAmericanoMode && (
                                                     <td className="px-4 py-3">
-                                                        <div className={`font-medium ${row.errors.teamname ? 'text-red-400' : 'text-white'}`}>
+                                                        <div className={\`font-medium \${row.errors.teamname ? 'text-red-400' : 'text-white'}\`}>
                                                             {row.data.name || <span className="text-red-400/50 italic">Missing Name</span>}
                                                         </div>
                                                     </td>
                                                 )}
                                                 <td className="px-4 py-3">
-                                                    <div className={`${(isAmericanoMode ? row.errors.playername : row.errors.player1name) ? 'text-red-400' : ''}`}>
+                                                    <div className={\`\${(isAmericanoMode ? row.errors.playername : row.errors.player1name) ? 'text-red-400' : ''}\`}>
                                                         {row.data.player1.name || <span className="text-red-400/50 italic">Missing Name</span>}
                                                     </div>
                                                     <div className="text-xs text-content-muted font-mono mt-0.5">{row.data.player1.phone || 'No phone'}</div>
                                                 </td>
                                                 {!isAmericanoMode && (
                                                     <td className="px-4 py-3">
-                                                        <div className={`${row.errors.player2name ? 'text-red-400' : ''}`}>
+                                                        <div className={\`\${row.errors.player2name ? 'text-red-400' : ''}\`}>
                                                             {row.data.player2.name || <span className="text-red-400/50 italic">Missing Name</span>}
                                                         </div>
                                                         <div className="text-xs text-content-muted font-mono mt-0.5">{row.data.player2.phone || 'No phone'}</div>
@@ -526,3 +527,5 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
         </div>
     );
 };
+`
+fs.writeFileSync('./components/BulkUploadTeamsModal.tsx', content);

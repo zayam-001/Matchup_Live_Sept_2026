@@ -26,7 +26,7 @@ const dismiss = (id: number) => {
   emit();
 };
 
-const push = (variant: ToastVariant, title: string, description?: string, duration = 5000) => {
+const push = (variant: ToastVariant, title: string, description?: string, duration = 4000) => {
   const id = nextId++;
   toasts = [...toasts, { id, variant, title, description, duration }];
   emit();
@@ -70,14 +70,14 @@ export const ToastContainer: React.FC = () => {
   if (items.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-[100000] flex flex-col gap-2 w-[min(360px,calc(100vw-2rem))] pointer-events-none">
+    <div className="fixed bottom-4 right-4 z-[100000] flex flex-col gap-2 w-[min(360px,calc(100vw-2rem))] pointer-events-none">
       {items.map((t) => {
         const style = VARIANT_STYLES[t.variant];
         return (
           <div
             key={t.id}
             role="alert"
-            className={`pointer-events-auto bg-[#16161a] border border-white/10 border-l-4 ${style.accent} rounded-xl shadow-2xl p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-200`}
+            className={`pointer-events-auto bg-[#16161a] border border-white/10 border-l-4 ${style.accent} rounded-xl shadow-2xl p-4 flex items-start gap-3 animate-in fade-in slide-in-from-right-4 duration-500`}
           >
             <span className="shrink-0 mt-0.5">{style.icon}</span>
             <div className="flex-1 min-w-0">

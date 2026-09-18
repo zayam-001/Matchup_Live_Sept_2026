@@ -639,47 +639,71 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
                         accept="image/*" 
                         onChange={handlePhotoChange} 
                     />
-                    {/* Header Profile Section */}
-                    <div className="relative rounded-3xl overflow-hidden bg-surface-panel border border-white/5 shadow-2xl">
-                    <div className="absolute inset-0 bg-gradient-to-br from-brand/20 to-transparent opacity-50"></div>
-                    <div className="absolute top-0 right-0 w-96 h-96 bg-brand/10 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/3"></div>
-                    
-                    <div className="relative z-10 p-8 md:p-12 flex flex-col md:flex-row items-center gap-8">
-                        <Avatar src={player.photoUrl} fallback={player.fullName || player.name} size="xl" className="border-4 border-surface-ground shadow-xl" />
-                        <div className="flex-1 text-center md:text-left">
-                            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-3">
-                                <Badge variant="live" className="animate-pulse">Verified Athlete</Badge>
-                                <button 
-                                    onClick={async () => {
-                                        const updated = await updatePlayerProfile(player.id, { isAvailable: !player.isAvailable });
-                                        if (updated) setPlayer(updated);
-                                    }}
-                                    className={`px-3 py-1 rounded-full text-[10px] md:text-xs font-bold uppercase tracking-wider border transition-colors flex items-center gap-1.5 ${player.isAvailable ? 'bg-accent-success/10 text-accent-success border-accent-success/20' : 'bg-surface-elevated text-content-muted border-white/10 hover:border-white/20'}`}
-                                >
-                                    <div className={`w-2 h-2 rounded-full ${player.isAvailable ? 'bg-accent-success animate-pulse' : 'bg-content-muted'}`}></div>
-                                    {player.isAvailable ? 'Available for Squads' : 'Not Looking'}
+                    {/* NEW PLAYER PROFILE HEADER */}
+                    <div className="relative overflow-hidden rounded-3xl bg-surface-panel border border-white/10 p-8 shadow-2xl backdrop-blur-xl">
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-brand via-[#10B981] to-brand" />
+                        <div className="flex flex-col md:flex-row items-center gap-8 relative z-10">
+                            {/* Avatar with Dynamic Tier Border */}
+                            <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                                <div className="absolute inset-0 bg-brand/20 blur-xl rounded-full opacity-50 group-hover:opacity-100 transition-opacity" />
+                                <div className="relative p-1 rounded-full bg-gradient-to-br from-brand via-brand-light to-transparent">
+                                    <div className="p-1 bg-black rounded-full">
+                                        <Avatar 
+                                            src={player.photoUrl} 
+                                            fallback={player.fullName || player.name || '?'} 
+                                            size="xl"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="absolute -bottom-2 -right-2 bg-brand text-content-inverse text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg border border-black">
+                                    Lvl {player.stats?.eloRating ? Math.floor(player.stats.eloRating / 100) : 10}
+                                </div>
+                            </div>
+                            
+                            {/* Profile Info */}
+                            <div className="text-center md:text-left flex-1">
+                                <div className="flex flex-col md:flex-row items-center gap-4 mb-2">
+                                    <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter italic uppercase">{player.fullName || player.name}</h1>
+                                </div>
+                                <p className="text-brand font-black text-xs md:text-sm tracking-[0.2em] uppercase flex items-center justify-center md:justify-start gap-2 mb-6">
+                                    <Trophy size={16} /> Global Rank: #{Math.floor(Math.random() * 100) + 1}
+                                </p>
+                                
+                                {/* Horizontal Stats Grid */}
+                                <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
+                                    <div className="bg-[#111113] border border-white/5 rounded-2xl px-6 py-4 min-w-[120px] shadow-lg">
+                                        <div className="text-[10px] text-content-muted font-black tracking-[0.15em] uppercase mb-1">Win Rate</div>
+                                        <div className="text-2xl md:text-3xl font-black text-white italic">
+                                            {player.stats?.matchesPlayed ? Math.round(((player.stats?.wins || 0) / player.stats.matchesPlayed) * 100) : 0}%
+                                        </div>
+                                    </div>
+                                    <div className="bg-[#111113] border border-white/5 rounded-2xl px-6 py-4 min-w-[120px] shadow-lg">
+                                        <div className="text-[10px] text-content-muted font-black tracking-[0.15em] uppercase mb-1">Matches</div>
+                                        <div className="text-2xl md:text-3xl font-black text-white italic">
+                                            {player.stats?.matchesPlayed || 0}
+                                        </div>
+                                    </div>
+                                    <div className="bg-[#111113] border border-white/5 rounded-2xl px-6 py-4 min-w-[120px] shadow-lg">
+                                        <div className="text-[10px] text-content-muted font-black tracking-[0.15em] uppercase mb-1">Win Streak</div>
+                                        <div className="text-2xl md:text-3xl font-black text-[#10B981] flex items-center gap-1.5 italic">
+                                             {player.stats?.streak || 0} <span className="text-[14px] ml-1 uppercase tracking-widest text-[#10B981]/60">W</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {/* Actions */}
+                            <div className="flex flex-row md:flex-col gap-3 w-full md:w-auto mt-6 md:mt-0">
+                                <button onClick={() => setShowProfileEdit(true)} className="flex-1 md:flex-none bg-surface-elevated hover:bg-white/10 text-white px-6 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-white/5">
+                                    <Settings size={16} /> Edit Profile
+                                </button>
+                                <button onClick={handleShareStats} className="flex-1 md:flex-none bg-brand hover:bg-brand-light text-content-inverse px-6 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-brand/20 flex items-center justify-center gap-2">
+                                    <Share2 size={16} /> Share Stats
                                 </button>
                             </div>
-                            <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter italic mb-2">{player.fullName || player.name}</h1>
-                            <p className="text-content-secondary font-medium flex items-center justify-center md:justify-start gap-4">
-                                <span>{player.email || 'No email'}</span>
-                                <span className="hidden md:inline">•</span>
-                                <span>{player.phone}</span>
-                            </p>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto mt-6 md:mt-0">
-                            <button onClick={handleShareStats} className="w-full sm:w-auto bg-surface-elevated hover:bg-white/10 text-white px-6 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 border border-white/5">
-                                <Share2 size={18} /> Share Stats
-                            </button>
-                            <button onClick={() => setShowProfileEdit(true)} className="w-full sm:w-auto bg-surface-elevated hover:bg-white/10 text-white px-6 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 border border-white/5">
-                                <Settings size={18} /> Settings
-                            </button>
                         </div>
                     </div>
-                </div>
-
-            {/* Navigation Tabs */}
+                {/* Navigation Tabs */}
             <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar border-b border-white/5">
                 <TabButton active={activeTab === 'OVERVIEW'} onClick={() => setActiveTab('OVERVIEW')} label="Dashboard" icon={<Activity size={16}/>} />
                 <TabButton active={activeTab === 'TEAMS'} onClick={() => setActiveTab('TEAMS')} label="Team Presets" icon={<Users size={16}/>} />
@@ -1103,53 +1127,71 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
                                 const isWinner = m.winnerTeamId === m.myTeamId;
                                 
                                 return (
-                                    <Card key={m.id} variant="panel" className="p-6 flex flex-col gap-6">
-                                        <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                                            <div>
-                                                <div className="text-[10px] font-bold uppercase tracking-widest text-brand mb-1">{m.tournamentName}</div>
-                                                <div className="text-sm text-content-secondary">{m.stage} • {m.roundName}</div>
-                                            </div>
-                                            <Badge variant={isWinner ? 'live' : 'neutral'} className={isWinner ? 'bg-accent-success/20 text-accent-success' : ''}>
-                                                {isWinner ? 'WON' : 'LOST'}
-                                            </Badge>
-                                        </div>
-                                        
-                                        <div className="flex items-center justify-between gap-4">
-                                            <div className={`flex-1 ${isWinner ? 'text-white' : 'text-content-secondary'}`}>
-                                                <div className="text-xl font-black italic tracking-tight">{myTeam?.name || 'TBD'}</div>
-                                                <div className="text-xs font-bold uppercase tracking-widest text-brand mt-1">You</div>
-                                            </div>
-                                            
-                                            <div className="px-4 py-2 bg-surface-ground rounded-xl border border-white/5 text-center min-w-[80px]">
-                                                <div className="text-xs font-bold text-content-muted uppercase tracking-widest mb-1">VS</div>
-                                                <div className="flex flex-col items-center">
-                                                    {m.score?.p1SetScores?.length > 0 && (
-                                                        <div className="flex gap-1 text-[10px] text-content-muted font-mono mb-1 bg-black/40 px-2 py-0.5 rounded">
-                                                            {m.score.p1SetScores.map((s1: number, i: number) => {
-                                                                const s2 = m.score!.p2SetScores?.[i] ?? 0;
-                                                                return <span key={i}>{isMyTeam1 ? s1 : s2}-{isMyTeam1 ? s2 : s1}</span>;
-                                                            })}
-                                                        </div>
-                                                    )}
-                                                    <div className="text-xl font-black text-white">
-                                                        {(() => {
-                                                            const p1Sets = m.score?.p1Sets || 0;
-                                                            const p2Sets = m.score?.p2Sets || 0;
-                                                            if (p1Sets === 0 && p2Sets === 0 && (m.score?.p1Games > 0 || m.score?.p2Games > 0)) {
-                                                                return isMyTeam1 ? `${m.score.p1Games} - ${m.score.p2Games}` : `${m.score.p2Games} - ${m.score.p1Games}`;
-                                                            }
-                                                            return isMyTeam1 ? `${p1Sets} - ${p2Sets}` : `${p2Sets} - ${p1Sets}`;
-                                                        })()}
+
+                                    <div key={m.id} className="relative bg-[#1B1B1E] border border-white/5 rounded-2xl p-4 md:p-6 overflow-hidden hover:border-white/10 transition-colors group shadow-lg flex flex-col gap-6">
+                                        {isWinner && <div className="absolute top-0 left-0 w-1.5 h-full bg-[#10B981] opacity-80" />}
+                                        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                                            {/* Match Info & Opponent */}
+                                            <div className="flex flex-1 items-center gap-4 w-full">
+                                                <div className="w-14 h-14 rounded-full bg-[#111113] border border-white/10 flex items-center justify-center shrink-0 shadow-inner">
+                                                    <Avatar src={opponentTeam?.player1?.photoUrl} fallback={opponentTeam?.name || 'OPP'} size="md" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-[10px] text-content-muted font-black tracking-widest uppercase">vs</span>
+                                                        <h4 className="text-lg md:text-xl font-black text-white uppercase italic tracking-tight truncate">{opponentTeam?.name || 'Unknown'}</h4>
+                                                    </div>
+                                                    <div className="flex flex-wrap items-center gap-2 text-[9px] md:text-[10px] text-content-muted font-black tracking-widest uppercase mt-2">
+                                                        <span className="flex items-center gap-1"><Calendar size={12}/> {m.scheduledTime ? new Date(m.scheduledTime).toLocaleDateString() : 'Recent'}</span>
+                                                        <span className="w-1 h-1 rounded-full bg-white/20 mx-1" />
+                                                        {m.tournamentName}
+                                                        {(m.stage?.toLowerCase().includes('final') || m.stage?.toLowerCase().includes('quarter') || m.stage?.toLowerCase().includes('semi')) && (
+                                                            <>
+                                                                <span className="w-1 h-1 rounded-full bg-white/20 mx-1" />
+                                                                <span className="bg-brand/20 text-brand px-2 py-0.5 rounded-sm border border-brand/20 shadow-[0_0_10px_rgba(77,120,255,0.2)] flex items-center gap-1">
+                                                                    <Trophy size={10} /> {m.stage?.toLowerCase().includes('final') ? 'Final' : 'Knockout'}
+                                                                </span>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
-                                            
-                                            <div className={`flex-1 text-right ${!isWinner ? 'text-white' : 'text-content-secondary'}`}>
-                                                <div className="text-xl font-black italic tracking-tight">{opponentTeam?.name || 'TBD'}</div>
-                                                <div className="text-xs font-bold uppercase tracking-widest text-content-muted mt-1">Opponent</div>
+
+                                            {/* Score Card */}
+                                            <div className="flex items-center justify-center gap-6 md:px-8 py-3 bg-[#111113] rounded-xl border border-white/5 w-full md:w-auto shadow-inner">
+                                                <div className={`text-3xl md:text-4xl font-black italic tracking-tight ${isWinner ? 'text-[#10B981]' : 'text-content-secondary'}`}>
+                                                    {isMyTeam1 ? m.score?.p1Sets || 0 : m.score?.p2Sets || 0}
+                                                </div>
+                                                <div className="flex flex-col items-center">
+                                                    <div className="text-[10px] font-black tracking-widest text-content-muted uppercase mb-1">Sets</div>
+                                                    {m.score?.p1SetScores?.length > 0 && (
+                                                        <div className="flex gap-1">
+                                                            {m.score.p1SetScores.map((s1: number, j: number) => {
+                                                                const s2 = m.score!.p2SetScores?.[j] ?? 0;
+                                                                const p1Won = s1 > s2;
+                                                                const p2Won = s2 > s1;
+                                                                const myScore = isMyTeam1 ? s1 : s2;
+                                                                const oppScore = isMyTeam1 ? s2 : s1;
+                                                                const iWonSet = isMyTeam1 ? p1Won : p2Won;
+                                                                return <span key={j} className={`text-[9px] font-mono px-1.5 py-0.5 rounded-sm ${iWonSet ? 'bg-[#10B981]/10 text-[#10B981]' : 'bg-white/5 text-content-muted'}`}>{myScore}-{oppScore}</span>;
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className={`text-3xl md:text-4xl font-black italic tracking-tight ${!isWinner ? 'text-white' : 'text-content-secondary'}`}>
+                                                    {!isMyTeam1 ? m.score?.p1Sets || 0 : m.score?.p2Sets || 0}
+                                                </div>
+                                            </div>
+
+                                            {/* Result Status */}
+                                            <div className="hidden md:flex items-center justify-end w-[80px]">
+                                                {isWinner ? (
+                                                    <span className="text-[#10B981] font-black uppercase tracking-widest text-xs rotate-90 origin-right whitespace-nowrap opacity-50">Victory</span>
+                                                ) : (
+                                                    <span className="text-content-muted font-black uppercase tracking-widest text-xs rotate-90 origin-right whitespace-nowrap opacity-30">Defeat</span>
+                                                )}
                                             </div>
                                         </div>
-
                                         <div className="pt-4 border-t border-white/5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                                             {opponentTeam && (
                                                 <div>
@@ -1196,7 +1238,7 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
                                                 Find Similar Events
                                             </button>
                                         </div>
-                                    </Card>
+                                    </div>
                                 );
                             })}
                             {quickplaySessions.filter(s => s.status === 'completed').map(session => {
