@@ -1533,9 +1533,9 @@ const BroadcastMatchCard = ({ match: initialMatch, teams, compact, categories, t
     const t2P1Name = t2?.player1?.name;
     const t2P2Name = t2?.player2?.name;
 
-    let t1FullName = formatCleanName([ t1P1Name, t1P2Name ].filter(n => n && n.trim()).join(' & ') || t1?.name || match.team1Name || 'TBA') || 'TBA';
+    let t1FullName = formatCleanName(t1?.name || match.team1Name || [ t1P1Name, t1P2Name ].filter(n => n && n.trim()).join(' & ') || 'TBA') || 'TBA';
     t1FullName = t1FullName.replace(/^&\s*/, '').replace(/\s*&$/, '').trim() || 'TBA';
-    let t2FullName = formatCleanName([ t2P1Name, t2P2Name ].filter(n => n && n.trim()).join(' & ') || t2?.name || match.team2Name || 'TBA') || 'TBA';
+    let t2FullName = formatCleanName(t2?.name || match.team2Name || [ t2P1Name, t2P2Name ].filter(n => n && n.trim()).join(' & ') || 'TBA') || 'TBA';
     t2FullName = t2FullName.replace(/^&\s*/, '').replace(/\s*&$/, '').trim() || 'TBA';
 
     const [displayScore, setDisplayScore] = useState(match.score);
@@ -1604,15 +1604,6 @@ const BroadcastMatchCard = ({ match: initialMatch, teams, compact, categories, t
 
     const scoreFlash = !!flashOverlayTitle;
 
-    const formatNameHtml = (p1?: string, p2?: string, fallback?: string) => {
-        const c1 = p1?.trim();
-        const c2 = p2?.trim();
-        if (c1 && c2) return <>{c1} &<br />{c2}</>;
-        if (c1) return <>{c1}</>;
-        if (c2) return <>{c2}</>;
-        return <>{fallback}</>;
-    };
-
     return (
         <div className={`bg-[#16161a] border-l-4 border-l-[#4D78FF] ${compact ? "p-3 pb-8 md:p-4 md:pb-12 gap-2 md:gap-3" : "p-6 pb-16 lg:p-8 lg:pb-18 gap-6 lg:gap-8"} flex flex-col relative overflow-hidden h-full shadow-2xl rounded-sm w-full`}>
             <div className="absolute top-0 right-0 w-[150px] h-[150px] bg-[radial-gradient(circle_at_top_right,rgba(77,120,255,0.15),transparent)] pointer-events-none" />
@@ -1654,7 +1645,7 @@ const BroadcastMatchCard = ({ match: initialMatch, teams, compact, categories, t
                     score box keeps shrink-0 so it never gets squeezed. */}
                 <div className="flex justify-between items-center gap-4 group">
                     <div className={`min-w-0 flex-1 font-black uppercase leading-[1.15] text-white break-words ${compact ? "text-base" : "text-xl md:text-3xl lg:text-4xl xl:text-5xl"}`}>
-                        {formatNameHtml(t1P1Name, t1P2Name, t1FullName)}
+                        {t1FullName}
                         {isT1Serving && <span className="w-2 h-2 bg-[#E65C31] rounded-full inline-block ml-2 mb-1 shadow-[0_0_10px_#E65C31]" />}
                     </div>
                     <div className={`bg-white/5 rounded font-mono font-bold text-white shrink-0 ${compact ? "px-3 py-1.5 text-base" : "px-5 py-2 lg:px-8 lg:py-4 text-4xl lg:text-6xl"}`}>
@@ -1668,7 +1659,7 @@ const BroadcastMatchCard = ({ match: initialMatch, teams, compact, categories, t
 
                 <div className="flex justify-between items-center gap-4 group">
                     <div className={`min-w-0 flex-1 font-black uppercase leading-[1.15] text-white break-words ${compact ? "text-base" : "text-xl md:text-3xl lg:text-4xl xl:text-5xl"}`}>
-                        {formatNameHtml(t2P1Name, t2P2Name, t2FullName)}
+                        {t2FullName}
                         {isT2Serving && <span className="w-2 h-2 bg-[#E65C31] rounded-full inline-block ml-2 mb-1 shadow-[0_0_10px_#E65C31]" />}
                     </div>
                     <div className={`bg-white/5 rounded font-mono font-bold text-white shrink-0 ${compact ? "px-3 py-1.5 text-base" : "px-5 py-2 lg:px-8 lg:py-4 text-4xl lg:text-6xl"}`}>
