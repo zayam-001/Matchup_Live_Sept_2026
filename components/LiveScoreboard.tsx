@@ -1301,9 +1301,39 @@ const ScheduleRow = ({ match, teams }: any) => {
     )
 };
 
+const LIVE_PAGE_SIZE = 6;
+
+const PaginationBar = ({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) => {
+    if (totalPages <= 1) return null;
+    return (
+        <div className="flex items-center justify-center gap-4 shrink-0 py-2">
+            <button
+                onClick={() => onChange(page - 1)}
+                disabled={page === 0}
+                aria-label="Previous page"
+                className="p-2 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            >
+                <ChevronLeft size={16} />
+            </button>
+            <span className="text-[11px] font-black uppercase tracking-widest text-white/60 font-mono">
+                Page {page + 1} / {totalPages}
+            </span>
+            <button
+                onClick={() => onChange(page + 1)}
+                disabled={page >= totalPages - 1}
+                aria-label="Next page"
+                className="p-2 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            >
+                <ChevronRight size={16} />
+            </button>
+        </div>
+    );
+};
+
 const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClose: () => void }) => {
     const { matches: globalMatches } = useTournamentMatches(tournament.id);
     const [selectedMatchId, setSelectedMatchId] = useState<string | 'ALL'>('ALL');
+    const [page, setPage] = useState(0);
     const liveMatches = globalMatches.filter(m => 
         (m.status === MatchStatus.IN_PROGRESS || String(m.status).toUpperCase() === 'LIVE' || String(m.status).toUpperCase() === 'IN_PROGRESS') && 
         !m.winnerTeamId
@@ -1337,6 +1367,10 @@ const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClos
     }, [liveMatches, selectedMatchId]);
 
     const activeMatch = selectedMatchId !== 'ALL' ? liveMatches.find(m => m.id === selectedMatchId) : null;
+
+    const totalPages = Math.max(1, Math.ceil(liveMatches.length / LIVE_PAGE_SIZE));
+    const safePage = Math.min(page, totalPages - 1);
+    const pageMatches = liveMatches.slice(safePage * LIVE_PAGE_SIZE, (safePage + 1) * LIVE_PAGE_SIZE);
     
     const globalRecentEvents = [];
     liveMatches.forEach(m => {
@@ -1408,13 +1442,13 @@ const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClos
                     // fill the whole stage instead of sitting at its own
                     // content height; compact mode only kicks in once there
                     // are enough matches that full-size cards wouldn't fit.
-                    <div className={`grid h-full auto-rows-fr gap-4 md:gap-8 ${
-                        liveMatches.length === 1 ? 'grid-cols-1' :
-                        liveMatches.length === 2 ? 'grid-cols-1 md:grid-cols-2' :
-                        liveMatches.length === 3 ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' :
-                        'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
+                    <div className="h-full flex flex-col min-h-0">
+                    <div className={`grid flex-1 min-h-0 auto-rows-fr gap-4 md:gap-8 ${
+                        pageMatches.length === 1 ? 'grid-cols-1' :
+                        pageMatches.length === 2 || pageMatches.length === 4 ? 'grid-cols-1 md:grid-cols-2' :
+                        'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
                     }`}>
-                        {liveMatches.map(m => (
+                        {pageMatches.map(m => (
                             // FEATURE (requested): with multiple matches live
                             // at once there was no way to focus on just one -
                             // clicking a card now switches to that match's
@@ -1430,9 +1464,11 @@ const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClos
                                 className={liveMatches.length > 1 ? 'cursor-pointer transition-transform hover:scale-[1.015]' : ''}
                                 title={liveMatches.length > 1 ? 'Click to view this match full-screen' : undefined}
                             >
-                                <BroadcastMatchCard match={m} teams={tournament.teams} categories={tournament.categories} tournament={tournament} compact={liveMatches.length > 2} />
+                                <BroadcastMatchCard match={m} teams={tournament.teams} categories={tournament.categories} tournament={tournament} compact={pageMatches.length > 2} />
                             </div>
                         ))}
+                    </div>
+                    <PaginationBar page={safePage} totalPages={totalPages} onChange={setPage} />
                     </div>
                 ) : activeMatch ? (
                     <div className="h-full flex flex-col min-h-0">
@@ -2094,6 +2130,10 @@ export const SpectatorResults = ({ matches, teams, tournament }: { matches: Matc
 
 export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Match[]; teams: Team[]; tournament?: any }) => {
     const [selectedLiveMatch, setSelectedLiveMatch] = useState<Match | null>(null);
+    const [livePage, setLivePage] = useState(0);
+    const liveTotalPages = Math.max(1, Math.ceil(matches.length / LIVE_PAGE_SIZE));
+    const liveSafePage = Math.min(livePage, liveTotalPages - 1);
+    const pagedMatches = matches.slice(liveSafePage * LIVE_PAGE_SIZE, (liveSafePage + 1) * LIVE_PAGE_SIZE);
     
     // Keep state updated in real-time if a match document is edited
     const activeModalMatch = selectedLiveMatch 
@@ -2201,9 +2241,9 @@ export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Matc
     return (
         <div className="w-full">
             <div className="flex flex-col gap-3">
-                {matches.map(m => {
-                    const { player1: t1p1, player2: t1p2 } = getTeamNamesAndPlayers(m.team1Id, m.team1Name, m.team1PlayerNames);
-                    const { player1: t2p1, player2: t2p2 } = getTeamNamesAndPlayers(m.team2Id, m.team2Name, m.team2PlayerNames);
+                {pagedMatches.map(m => {
+                    const t1TeamName = getTeamNamesAndPlayers(m.team1Id, m.team1Name, m.team1PlayerNames).teamName;
+                    const t2TeamName = getTeamNamesAndPlayers(m.team2Id, m.team2Name, m.team2PlayerNames).teamName;
                     
                     const score: any = m.score || { p1Points: '0', p2Points: '0', p1Games: 0, p2Games: 0, p1Sets: 0, p2Sets: 0, currentSet: 1 };
                     
@@ -2245,8 +2285,7 @@ export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Matc
                                         <div className="flex items-center gap-2 min-w-0 pr-2">
                                             <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isT1Serving ? 'bg-[#E65C31] shadow-[0_0_6px_#E65C31]' : 'opacity-0'}`} />
                                             <div className="flex flex-col min-w-0 leading-tight">
-                                                <span className="text-white font-black text-xs sm:text-sm uppercase tracking-wider truncate">{t1p1}</span>
-                                                {(t1p2 && t1p2 !== 'Player 2' && t1p2 !== 'TBD') && <span className="text-gray-400 font-bold text-[10px] sm:text-xs uppercase tracking-wider truncate">{t1p2}</span>}
+                                                <span className="text-white font-black text-xs sm:text-sm uppercase tracking-wider truncate">{t1TeamName}</span>
                                             </div>
                                         </div>
                                         <div className="text-center font-mono font-bold text-gray-400 text-xs sm:text-sm">{score.p1Sets}</div>
@@ -2259,8 +2298,7 @@ export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Matc
                                         <div className="flex items-center gap-2 min-w-0 pr-2">
                                             <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isT2Serving ? 'bg-[#E65C31] shadow-[0_0_6px_#E65C31]' : 'opacity-0'}`} />
                                             <div className="flex flex-col min-w-0 leading-tight">
-                                                <span className="text-white font-black text-xs sm:text-sm uppercase tracking-wider truncate">{t2p1}</span>
-                                                {(t2p2 && t2p2 !== 'Player 2' && t2p2 !== 'TBD') && <span className="text-gray-400 font-bold text-[10px] sm:text-xs uppercase tracking-wider truncate">{t2p2}</span>}
+                                                <span className="text-white font-black text-xs sm:text-sm uppercase tracking-wider truncate">{t2TeamName}</span>
                                             </div>
                                         </div>
                                         <div className="text-center font-mono font-bold text-gray-400 text-xs sm:text-sm">{score.p2Sets}</div>
@@ -2273,6 +2311,7 @@ export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Matc
                     );
                 })}
             </div>
+            <PaginationBar page={liveSafePage} totalPages={liveTotalPages} onChange={setLivePage} />
             {/* Interactive Court Detail / Detailed Scoreboard Overlay */}
             <AnimatePresence>
                 {activeModalMatch && (
