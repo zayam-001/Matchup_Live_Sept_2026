@@ -7,9 +7,9 @@ import { toPng } from 'html-to-image';
 import { Logo } from './ui/Logo';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export const WinnerBanner = ({ match, tournamentName, teams, sponsors, onClose, quickplayPlayers }: any) => {
+export const WinnerBanner = ({ match, tournamentName, teams, sponsors, onClose, quickplayPlayers, initialMode = 'WINNER' }: any) => {
     const bannerRef = useRef<HTMLDivElement>(null);
-    const [bannerMode, setBannerMode] = useState<'WINNER' | 'RUNNER_UP'>('WINNER');
+    const [bannerMode, setBannerMode] = useState<'WINNER' | 'RUNNER_UP'>(initialMode);
 
     const isFinal = match.roundName?.toLowerCase().includes('final') && 
                    !match.roundName?.toLowerCase().includes('semi') && 
@@ -246,22 +246,23 @@ export const WinnerBanner = ({ match, tournamentName, teams, sponsors, onClose, 
             <div className="min-h-[100dvh] flex flex-col items-center p-4 sm:p-8">
                 <div className="m-auto w-full max-w-[540px] flex flex-col pt-12 pb-4 relative">
                     <button onClick={onClose} className="absolute -top-4 -right-2 sm:-right-4 text-white hover:text-white bg-black/60 hover:bg-black w-10 h-10 flex items-center justify-center rounded-full z-30 transition-colors border border-white/20"><X size={18}/></button>
-                    {isFinal && (
-                        <div data-html2canvas-ignore className="w-full flex bg-[#111111] rounded-xl p-1 mb-6 shrink-0 border border-white/10 shadow-lg">
-                            <button 
-                                onClick={() => setBannerMode('WINNER')} 
-                                className={`flex-1 py-3 text-xs font-black uppercase tracking-[0.2em] rounded-lg transition-all ${bannerMode === 'WINNER' ? 'bg-[#F59E0B] text-black shadow-lg scale-100' : 'text-content-muted hover:text-white scale-[0.98]'}`}
-                            >
-                                Finals Winner
-                            </button>
-                            <button 
-                                onClick={() => setBannerMode('RUNNER_UP')} 
-                                className={`flex-1 py-3 text-xs font-black uppercase tracking-[0.2em] rounded-lg transition-all ${bannerMode === 'RUNNER_UP' ? 'bg-gray-200 text-black shadow-lg scale-100' : 'text-content-muted hover:text-white scale-[0.98]'}`}
-                            >
-                                Runner-Up
-                            </button>
-                        </div>
-                    )}
+                    {/* Mode Toggle Switch: Winner vs Runner-Up */}
+                    <div data-html2canvas-ignore className="w-full flex bg-[#111111] rounded-xl p-1 mb-6 shrink-0 border border-white/10 shadow-lg">
+                        <button 
+                            onClick={() => setBannerMode('WINNER')} 
+                            className={`flex-1 py-3 text-xs font-black uppercase tracking-[0.2em] rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${bannerMode === 'WINNER' ? (isFinal ? 'bg-[#F59E0B] text-black shadow-lg scale-100' : 'bg-brand text-white shadow-lg scale-100') : 'text-content-muted hover:text-white scale-[0.98]'}`}
+                        >
+                            <Trophy size={14} />
+                            {isFinal ? 'Finals Winner' : 'Winner'}
+                        </button>
+                        <button 
+                            onClick={() => setBannerMode('RUNNER_UP')} 
+                            className={`flex-1 py-3 text-xs font-black uppercase tracking-[0.2em] rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${bannerMode === 'RUNNER_UP' ? 'bg-sky-400 text-black shadow-lg scale-100' : 'text-content-muted hover:text-white scale-[0.98]'}`}
+                        >
+                            <Medal size={14} />
+                            Runner-Up
+                        </button>
+                    </div>
 
                     <div className={`w-full relative mb-6 shadow-2xl ${
                         displayTeam.isChamp ? 'shadow-[#F59E0B]/20' : bannerMode === 'RUNNER_UP' ? 'shadow-white/10' : 'shadow-brand/20'
@@ -272,13 +273,13 @@ export const WinnerBanner = ({ match, tournamentName, teams, sponsors, onClose, 
                     
                     {!isFinal ? (
                         <>
-                            {/* MATCH WINNER LAYOUT */}
+                            {/* MATCH WINNER / RUNNER UP LAYOUT */}
                             <div className="flex items-center justify-between w-full mb-5">
                                 <div className="flex items-center gap-1.5 opacity-90">
                                     <Logo size={20} variant="white" />
                                     <span className="font-brand font-black uppercase tracking-widest text-base text-white">MATCHUP</span>
                                 </div>
-                                <span className="bg-brand/10 border border-brand/30 rounded-xl px-3.5 py-1.5 text-xs font-black tracking-[0.15em] text-brand uppercase">
+                                <span className={`${bannerMode === 'WINNER' ? 'bg-brand/10 border-brand/30 text-brand' : 'bg-sky-500/10 border-sky-500/30 text-sky-400'} border rounded-xl px-3.5 py-1.5 text-xs font-black tracking-[0.15em] uppercase`}>
                                     {tournamentName || 'QuickPlay'}
                                 </span>
                             </div>
@@ -289,35 +290,67 @@ export const WinnerBanner = ({ match, tournamentName, teams, sponsors, onClose, 
                                 {match.roundName || 'Match Result'} {match.court ? `· ${match.court}` : ''}
                             </div>
                             
-                            <div className="text-[10px] sm:text-xs font-bold tracking-[0.2em] text-brand uppercase mb-0.5">Match Winner</div>
-                            <h1 className="text-5xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-brand-light italic tracking-tight mb-6 leading-none">
-                                VICTORY
+                            <div className={`text-[10px] sm:text-xs font-bold tracking-[0.2em] uppercase mb-0.5 ${bannerMode === 'WINNER' ? 'text-brand' : 'text-sky-400'}`}>
+                                {bannerMode === 'WINNER' ? 'Match Winner' : 'Match Runner-Up'}
+                            </div>
+                            <h1 className={`text-5xl sm:text-6xl font-black text-transparent bg-clip-text ${bannerMode === 'WINNER' ? 'bg-gradient-to-br from-white to-brand-light' : 'bg-gradient-to-br from-white via-sky-200 to-sky-400'} italic tracking-tight mb-6 leading-none`}>
+                                {bannerMode === 'WINNER' ? 'VICTORY' : 'RUNNER-UP'}
                             </h1>
                             
                             {/* VS Block */}
-                            <div className="w-full bg-brand/10 border border-brand/20 rounded-xl p-4 flex items-center justify-between relative overflow-hidden mb-2">
-                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-brand" />
-                                <div className="flex flex-col text-left px-2">
-                                    <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-brand mb-1">Winner</span>
-                                    <span className="text-lg sm:text-xl font-black text-white leading-tight">{winnerName}</span>
-                                </div>
-                                <span className="text-4xl sm:text-5xl font-brand font-black text-white mr-1">{wSets}</span>
-                            </div>
+                            {bannerMode === 'WINNER' ? (
+                                <>
+                                    <div className="w-full bg-brand/10 border border-brand/20 rounded-xl p-4 flex items-center justify-between relative overflow-hidden mb-2">
+                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-brand" />
+                                        <div className="flex flex-col text-left px-2">
+                                            <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-brand mb-1">Winner</span>
+                                            <span className="text-lg sm:text-xl font-black text-white leading-tight">{winnerName}</span>
+                                        </div>
+                                        <span className="text-4xl sm:text-5xl font-brand font-black text-white mr-1">{wSets}</span>
+                                    </div>
 
-                            <div className="flex items-center justify-center gap-2 my-2 opacity-60">
-                                <div className="h-px w-8 bg-white/20" />
-                                <span className="text-xs font-black tracking-widest bg-white/5 border border-white/10 px-2 py-0.5 rounded text-white">VS</span>
-                                <div className="h-px w-8 bg-white/20" />
-                            </div>
+                                    <div className="flex items-center justify-center gap-2 my-2 opacity-60">
+                                        <div className="h-px w-8 bg-white/20" />
+                                        <span className="text-xs font-black tracking-widest bg-white/5 border border-white/10 px-2 py-0.5 rounded text-white">VS</span>
+                                        <div className="h-px w-8 bg-white/20" />
+                                    </div>
 
-                            <div className="w-full bg-white/5 border border-content-muted/20 rounded-xl p-3 flex items-center justify-between relative overflow-hidden mb-5">
-                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-content-muted/50" />
-                                <div className="flex flex-col text-left px-2">
-                                    <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-content-secondary mb-1">Defeated</span>
-                                    <span className="text-lg sm:text-xl font-black text-content-secondary leading-tight">{runnerUpName}</span>
-                                </div>
-                                <span className="text-4xl sm:text-5xl font-brand font-black text-content-muted mr-1">{rSets}</span>
-                            </div>
+                                    <div className="w-full bg-white/5 border border-content-muted/20 rounded-xl p-3 flex items-center justify-between relative overflow-hidden mb-5">
+                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-content-muted/50" />
+                                        <div className="flex flex-col text-left px-2">
+                                            <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-content-secondary mb-1">Defeated</span>
+                                            <span className="text-lg sm:text-xl font-black text-content-secondary leading-tight">{runnerUpName}</span>
+                                        </div>
+                                        <span className="text-4xl sm:text-5xl font-brand font-black text-content-muted mr-1">{rSets}</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="w-full bg-sky-500/10 border border-sky-400/30 rounded-xl p-4 flex items-center justify-between relative overflow-hidden mb-2 shadow-lg shadow-sky-500/5">
+                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-sky-400" />
+                                        <div className="flex flex-col text-left px-2">
+                                            <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-sky-400 mb-1">Runner-Up</span>
+                                            <span className="text-lg sm:text-xl font-black text-white leading-tight">{runnerUpName}</span>
+                                        </div>
+                                        <span className="text-4xl sm:text-5xl font-brand font-black text-white mr-1">{rSets}</span>
+                                    </div>
+
+                                    <div className="flex items-center justify-center gap-2 my-2 opacity-60">
+                                        <div className="h-px w-8 bg-white/20" />
+                                        <span className="text-xs font-black tracking-widest bg-white/5 border border-white/10 px-2 py-0.5 rounded text-white">VS</span>
+                                        <div className="h-px w-8 bg-white/20" />
+                                    </div>
+
+                                    <div className="w-full bg-white/5 border border-content-muted/20 rounded-xl p-3 flex items-center justify-between relative overflow-hidden mb-5">
+                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-content-muted/50" />
+                                        <div className="flex flex-col text-left px-2">
+                                            <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-content-secondary mb-1">Match Winner</span>
+                                            <span className="text-lg sm:text-xl font-black text-content-secondary leading-tight">{winnerName}</span>
+                                        </div>
+                                        <span className="text-4xl sm:text-5xl font-brand font-black text-content-muted mr-1">{wSets}</span>
+                                    </div>
+                                </>
+                            )}
 
                             {/* MVP Badge */}
                             {mvp && mvp.I > 0 && bannerMode === 'WINNER' && (
@@ -339,14 +372,14 @@ export const WinnerBanner = ({ match, tournamentName, teams, sponsors, onClose, 
                                         const s2 = match.score.p2SetScores?.[i] ?? match.score?.p2Games ?? 0;
                                         const winScore = isTeam1Winner ? s1 : s2;
                                         const loseScore = isTeam1Winner ? s2 : s1;
-                                        const winnerWonTheSet = winScore > loseScore;
+                                        const isHighlightedTeamWinner = bannerMode === 'WINNER' ? winScore > loseScore : loseScore > winScore;
                                         return (
                                             <div key={i} className="flex-1 bg-white/5 border border-white/10 rounded-lg py-2.5 text-center">
                                                 <div className="text-[9px] font-bold tracking-[0.15em] text-content-muted uppercase mb-1">Set {i+1}</div>
                                                 <div className="flex justify-center items-center gap-1.5 font-brand text-lg sm:text-xl leading-none">
-                                                    <span className={winnerWonTheSet ? 'text-brand-light' : 'text-content-muted'}>{winScore}</span>
+                                                    <span className={winScore > loseScore ? (bannerMode === 'WINNER' ? 'text-brand-light font-black' : 'text-white/80') : 'text-content-muted'}>{winScore}</span>
                                                     <span className="text-xs text-content-secondary">-</span>
-                                                    <span className={!winnerWonTheSet ? 'text-brand-light' : 'text-content-muted'}>{loseScore}</span>
+                                                    <span className={loseScore > winScore ? (bannerMode === 'RUNNER_UP' ? 'text-sky-300 font-black' : 'text-white/80') : 'text-content-muted'}>{loseScore}</span>
                                                 </div>
                                             </div>
                                         )
@@ -358,25 +391,27 @@ export const WinnerBanner = ({ match, tournamentName, teams, sponsors, onClose, 
 
                             {/* Skills Grid */}
                             <div className="w-full text-left">
-                                <div className="text-xs sm:text-sm font-black tracking-[0.2em] text-content-muted uppercase mb-4 text-center">Player Skills This Match</div>
+                                <div className="text-xs sm:text-sm font-black tracking-[0.2em] text-content-muted uppercase mb-4 text-center">
+                                    {bannerMode === 'WINNER' ? 'Winner Player Skills This Match' : 'Runner-Up Player Skills This Match'}
+                                </div>
                                 
-                                {wp1 && (
+                                {(bannerMode === 'WINNER' ? wp1 : rp1) && (
                                     <div className="mb-5">
-                                        <div className="text-xs sm:text-sm font-black uppercase tracking-widest text-brand mb-1.5 flex items-center gap-2">
-                                            {wp1.name || wp1.fullName}
-                                            <div className="flex-1 h-px bg-brand/30" />
+                                        <div className={`text-xs sm:text-sm font-black uppercase tracking-widest ${bannerMode === 'WINNER' ? 'text-brand' : 'text-sky-400'} mb-1.5 flex items-center gap-2`}>
+                                            {(bannerMode === 'WINNER' ? wp1 : rp1)?.name || (bannerMode === 'WINNER' ? wp1 : rp1)?.fullName}
+                                            <div className={`flex-1 h-px ${bannerMode === 'WINNER' ? 'bg-brand/30' : 'bg-sky-400/30'}`} />
                                         </div>
-                                        {renderSkillsGrid(wp1.id, wpTeamTag, '1', false)}
+                                        {renderSkillsGrid((bannerMode === 'WINNER' ? wp1 : rp1)?.id, bannerMode === 'WINNER' ? wpTeamTag : rpTeamTag, '1', false)}
                                     </div>
                                 )}
 
-                                {wp2 && (
+                                {(bannerMode === 'WINNER' ? wp2 : rp2) && (
                                     <div className="mb-2">
-                                        <div className="text-xs sm:text-sm font-black uppercase tracking-widest text-brand mb-1.5 flex items-center gap-2">
-                                            {wp2.name || wp2.fullName}
-                                            <div className="flex-1 h-px bg-brand/30" />
+                                        <div className={`text-xs sm:text-sm font-black uppercase tracking-widest ${bannerMode === 'WINNER' ? 'text-brand' : 'text-sky-400'} mb-1.5 flex items-center gap-2`}>
+                                            {(bannerMode === 'WINNER' ? wp2 : rp2)?.name || (bannerMode === 'WINNER' ? wp2 : rp2)?.fullName}
+                                            <div className={`flex-1 h-px ${bannerMode === 'WINNER' ? 'bg-brand/30' : 'bg-sky-400/30'}`} />
                                         </div>
-                                        {renderSkillsGrid(wp2.id, wpTeamTag, '2', false)}
+                                        {renderSkillsGrid((bannerMode === 'WINNER' ? wp2 : rp2)?.id, bannerMode === 'WINNER' ? wpTeamTag : rpTeamTag, '2', false)}
                                     </div>
                                 )}
                             </div>
