@@ -109,10 +109,37 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
     });
   }, [activeTab]);
 
-  // Filters matches & teams based on category selection
-  const matchesToDisplay = (tournament.categories && tournament.categories.length > 0) && selectedCategoryId
-    ? matches.filter((m: any) => isMatchInCategory(m, selectedCategoryId, tournament))
-    : matches;
+  // Filters matches & teams based on category selection AND optional search query
+  const matchesToDisplay = React.useMemo(() => {
+    let list = (tournament.categories && tournament.categories.length > 0) && selectedCategoryId
+      ? matches.filter((m: any) => isMatchInCategory(m, selectedCategoryId, tournament))
+      : matches;
+
+    if (searchQuery && searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const teamMap = new Map((tournament.teams || []).map((t: Team) => [t.id, t]));
+      list = list.filter((m: any) => {
+        const t1 = teamMap.get(m.team1Id);
+        const t2 = teamMap.get(m.team2Id);
+        const t1Name = (t1?.name || '').toLowerCase();
+        const t2Name = (t2?.name || '').toLowerCase();
+        const court = (m.court || '').toLowerCase();
+        const round = (m.roundName || '').toLowerCase();
+        const pNames = [
+          t1?.player1?.name,
+          t1?.player2?.name,
+          t2?.player1?.name,
+          t2?.player2?.name,
+          ...(((t1 as any)?.players || []).map((p: any) => p?.name || p?.fullName || '')),
+          ...(((t2 as any)?.players || []).map((p: any) => p?.name || p?.fullName || ''))
+        ].filter(Boolean).map((s: string) => s.toLowerCase());
+
+        return t1Name.includes(q) || t2Name.includes(q) || court.includes(q) || round.includes(q) || pNames.some(p => p.includes(q));
+      });
+    }
+
+    return list;
+  }, [tournament, selectedCategoryId, matches, searchQuery]);
 
   const teamsToDisplay = (tournament.categories && tournament.categories.length > 0) && selectedCategoryId
     ? (tournament.teams || []).filter((t: any) => isTeamInCategory(t, selectedCategoryId, tournament))
