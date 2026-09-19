@@ -844,8 +844,8 @@ const LiveCard = ({ match: initialMatch, teams, sponsors, tournament }: any) => 
     const t2P1Name = getFirstName(t2?.player1?.name);
     const t2P2Name = getFirstName(t2?.player2?.name);
 
-    const t1DisplayName = formatCleanName([ t1P1Name, t1P2Name ].filter(n => n && n.trim()).join(' & ') || t1?.name || match.team1Name || 'TBA') || 'TBA';
-    const t2DisplayName = formatCleanName([ t2P1Name, t2P2Name ].filter(n => n && n.trim()).join(' & ') || t2?.name || match.team2Name || 'TBA') || 'TBA';
+    const t1DisplayName = formatCleanName(t1?.name || match.team1Name || [ t1P1Name, t1P2Name ].filter(n => n && n.trim()).join(' & ') || 'TBA') || 'TBA';
+    const t2DisplayName = formatCleanName(t2?.name || match.team2Name || [ t2P1Name, t2P2Name ].filter(n => n && n.trim()).join(' & ') || 'TBA') || 'TBA';
 
     return (
         <div className={`w-full max-w-[520px] mx-auto rounded-[16px] overflow-hidden relative p-[24px_24px_24px_26px] font-sans group transition-all duration-300 ${cardClasses} ${scoreFlash ? 'scale-[1.02]' : ''}`}>
@@ -1023,8 +1023,8 @@ const RecentMatchSummary = ({ match, teams }: any) => {
     const isT1Winner = match.winnerTeamId === t1?.id;
 
     const getFirstName = (name?: string) => name ? name.split(' ')[0] : '';
-    const t1DisplayName = formatCleanName([ getFirstName(t1?.player1?.name), getFirstName(t1?.player2?.name) ].filter(n => n && n.trim()).join(' & ') || t1?.name || match.team1Name || 'TBA') || 'TBA';
-    const t2DisplayName = formatCleanName([ getFirstName(t2?.player1?.name), getFirstName(t2?.player2?.name) ].filter(n => n && n.trim()).join(' & ') || t2?.name || match.team2Name || 'TBA') || 'TBA';
+    const t1DisplayName = formatCleanName(t1?.name || match.team1Name || [ getFirstName(t1?.player1?.name), getFirstName(t1?.player2?.name) ].filter(n => n && n.trim()).join(' & ') || 'TBA') || 'TBA';
+    const t2DisplayName = formatCleanName(t2?.name || match.team2Name || [ getFirstName(t2?.player1?.name), getFirstName(t2?.player2?.name) ].filter(n => n && n.trim()).join(' & ') || 'TBA') || 'TBA';
 
     const isAmericanoMatch = match.roundName?.toLowerCase().includes("americano") || (match.score && (match.score.americanoTargetPoints !== undefined || match.score.americanoMode !== undefined));
 
@@ -1080,9 +1080,24 @@ export const StandingsTable = ({ tournamentId, categoryId, initialTeams, onTeamS
 
     useEffect(() => {
         if (!tournamentId) return;
+        const STAT_KEYS = ['matchesPlayed', 'wins', 'losses', 'ties', 'points', 'setsWon', 'setsLost', 'gamesWon', 'gamesLost', 'gamesPlayed', 'pointsScored', 'pointsConceded', 'pointDifferential', 'missedMatchPoints', 'gd', 'knockoutStage', 'knockoutWeight', 'fipPpfPoints'];
+        // Stored standings docs can be stale (e.g. they once folded knockout results into group
+        // totals and spectators cannot self-heal them), so re-derive the stat columns from matches.
+        const overlayDerivedStats = (teams: any[]) => {
+            if (!tournament || !matches || matches.length === 0 || teams.length === 0) return teams;
+            const derived = calculateStats(teams, matches, tournament.format, tournament.categories);
+            const byId = new Map(derived.map((d: any) => [d.id, d]));
+            return teams.map((t: any) => {
+                const d: any = byId.get(t.id);
+                if (!d) return t;
+                const out = { ...t };
+                STAT_KEYS.forEach(k => { out[k] = d[k]; });
+                return out;
+            });
+        };
         const unsub = subscribeToStandings(tournamentId, categoryId, (data) => {
             const source = (data && data.length > 0) ? data : (tournament?.teams || initialTeams || []);
-            const filtered = source.filter((t: any) => isTeamInCategory(t, categoryId, tournament));
+            const filtered = overlayDerivedStats(source.filter((t: any) => isTeamInCategory(t, categoryId, tournament)));
             
             // Check if filtered has meaningful stats or if we should fallback to dynamic calculation
             const allZeroes = filtered.length > 0 && filtered.every((t: any) => (t.matchesPlayed || 0) === 0 && (t.wins || 0) === 0 && (t.points || 0) === 0);
@@ -1260,8 +1275,8 @@ const ScheduleRow = ({ match, teams }: any) => {
     const t2Obj = teams.find((t: any) => t.id === match.team2Id);
     
     const getFirstName = (name?: string) => name ? name.split(' ')[0] : '';
-    const t1DisplayName = formatCleanName([ getFirstName(t1Obj?.player1?.name), getFirstName(t1Obj?.player2?.name) ].filter(n => n && n.trim()).join(' & ') || t1Obj?.name || match.team1Name || 'TBD') || 'TBD';
-    const t2DisplayName = formatCleanName([ getFirstName(t2Obj?.player1?.name), getFirstName(t2Obj?.player2?.name) ].filter(n => n && n.trim()).join(' & ') || t2Obj?.name || match.team2Name || 'TBD') || 'TBD';
+    const t1DisplayName = formatCleanName(t1Obj?.name || match.team1Name || [ getFirstName(t1Obj?.player1?.name), getFirstName(t1Obj?.player2?.name) ].filter(n => n && n.trim()).join(' & ') || 'TBD') || 'TBD';
+    const t2DisplayName = formatCleanName(t2Obj?.name || match.team2Name || [ getFirstName(t2Obj?.player1?.name), getFirstName(t2Obj?.player2?.name) ].filter(n => n && n.trim()).join(' & ') || 'TBD') || 'TBD';
 
     return (
         <Card variant="panel" className="p-6 flex justify-between items-center hover:bg-white/[0.02] transition-colors group">
@@ -2440,7 +2455,7 @@ export const SpectatorSchedule = ({ matches, teams, onSelectTab }: { matches: Ma
     const getTeamName = (teamId: string, fallbackName?: string) => {
         const t = teams.find(team => team.id === teamId);
         const getFirstName = (name?: string) => (name && name.trim()) ? name.trim().split(' ')[0] : '';
-        let nm = [getFirstName(t?.player1?.name), getFirstName(t?.player2?.name)].filter(n => n && n.trim()).join(' & ') || t?.name || fallbackName || 'TBD';
+        let nm = t?.name || fallbackName || [getFirstName(t?.player1?.name), getFirstName(t?.player2?.name)].filter(n => n && n.trim()).join(' & ') || 'TBD';
         nm = nm.replace(/^&\s*/, '').replace(/\s*&$/, '').trim();
         return nm || 'TBD';
     };

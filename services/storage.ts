@@ -2411,6 +2411,17 @@ export const checkAndHealTournamentStats = async (tournament: Tournament, matche
     }
 };
 
+// Knockout matches are labelled inconsistently in real data: newer ones carry stage 'KNOCKOUT',
+// older/manual ones have a blank stage and only a roundName like "Round of 16 - 3" or "Quarterfinal 2".
+export const isKnockoutMatch = (m: any): boolean => {
+    const stage = String(m?.stage || '').toUpperCase();
+    if (stage === 'KNOCKOUT' || stage === 'BRACKET' || stage === 'PLAYOFF') return true;
+    if (stage === 'GROUP') return false;
+    const name = String(m?.roundName || '').toUpperCase().trim();
+    if (!name || name.startsWith('GROUP')) return false;
+    return /FINAL|QUARTER|SEMI|ROUND OF|PLAYOFF|KNOCKOUT|\b1\/[248]\b/.test(name);
+};
+
 export const calculateStats = (teams: Team[], matches: Match[], format: TournamentFormat, categories?: any[]): Team[] => {
     if (!teams) return [];
     
@@ -2634,8 +2645,13 @@ export const calculateStats = (teams: Team[], matches: Match[], format: Tourname
             const t1Points = isT1Winner ? 2 : (isTie ? 1 : 0);
             const t2Points = isT2Winner ? 2 : (isTie ? 1 : 0);
 
-            processTeamStats(m.team1Id, isT1Winner, isT2Winner, p1Sets, p2Sets, p1Games, p2Games, t1Points);
-            processTeamStats(m.team2Id, isT2Winner, isT1Winner, p2Sets, p1Sets, p2Games, p1Games, t2Points);
+            // Knockout results are tracked separately (rank/finalist below) and must not be
+            // folded into the group standings wins/losses/games/points.
+            const isPureElimination = format === TournamentFormat.SINGLE_ELIMINATION || format === TournamentFormat.DOUBLE_ELIMINATION;
+            if (isPureElimination || !isKnockoutMatch(m)) {
+                processTeamStats(m.team1Id, isT1Winner, isT2Winner, p1Sets, p2Sets, p1Games, p2Games, t1Points);
+                processTeamStats(m.team2Id, isT2Winner, isT1Winner, p2Sets, p1Sets, p2Games, p1Games, t2Points);
+            }
 
             // Detect Knockout round outcomes for priority rank & FIP/PPF points
             const roundStr = String(m.round || m.roundName || m.stage || '').toUpperCase();
