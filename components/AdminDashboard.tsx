@@ -5393,7 +5393,7 @@ const ExpandableSection = ({ title, matches, defaultExpanded = false, tournament
                    ) : (
                        <div className="space-y-4">
                            {matches.map((m: Match) => (
-                               <MatchResultCard key={m.id} match={m} teams={tournament.teams || []} tournament={tournament} onEdit={() => onEdit(m)} isAdmin={true} />
+                               <MatchResultCard key={m.id} match={m} teams={tournament.teams || []} tournament={tournament} onEdit={() => onEdit(m)} />
                            ))}
                        </div>
                    )}

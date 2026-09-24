@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { Match, Team, MatchStatus } from '../types';
 import { Avatar } from './ui/Avatar';
-import { Trophy, CalendarDays, MapPin, Copy, Check, Medal } from 'lucide-react';
+import { Trophy, CalendarDays, MapPin, Copy, Check } from 'lucide-react';
 import { WinnerBanner } from './WinnerBanner';
 
 export const formatCleanName = (name: string | undefined | null): string => { if (!name) return ''; return name.replace(/^&\s*/, '').replace(/\s*&$/, '').trim(); };
-export const MatchResultCard = ({ match, teams, tournament, onEdit, isAdmin }: { match: Match; teams: Team[]; tournament?: any; onEdit?: () => void; isAdmin?: boolean }) => {
+export const MatchResultCard = ({ match, teams, tournament, onEdit }: { match: Match; teams: Team[]; tournament?: any; onEdit?: () => void }) => {
     const [showWinnerBanner, setShowWinnerBanner] = useState(false);
-    const [bannerMode, setBannerMode] = useState<'WINNER' | 'RUNNER_UP'>('WINNER');
     const [copiedObs, setCopiedObs] = useState(false);
 
     const handleCopyObsUrl = () => {
@@ -224,46 +223,26 @@ export const MatchResultCard = ({ match, teams, tournament, onEdit, isAdmin }: {
                     {dateFormatted || 'TBA'}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 justify-center">
-                    {(isAdmin || !!onEdit) && (
-                        <button 
-                            onClick={handleCopyObsUrl} 
-                            className="bg-brand/10 hover:bg-brand/20 text-brand border border-brand/20 hover:border-brand/40 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow flex items-center gap-1.5 cursor-pointer"
-                            title="Copy OBS browser source URL"
-                        >
-                            {copiedObs ? <Check size={14} /> : <Copy size={14} />}
-                            OBS Link
-                        </button>
-                    )}
+                    <button 
+                        onClick={handleCopyObsUrl} 
+                        className="bg-brand/10 hover:bg-brand/20 text-brand border border-brand/20 hover:border-brand/40 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow flex items-center gap-1.5"
+                    >
+                        {copiedObs ? <Check size={14} /> : <Copy size={14} />}
+                        OBS Link
+                    </button>
                     {onEdit && (
-                        <button onClick={onEdit} className="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-white text-xs font-bold transition-colors shadow cursor-pointer">
+                        <button onClick={onEdit} className="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-white text-xs font-bold transition-colors shadow">
                             Edit Score
                         </button>
                     )}
-                    {isCompleted && (
-                        <>
-                            <button 
-                                onClick={() => {
-                                    setBannerMode('WINNER');
-                                    setShowWinnerBanner(true);
-                                }} 
-                                className="group relative overflow-hidden bg-gradient-to-r from-amber-500/15 via-amber-400/25 to-amber-500/15 hover:from-amber-500/30 hover:to-amber-400/35 text-amber-300 border border-amber-500/40 hover:border-amber-400 px-3.5 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all duration-200 shadow-[0_0_12px_rgba(245,158,11,0.15)] hover:shadow-[0_0_18px_rgba(245,158,11,0.35)] flex items-center gap-1.5 active:scale-95 cursor-pointer"
-                                title="View official Winner celebration banner"
-                            >
-                                <Trophy size={13} className="text-amber-400 fill-amber-400/30 group-hover:scale-110 transition-transform" />
-                                <span>Winner Banner</span>
-                            </button>
-                            <button 
-                                onClick={() => {
-                                    setBannerMode('RUNNER_UP');
-                                    setShowWinnerBanner(true);
-                                }} 
-                                className="group relative overflow-hidden bg-gradient-to-r from-sky-500/15 via-indigo-500/20 to-sky-500/15 hover:from-sky-500/30 hover:to-indigo-500/35 text-sky-200 border border-sky-400/40 hover:border-sky-300 px-3.5 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all duration-200 shadow-[0_0_12px_rgba(56,189,248,0.15)] hover:shadow-[0_0_18px_rgba(56,189,248,0.35)] flex items-center gap-1.5 active:scale-95 cursor-pointer"
-                                title="View official Runner-Up recognition banner"
-                            >
-                                <Medal size={13} className="text-sky-300 group-hover:scale-110 transition-transform" />
-                                <span>Runner-Up Banner</span>
-                            </button>
-                        </>
+                    {((match.status === 'COMPLETED' || String(match.status).toUpperCase() === 'FINISHED') || String(match.status).toUpperCase() === 'COMPLETED' || String(match.status).toUpperCase() === 'FINISHED') && (
+                        <button 
+                            onClick={() => setShowWinnerBanner(true)} 
+                            className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 hover:border-amber-500/40 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all shadow flex items-center gap-1.5"
+                        >
+                            <Trophy size={13} className="mb-0.5" />
+                            Generate Banner
+                        </button>
                     )}
                 </div>
                 <div className="flex items-center gap-2">
@@ -278,7 +257,6 @@ export const MatchResultCard = ({ match, teams, tournament, onEdit, isAdmin }: {
                     tournamentName={tournament?.name || (match as any).tournamentName || "Tournament"}
                     teams={teams}
                     sponsors={tournament?.sponsors}
-                    initialMode={bannerMode}
                     onClose={() => setShowWinnerBanner(false)}
                 />
             )}

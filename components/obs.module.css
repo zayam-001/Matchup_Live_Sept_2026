@@ -10,266 +10,169 @@
   margin: 0 auto;
 }
 
-/* Card — bottom-left corner, fixed width */
+/* Card — bottom-left corner, pixel-perfect clone of broadcast scorebug */
 .obsCard {
   position: absolute;
   bottom: 48px;
   left: 48px;
-  width: 650px;
-  border-radius: 10px;
-  overflow: hidden;
-  font-family: 'Bebas Neue', sans-serif;
-  box-shadow: 0 12px 60px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.06);
+  background: #061838;
+  border-radius: 2px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.75);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  user-select: none;
   will-change: transform;
-}
-
-/* ── HEADER ─────────────────────────────────────────────── */
-.obsHdr {
-  background: #1A56DB;
-  padding: 8px 22px 8px 18px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  position: relative;
-  overflow: hidden;
+  min-width: 440px;
+  max-width: 820px;
+  padding: 5px 14px 5px 16px;
+  gap: 12px;
+  box-sizing: border-box;
 }
 
-/* Travelling shimmer on header */
-.obsHdrShimmer {
-  position: absolute;
-  top: 0; left: -100%; bottom: 0;
-  width: 55%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.13), transparent);
-  animation: hdrShimmer 4s ease-in-out infinite;
-  pointer-events: none;
-}
-@keyframes hdrShimmer {
-  0%   { left: -100%; }
-  100% { left: 220%;  }
-}
-
-.obsLogoWrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 120px;
-  background: #2563EB;
-  padding: 0 10px;
-  perspective: 1000px;
-  animation: wrapPulse 5s ease-in-out infinite;
-}
-@keyframes wrapPulse {
-  0%, 100% { background: #2563EB; }
-  50% { background: #1D4ED8; }
-}
-
-.obsLogoSvg {
-  width: 80px;
-  height: 80px;
-  will-change: filter, transform;
-  transform-style: preserve-3d;
-  animation: logoBreathe 5s ease-in-out infinite, flipLogo 4s infinite ease-in-out;
-}
-@keyframes logoBreathe {
-  0%, 100% { filter: drop-shadow(0 0 6px rgba(255,255,255,0.2)); }
-  50%       { filter: drop-shadow(0 0 16px rgba(255,255,255,0.55)); }
-}
-@keyframes flipLogo {
-  0% { transform: rotateY(0deg); }
-  100% { transform: rotateY(360deg); }
-}
-
-.obsHdrRight {
-  text-align: right;
-  line-height: 1.15;
-}
-.obsCourtTxt {
-  font-family: 'Inter', sans-serif;
-  font-size: 15px;
-  font-weight: 700;
-  color: rgba(255,255,255,0.82);
-  letter-spacing: 0.10em;
-  text-transform: uppercase;
-  display: block;
-}
-.obsMatchTitle {
-  font-size: 28px;
-  color: #ffffff;
-  letter-spacing: 0.06em;
-  line-height: 1;
-}
-
-/* ── BODY ───────────────────────────────────────────────── */
-.obsBody {
-  background: #0c1220;
-  display: flex;
-  align-items: stretch;
-}
-.obsTeams {
+/* Left Column containing Team 1 and Team 2 rows */
+.obsLeftCol {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  position: relative;
 }
+
+/* Each team row */
 .obsRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 22px;
-  gap: 16px;
+  height: 34px;
+  gap: 12px;
 }
-.obsRow:first-child {
-  border-bottom: 2px solid rgba(255,255,255,0.07);
+
+/* Horizontal line between row 1 and row 2 across names */
+.obsDivider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.22);
+  width: 100%;
 }
-.obsTname {
-  font-size: 34px;
+
+.obsPlayerName {
   color: #ffffff;
-  letter-spacing: 0.04em;
-  line-height: 1;
-  flex: 1;
-  min-width: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.obsSets {
-  display: flex;
-  gap: 10px;
-  flex-shrink: 0;
-}
-.obsSbox {
-  width: 44px;
-  height: 44px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  font-size: 28px;
-  color: #ffffff;
   line-height: 1;
-  background: rgba(255,255,255,0.07);
-  border: 2px solid rgba(255,255,255,0.15);
-  will-change: transform;
-  transition: background 0.2s, border-color 0.2s;
-}
-.win {
-  background: rgba(26,86,219,0.55);
-  border-color: #4a7dfa;
-}
-.liveScoreValue {
-  color: #E65C31; /* Highlight the live score points specially */
-  font-weight: bold;
 }
 
-/* ── FOOTER ─────────────────────────────────────────────── */
-.obsFoot {
-  background: #0c1220;
-  padding: 8px 22px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-top: 2px solid rgba(255,255,255,0.05);
+/* Yellow serving indicator ball */
+.servingBall {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #FFF677 0%, #FACC15 55%, #CA8A04 100%);
+  box-shadow: 0 0 6px rgba(250, 204, 21, 0.75), inset -1px -1px 2px rgba(0, 0, 0, 0.35);
+  flex-shrink: 0;
+  margin-left: 8px;
 }
 
-/* Full badge flashes — whole LIVE indicator dims and recovers */
-.obsLive {
+.servingBallPlaceholder {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  margin-left: 8px;
+  visibility: hidden;
+}
+
+/* Scores Section */
+.obsScoresSection {
   display: flex;
   align-items: center;
   gap: 8px;
-  animation: liveFlash 2.4s ease-in-out infinite;
-}
-@keyframes liveFlash {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.28; }
-}
-
-.liveDot {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #ff3333;
   flex-shrink: 0;
-  animation: dotScale 2.4s ease-in-out infinite;
-}
-@keyframes dotScale {
-  0%, 100% { transform: scale(1);    box-shadow: 0 0 10px rgba(255,51,51,0.8); }
-  50%       { transform: scale(0.6); box-shadow: none; }
 }
 
-.liveTxt {
-  font-family: 'Inter', sans-serif;
-  font-size: 19px;
-  font-weight: 800;
-  color: #ff3333;
-  letter-spacing: 0.18em;
-}
-.obsFootInfo {
-  font-family: 'Inter', sans-serif;
-  font-size: 17px;
-  color: rgba(255,255,255,0.28);
-  letter-spacing: 0.05em;
-}
-
-/* ── STING LAYER ────────────────────────────────────────── */
-/* Sits absolutely over the card — controlled entirely by GSAP */
-.stingLayer {
-  position: absolute;
-  inset: 0;
-  background: rgba(8, 12, 28, 0.96);
-  display: none;              /* GSAP sets to flex when active */
+/* Completed set score column */
+.obsSetCol {
+  display: flex;
   flex-direction: column;
+  width: 32px;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  z-index: 50;
 }
 
-/* Horizontal rule that draws in from left */
-.stingRule {
-  height: 4px;
-  background: #1A56DB;
-  width: 0%;
-  border-radius: 2px;
-}
-
-/* Logo + tagline group */
-.stingBody {
+.obsSetNum {
+  height: 34px;
   display: flex;
   align-items: center;
-  gap: 20px;
-  opacity: 0;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
 }
 
-.stingLogo {
-  width: 96px;
-  height: 96px;
-  flex-shrink: 0;
+.scoreRowDivider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.22);
+  width: 100%;
 }
 
-.stingWords {
+/* Active Game Box (The white outlined box in Image 2) */
+.activeGameBox {
+  border: 2px solid #ffffff;
+  border-radius: 2px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  width: 44px;
+  background: rgba(255, 255, 255, 0.02);
+  box-sizing: border-box;
 }
 
-.stingTaglineTop {
-  font-family: 'Inter', sans-serif;
-  font-size: 17px;
+.activeGameDivider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.45);
+  width: 100%;
+}
+
+.activeGameNum {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 22px;
   font-weight: 800;
-  color: rgba(100, 160, 255, 0.9);
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  display: block;
-  opacity: 0;
+  line-height: 1;
+  will-change: transform;
 }
 
-.stingTaglineBot {
-  font-family: 'Inter', sans-serif;
-  font-size: 17px;
-  font-weight: 700;
-  color: rgba(100, 160, 255, 0.6);
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  display: block;
-  opacity: 0;
+/* Points column */
+.pointsCol {
+  display: flex;
+  flex-direction: column;
+  width: 38px;
+  align-items: center;
+  justify-content: center;
+  margin-left: 2px;
+}
+
+.pointsDivider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.22);
+  width: 100%;
+}
+
+.pointsNum {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  will-change: transform;
 }

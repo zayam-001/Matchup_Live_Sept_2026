@@ -105,40 +105,6 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'upcoming'>('all');
   const [sportFilter, setSportFilter] = useState<'all' | 'padel'>('all');
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [isDateFilterOpen, setIsDateFilterOpen] = useState(false);
-  const [isSportFilterOpen, setIsSportFilterOpen] = useState(false);
-
-  const searchInputRef = React.useRef<HTMLInputElement>(null);
-  const searchContainerRef = React.useRef<HTMLDivElement>(null);
-  const dateFilterRef = React.useRef<HTMLDivElement>(null);
-  const sportFilterRef = React.useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
-        if (!searchQuery) {
-          setIsSearchOpen(false);
-        }
-      }
-      if (dateFilterRef.current && !dateFilterRef.current.contains(e.target as Node)) {
-        setIsDateFilterOpen(false);
-      }
-      if (sportFilterRef.current && !sportFilterRef.current.contains(e.target as Node)) {
-        setIsSportFilterOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [searchQuery]);
-
-  const handleResetAllFilters = () => {
-    setSearchQuery('');
-    setDateFilter('all');
-    setSportFilter('all');
-    setIsDateFilterOpen(false);
-    setIsSportFilterOpen(false);
-  };
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(initialTournamentId || null);
   const [isBroadcastMode, setIsBroadcastMode] = useState(false);
@@ -237,302 +203,35 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
   
   return (
     <div className="relative min-h-screen">
-      {/* Expandable Netflix-style Search & Filter Banner */}
-      <div className="sticky top-[72px] md:top-[88px] z-40 bg-[#0d0d10]/90 backdrop-blur-2xl border-b border-white/10 py-3 px-4 md:px-8 mb-4 shadow-2xl transition-all">
-          <div className="max-w-7xl mx-auto space-y-2.5">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                  {/* Left Column: Context indicator or back navigation */}
-                  <div className="flex items-center gap-3">
-                      {selectedTournamentId && activeTournament ? (
-                          <div className="flex items-center gap-2.5">
-                              <button 
-                                  onClick={() => handleSelectTournament(null)}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/15 border border-white/15 text-zinc-300 hover:text-white text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
-                              >
-                                  <ChevronLeft size={14} />
-                                  <span>Tournaments</span>
-                              </button>
-                              <span className="text-sm font-black uppercase text-white tracking-wide truncate max-w-[180px] sm:max-w-xs md:max-w-md">
-                                  {activeTournament.name}
-                              </span>
-                          </div>
-                      ) : (
-                          <div className="flex items-center gap-2.5">
-                              <div className="w-2.5 h-2.5 rounded-full bg-brand animate-pulse" />
-                              <span className="text-xs font-black uppercase tracking-[0.2em] text-white/90">
-                                  Live Arena & Tournaments
-                              </span>
-                              {tournaments.length > 0 && (
-                                  <span className="text-[10px] font-mono font-bold bg-white/10 text-zinc-400 px-2 py-0.5 rounded-full">
-                                      {tournaments.length} Events
-                                  </span>
-                              )}
-                          </div>
-                      )}
-                  </div>
-
-                  {/* Right Column: Expandable Controls (Netflix search, Date filter, Sport filter, Reset) */}
-                  <div className="flex items-center gap-2 sm:gap-2.5 justify-end flex-wrap sm:flex-nowrap relative">
-                      {/* 1. Expandable Netflix Search Island */}
-                      <div ref={searchContainerRef} className="relative flex items-center">
-                          {!isSearchOpen && !searchQuery ? (
-                              <button
-                                  onClick={() => {
-                                      setIsSearchOpen(true);
-                                      setTimeout(() => searchInputRef.current?.focus(), 60);
-                                  }}
-                                  className="group flex items-center justify-center w-10 h-10 rounded-full bg-black/80 hover:bg-white/10 border border-white/20 hover:border-white/60 text-white transition-all duration-200 shadow-md hover:scale-105 active:scale-95 cursor-pointer"
-                                  title="Search tournaments or matches"
-                              >
-                                  <Search size={17} strokeWidth={2.2} className="group-hover:text-brand transition-colors" />
-                              </button>
-                          ) : (
-                              <motion.div
-                                  initial={{ width: 40, opacity: 0 }}
-                                  animate={{ width: '100%', opacity: 1 }}
-                                  exit={{ width: 40, opacity: 0 }}
-                                  transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-                                  className="relative flex items-center bg-[#141414] border border-white/60 focus-within:border-white focus-within:ring-2 focus-within:ring-white/25 rounded-full px-3.5 py-1.5 shadow-2xl w-full sm:w-72 md:w-80 lg:w-96"
-                              >
-                                  <Search size={17} className="text-white/80 shrink-0 mr-2" strokeWidth={2.2} />
-                                  <input
-                                      ref={searchInputRef}
-                                      type="text"
-                                      placeholder="Titles, tournaments, players..."
-                                      value={searchQuery}
-                                      onChange={e => setSearchQuery(e.target.value)}
-                                      onKeyDown={e => {
-                                          if (e.key === 'Escape') {
-                                              if (!searchQuery) setIsSearchOpen(false);
-                                          }
-                                      }}
-                                      className="w-full bg-transparent text-white text-sm font-medium tracking-wide placeholder:text-zinc-400 focus:outline-none py-1"
-                                      autoFocus
-                                  />
-                                  {searchQuery ? (
-                                      <button
-                                          onClick={() => {
-                                              setSearchQuery('');
-                                              searchInputRef.current?.focus();
-                                          }}
-                                          className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-white/20 transition-colors ml-1 cursor-pointer shrink-0"
-                                          title="Clear search"
-                                      >
-                                          <X size={15} />
-                                      </button>
-                                  ) : (
-                                      <button
-                                          onClick={() => setIsSearchOpen(false)}
-                                          className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-white/20 transition-colors ml-1 cursor-pointer shrink-0"
-                                          title="Close search"
-                                      >
-                                          <X size={15} />
-                                      </button>
-                                  )}
-                              </motion.div>
-                          )}
-                      </div>
-
-                      {/* 2. Expandable Date Filter */}
-                      <div ref={dateFilterRef} className="relative">
-                          <button
-                              onClick={() => {
-                                  setIsDateFilterOpen(v => !v);
-                                  setIsSportFilterOpen(false);
-                              }}
-                              className={`flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200 border cursor-pointer ${
-                                  dateFilter !== 'all'
-                                      ? 'bg-brand text-black border-brand shadow-[0_0_12px_rgba(245,158,11,0.35)] font-black'
-                                      : 'bg-[#141414] hover:bg-white/10 text-zinc-300 hover:text-white border-white/20 hover:border-white/40'
-                              }`}
-                              title="Filter by date"
-                          >
-                              <Calendar size={14} className={dateFilter !== 'all' ? 'text-black' : 'text-zinc-400'} />
-                              <span>{dateFilter === 'all' ? 'Dates' : dateFilter === 'today' ? 'Today' : 'Upcoming'}</span>
-                              <ChevronDown
-                                  size={13}
-                                  className={`transition-transform duration-200 ${isDateFilterOpen ? 'rotate-180' : ''}`}
-                              />
-                          </button>
-
-                          <AnimatePresence>
-                              {isDateFilterOpen && (
-                                  <motion.div
-                                      initial={{ opacity: 0, y: -6, scale: 0.95 }}
-                                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                                      exit={{ opacity: 0, y: -6, scale: 0.95 }}
-                                      transition={{ duration: 0.15 }}
-                                      className="absolute right-0 top-full mt-2 min-w-[170px] bg-[#141416]/98 backdrop-blur-2xl border border-white/20 rounded-2xl p-1.5 shadow-2xl z-50 flex flex-col gap-1"
-                                  >
-                                      <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 border-b border-white/10 mb-0.5">
-                                          Select Date
-                                      </div>
-                                      <button
-                                          onClick={() => {
-                                              setDateFilter('all');
-                                              setIsDateFilterOpen(false);
-                                          }}
-                                          className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                                              dateFilter === 'all'
-                                                  ? 'bg-brand text-black font-black'
-                                                  : 'text-zinc-300 hover:bg-white/10 hover:text-white'
-                                          }`}
-                                      >
-                                          <span>All Dates</span>
-                                          {dateFilter === 'all' && <Check size={14} className="stroke-[3]" />}
-                                      </button>
-                                      <button
-                                          onClick={() => {
-                                              setDateFilter('today');
-                                              setIsDateFilterOpen(false);
-                                          }}
-                                          className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                                              dateFilter === 'today'
-                                                  ? 'bg-brand text-black font-black'
-                                                  : 'text-zinc-300 hover:bg-white/10 hover:text-white'
-                                          }`}
-                                      >
-                                          <div className="flex items-center gap-1.5">
-                                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                              <span>Today</span>
-                                          </div>
-                                          {dateFilter === 'today' && <Check size={14} className="stroke-[3]" />}
-                                      </button>
-                                      <button
-                                          onClick={() => {
-                                              setDateFilter('upcoming');
-                                              setIsDateFilterOpen(false);
-                                          }}
-                                          className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                                              dateFilter === 'upcoming'
-                                                  ? 'bg-brand text-black font-black'
-                                                  : 'text-zinc-300 hover:bg-white/10 hover:text-white'
-                                          }`}
-                                      >
-                                          <span>Upcoming</span>
-                                          {dateFilter === 'upcoming' && <Check size={14} className="stroke-[3]" />}
-                                      </button>
-                                  </motion.div>
-                              )}
-                          </AnimatePresence>
-                      </div>
-
-                      {/* 3. Expandable Sport Filter */}
-                      <div ref={sportFilterRef} className="relative">
-                          <button
-                              onClick={() => {
-                                  setIsSportFilterOpen(v => !v);
-                                  setIsDateFilterOpen(false);
-                              }}
-                              className={`flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200 border cursor-pointer ${
-                                  sportFilter !== 'all'
-                                      ? 'bg-emerald-400 text-black border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.35)] font-black'
-                                      : 'bg-[#141414] hover:bg-white/10 text-zinc-300 hover:text-white border-white/20 hover:border-white/40'
-                              }`}
-                              title="Filter by sport"
-                          >
-                              <Activity size={14} className={sportFilter !== 'all' ? 'text-black' : 'text-emerald-400'} />
-                              <span>{sportFilter === 'all' ? 'Sports' : 'Padel'}</span>
-                              <ChevronDown
-                                  size={13}
-                                  className={`transition-transform duration-200 ${isSportFilterOpen ? 'rotate-180' : ''}`}
-                              />
-                          </button>
-
-                          <AnimatePresence>
-                              {isSportFilterOpen && (
-                                  <motion.div
-                                      initial={{ opacity: 0, y: -6, scale: 0.95 }}
-                                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                                      exit={{ opacity: 0, y: -6, scale: 0.95 }}
-                                      transition={{ duration: 0.15 }}
-                                      className="absolute right-0 top-full mt-2 min-w-[170px] bg-[#141416]/98 backdrop-blur-2xl border border-white/20 rounded-2xl p-1.5 shadow-2xl z-50 flex flex-col gap-1"
-                                  >
-                                      <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 border-b border-white/10 mb-0.5">
-                                          Select Sport
-                                      </div>
-                                      <button
-                                          onClick={() => {
-                                              setSportFilter('all');
-                                              setIsSportFilterOpen(false);
-                                          }}
-                                          className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                                              sportFilter === 'all'
-                                                  ? 'bg-emerald-400 text-black font-black'
-                                                  : 'text-zinc-300 hover:bg-white/10 hover:text-white'
-                                          }`}
-                                      >
-                                          <span>All Sports</span>
-                                          {sportFilter === 'all' && <Check size={14} className="stroke-[3]" />}
-                                      </button>
-                                      <button
-                                          onClick={() => {
-                                              setSportFilter('padel');
-                                              setIsSportFilterOpen(false);
-                                          }}
-                                          className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                                              sportFilter === 'padel'
-                                                  ? 'bg-emerald-400 text-black font-black'
-                                                  : 'text-zinc-300 hover:bg-white/10 hover:text-white'
-                                          }`}
-                                      >
-                                          <span>Padel</span>
-                                          {sportFilter === 'padel' && <Check size={14} className="stroke-[3]" />}
-                                      </button>
-                                  </motion.div>
-                              )}
-                          </AnimatePresence>
-                      </div>
-
-                      {/* 4. Reset All Filters Button */}
-                      {(searchQuery || dateFilter !== 'all' || sportFilter !== 'all') && (
-                          <button
-                              onClick={handleResetAllFilters}
-                              className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold text-zinc-300 hover:text-white bg-white/5 hover:bg-white/15 border border-white/20 hover:border-white/40 transition-all cursor-pointer uppercase tracking-wider shadow-sm"
-                              title="Reset all filters"
-                          >
-                              <X size={13} />
-                              <span>Reset</span>
-                          </button>
-                      )}
-                  </div>
+      {/* Sticky Search Bar */}
+      <div className="sticky top-[72px] md:top-[88px] z-40 bg-[#111113]/80 backdrop-blur-xl border-b border-white/5 py-4 px-4 md:px-8 mb-4">
+          <div className="max-w-7xl mx-auto space-y-3">
+              <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-content-muted" size={20} />
+                  <input 
+                      type="text" 
+                      placeholder="Search tournaments or specific matches..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      className="w-full bg-[#1B1B1E]/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white font-bold tracking-wide focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all placeholder:text-content-muted/50"
+                  />
               </div>
-
-              {/* Active Filter Badges */}
-              {(searchQuery || dateFilter !== 'all' || sportFilter !== 'all') && (
-                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-white/5 text-xs">
-                      <span className="text-zinc-500 font-bold uppercase tracking-wider text-[10px]">Active Filters:</span>
-                      {searchQuery && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/10 border border-white/20 text-white text-[11px] font-medium">
-                              <span>"{searchQuery}"</span>
-                              <button onClick={() => setSearchQuery('')} className="hover:text-amber-400 cursor-pointer ml-0.5">
-                                  <X size={11} />
-                              </button>
-                          </span>
-                      )}
-                      {dateFilter !== 'all' && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-brand/20 border border-brand/40 text-brand text-[11px] font-bold uppercase">
-                              <span>Date: {dateFilter}</span>
-                              <button onClick={() => setDateFilter('all')} className="hover:text-white cursor-pointer ml-0.5">
-                                  <X size={11} />
-                              </button>
-                          </span>
-                      )}
-                      {sportFilter !== 'all' && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold uppercase">
-                              <span>Sport: {sportFilter}</span>
-                              <button onClick={() => setSportFilter('all')} className="hover:text-white cursor-pointer ml-0.5">
-                                  <X size={11} />
-                              </button>
-                          </span>
-                      )}
-                  </div>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                  <Filter size={14} className="text-content-muted mr-2" />
+                  <button onClick={() => setDateFilter('all')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${dateFilter === 'all' ? 'bg-brand text-content-inverse' : 'bg-surface-elevated text-content-muted hover:bg-white/10'}`}>All Dates</button>
+                  <button onClick={() => setDateFilter('today')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${dateFilter === 'today' ? 'bg-brand text-content-inverse' : 'bg-surface-elevated text-content-muted hover:bg-white/10'}`}>Today</button>
+                  <button onClick={() => setDateFilter('upcoming')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${dateFilter === 'upcoming' ? 'bg-brand text-content-inverse' : 'bg-surface-elevated text-content-muted hover:bg-white/10'}`}>Upcoming</button>
+                  
+                  <div className="w-px h-4 bg-white/10 mx-1" />
+                  
+                  <button onClick={() => setSportFilter('all')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${sportFilter === 'all' ? 'bg-[#10B981] text-[#111113]' : 'bg-surface-elevated text-content-muted hover:bg-white/10'}`}>All Sports</button>
+                  <button onClick={() => setSportFilter('padel')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${sportFilter === 'padel' ? 'bg-[#10B981] text-[#111113]' : 'bg-surface-elevated text-content-muted hover:bg-white/10'}`}>Padel</button>
+              </div>
           </div>
       </div>
 
       {!selectedTournamentId ? (
-          <TournamentList tournaments={tournaments} onSelect={handleSelectTournament} searchQuery={searchQuery} dateFilter={dateFilter} sportFilter={sportFilter} onResetFilters={handleResetAllFilters} />
+          <TournamentList tournaments={tournaments} onSelect={handleSelectTournament} searchQuery={searchQuery} dateFilter={dateFilter} sportFilter={sportFilter} />
       ) : loadingTournament ? (
           <div className="text-center p-10 text-gray-500">Loading...</div>
       ) : !activeTournament ? (
@@ -643,7 +342,7 @@ const BroadcastOverlay = ({ event }: { event: any }) => {
     return null;
 };
 
-const TournamentList = ({ tournaments, onSelect, searchQuery = '', dateFilter = 'all', sportFilter = 'all', onResetFilters }: any) => {
+const TournamentList = ({ tournaments, onSelect }: any) => {
     const [activeCategoryTab, setActiveCategoryTab] = useState<'all' | 'live' | 'ongoing' | 'upcoming' | 'completed'>('all');
     const [liveMatchTournamentIds, setLiveMatchTournamentIds] = useState<Set<string>>(new Set());
 
@@ -679,63 +378,25 @@ const TournamentList = ({ tournaments, onSelect, searchQuery = '', dateFilter = 
         }
         const hasLiveMatchRealtime = liveMatchTournamentIds.has(t.id);
         const hasLiveMatch = hasLiveMatchRealtime || t.matches?.some(m => m.status === MatchStatus.IN_PROGRESS || String(m.status).toUpperCase() === 'LIVE' || String(m.status).toUpperCase() === 'IN_PROGRESS');
+        // FIX: this used to also count a tournament as "live" purely because
+        // its start date had passed, even with zero matches actually in
+        // progress - so any ongoing multi-day event sat in "Live Now" the
+        // entire time between matches, or even before the first match of
+        // the day had been started. "Live" should only mean an actual match
+        // is being played right now.
         if (t.status === 'ACTIVE' && hasLiveMatch) {
             return 'live';
         }
+        // FIX: a tournament whose start date has already passed but has no
+        // match live right this second (between rounds, waiting on a court,
+        // etc.) isn't accurately "Upcoming" either - that label means it
+        // hasn't started yet. Give it its own "Ongoing" bucket instead of
+        // forcing a binary live/upcoming choice.
         if (t.status === 'ACTIVE' && t.startDate && new Date(t.startDate) <= now) {
             return 'ongoing';
         }
         return 'upcoming';
     };
-
-    // Filter tournaments based on search query, date filter, and sport filter
-    const filteredTournaments = React.useMemo(() => {
-        let result = [...tournaments];
-
-        if (searchQuery && searchQuery.trim()) {
-            const q = searchQuery.toLowerCase().trim();
-            result = result.filter(t => {
-                const nameMatch = t.name?.toLowerCase().includes(q);
-                const clubMatch = t.clubName?.toLowerCase().includes(q);
-                const cityMatch = t.city?.toLowerCase().includes(q) || t.location?.toLowerCase().includes(q);
-                const descMatch = t.description?.toLowerCase().includes(q);
-                const teamMatch = t.teams?.some((team: any) => 
-                    team.name?.toLowerCase().includes(q) || 
-                    team.players?.some((p: any) => (p.name || p.fullName || '')?.toLowerCase().includes(q))
-                );
-                return nameMatch || clubMatch || cityMatch || descMatch || teamMatch;
-            });
-        }
-
-        if (dateFilter && dateFilter !== 'all') {
-            const now = new Date();
-            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-            const todayEnd = todayStart + 24 * 60 * 60 * 1000;
-
-            result = result.filter(t => {
-                const start = t.startDate ? new Date(t.startDate).getTime() : 0;
-                const end = t.endDate ? new Date(t.endDate).getTime() : start;
-                if (dateFilter === 'today') {
-                    return (start <= todayEnd && end >= todayStart);
-                }
-                if (dateFilter === 'upcoming') {
-                    return start > todayEnd;
-                }
-                return true;
-            });
-        }
-
-        if (sportFilter && sportFilter !== 'all') {
-            result = result.filter(t => {
-                if (sportFilter === 'padel') {
-                    return !t.sport || t.sport.toLowerCase() === 'padel';
-                }
-                return t.sport?.toLowerCase() === sportFilter.toLowerCase();
-            });
-        }
-
-        return result;
-    }, [tournaments, searchQuery, dateFilter, sportFilter]);
 
     const categorized = React.useMemo(() => {
         const live: Tournament[] = [];
@@ -743,7 +404,7 @@ const TournamentList = ({ tournaments, onSelect, searchQuery = '', dateFilter = 
         const upcoming: Tournament[] = [];
         const completed: Tournament[] = [];
 
-        filteredTournaments.forEach((t: Tournament) => {
+        tournaments.forEach((t: Tournament) => {
             const cat = categorizeTournament(t);
             if (cat === 'live') live.push(t);
             else if (cat === 'ongoing') ongoing.push(t);
@@ -751,6 +412,8 @@ const TournamentList = ({ tournaments, onSelect, searchQuery = '', dateFilter = 
             else completed.push(t);
         });
 
+        // Most-recently-started first, since that's the one most likely to
+        // still have rounds left to play.
         ongoing.sort((a, b) => {
             if (!a.startDate) return 1;
             if (!b.startDate) return -1;
@@ -770,7 +433,7 @@ const TournamentList = ({ tournaments, onSelect, searchQuery = '', dateFilter = 
         });
 
         return { live, ongoing, upcoming, completed };
-    }, [filteredTournaments, liveMatchTournamentIds]);
+    }, [tournaments, liveMatchTournamentIds]);
 
     const featuredTournament = React.useMemo(() => {
         return categorized.live[0] || categorized.ongoing[0] || categorized.upcoming[0] || categorized.completed[0] || null;
@@ -989,23 +652,7 @@ const TournamentList = ({ tournaments, onSelect, searchQuery = '', dateFilter = 
                     </div>
                 )}
 
-                {filteredTournaments.length === 0 ? (
-                    <div className="text-center py-20 bg-[#1B1B1E]/40 rounded-3xl border border-white/5 border-dashed max-w-md mx-auto my-8 p-6">
-                        <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-zinc-400 mx-auto mb-3">
-                            <Search size={20} />
-                        </div>
-                        <p className="text-white font-black uppercase tracking-wider text-base mb-1">No Tournaments Match</p>
-                        <p className="text-gray-400 text-xs mb-5">Try checking your spelling or adjusting your date and sport filters.</p>
-                        {onResetFilters && (
-                            <button
-                                onClick={onResetFilters}
-                                className="px-5 py-2 rounded-full bg-brand text-black font-black text-xs uppercase tracking-wider hover:bg-brand-light transition-all cursor-pointer shadow-lg"
-                            >
-                                Reset Search & Filters
-                            </button>
-                        )}
-                    </div>
-                ) : activeCategoryTab !== 'all' && categorized[activeCategoryTab].length === 0 && (
+                {activeCategoryTab !== 'all' && categorized[activeCategoryTab].length === 0 && (
                     <div className="text-center py-24 bg-[#1B1B1E]/40 rounded-3xl border border-white/5 border-dashed max-w-md mx-auto">
                         <p className="text-white font-black uppercase italic tracking-widest text-base mb-2">No Tournaments Found</p>
                         <p className="text-gray-400 text-xs">There are no tournaments in the "{activeCategoryTab}" list right now.</p>
