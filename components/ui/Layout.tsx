@@ -226,18 +226,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
             </div>
           
           <div className="pointer-events-auto flex items-center gap-2.5">
-              {/* Apple Spotlight Trigger in Top Bar */}
-              <button
-                type="button"
-                onClick={() => setIsSpotlightOpen(true)}
-                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-xs text-zinc-300 hover:text-white transition-all shadow-md group cursor-pointer"
-                title="Search everywhere (⌘K)"
-              >
-                <Search size={14} className="text-zinc-400 group-hover:text-brand transition-colors" />
-                <span className="font-medium">Search</span>
-                <kbd className="text-[10px] font-mono bg-white/10 text-zinc-400 px-1.5 py-0.5 rounded border border-white/10">⌘K</kbd>
-              </button>
-
               <NavigationMenu
                   navItems={navItems}
                   activeTab={activeTab}
