@@ -5,6 +5,11 @@ import { Match, MatchStatus } from "../types";
 import { useMatchResult } from "../hooks/useMatchResult";
 import { useTournamentDoc } from "../hooks/useTournamentDoc";
 
+/**
+ * OBS Broadcast Stream Overlay
+ * Renders real-time padel scorebugs, previous/active set scores, and match statistics for OBS.
+ */
+
 function getTeamDisplayName(
   teamId?: string,
   name?: string,
