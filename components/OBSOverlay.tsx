@@ -5,44 +5,37 @@ import { Match, MatchStatus } from "../types";
 import { useMatchResult } from "../hooks/useMatchResult";
 import { useTournamentDoc } from "../hooks/useTournamentDoc";
 
-function formatPlayerInitial(name: string): string {
-  if (!name) return "";
-  const trimmed = name.trim().toUpperCase();
-  if (/^[A-Z]\.?\s*[A-Z\s]+$/.test(trimmed) && trimmed.includes(".")) {
-    return trimmed.replace(/\s+/g, "");
-  }
-  const parts = trimmed.split(/\s+/).filter(Boolean);
-  if (parts.length === 1) return parts[0];
-  const initial = parts[0][0] + ".";
-  const lastName = parts.slice(1).join(" ");
-  return `${initial}${lastName}`;
-}
-
-function formatBroadcastName(
-  teamName?: string,
-  player1Name?: string,
-  player2Name?: string
+function getTeamDisplayName(
+  teamId?: string,
+  name?: string,
+  playerNames?: string,
+  teamObj?: any,
+  tournament?: any,
+  fallbackLabel: string = "TEAM"
 ): string {
-  if (player1Name && player2Name) {
-    return `${formatPlayerInitial(player1Name)}/${formatPlayerInitial(player2Name)}`;
+  const tData = tournament?.teams?.find((t: any) => String(t.id) === String(teamId));
+  if (tData?.name && tData.name.trim()) {
+    return tData.name.trim();
   }
-  if (player1Name) {
-    return formatPlayerInitial(player1Name);
+  if (teamObj?.name && teamObj.name.trim()) {
+    return teamObj.name.trim();
   }
-  if (!teamName) return "TBD";
-  if (teamName.includes(" / ")) {
-    const [p1, p2] = teamName.split(" / ");
-    return `${formatPlayerInitial(p1)}/${formatPlayerInitial(p2)}`;
+  if (name && name.trim()) {
+    return name.trim();
   }
-  if (teamName.includes(" & ")) {
-    const [p1, p2] = teamName.split(" & ");
-    return `${formatPlayerInitial(p1)}/${formatPlayerInitial(p2)}`;
+  if (tData?.player1?.name && tData?.player2?.name) {
+    return `${tData.player1.name} / ${tData.player2.name}`;
   }
-  if (teamName.includes("/")) {
-    const [p1, p2] = teamName.split("/");
-    return `${formatPlayerInitial(p1)}/${formatPlayerInitial(p2)}`;
+  if (tData?.player1?.name) {
+    return tData.player1.name;
   }
-  return formatPlayerInitial(teamName);
+  if (teamObj?.player1?.name && teamObj?.player2?.name) {
+    return `${teamObj.player1.name} / ${teamObj.player2.name}`;
+  }
+  if (playerNames && playerNames.trim()) {
+    return playerNames.trim();
+  }
+  return teamId ? fallbackLabel : "TBD";
 }
 
 export interface OBSDiagnosticsState {
@@ -205,67 +198,22 @@ export default function OBSOverlay({
   const validOverlays = ["scoreboard", "team_vs_team", "player_profiles", "winner_result"];
   const activeOverlay = rawOverlay && validOverlays.includes(rawOverlay) ? rawOverlay : "scoreboard";
 
-  const getTeamInfo = (
-    teamId?: string,
-    name?: string,
-    playerNames?: string,
-    teamObj?: any
-  ) => {
-    const tData = tournament?.teams?.find((t: any) => String(t.id) === String(teamId));
-    if (tData) {
-      return {
-        name: tData.name,
-        p1: tData.player1?.name,
-        p2: tData.player2?.name,
-      };
-    }
-    if (teamObj) {
-      return {
-        name: teamObj.name,
-        p1: teamObj.player1?.name,
-        p2: teamObj.player2?.name,
-      };
-    }
-    if (playerNames) {
-      if (playerNames.includes(" & ")) {
-        const [p1, p2] = playerNames.split(" & ");
-        return { name, p1, p2 };
-      }
-      if (playerNames.includes(" / ")) {
-        const [p1, p2] = playerNames.split(" / ");
-        return { name, p1, p2 };
-      }
-      return { name, p1: playerNames, p2: undefined };
-    }
-    if (name) {
-      if (name.includes(" / ")) {
-        const [p1, p2] = name.split(" / ");
-        return { name, p1, p2 };
-      }
-      if (name.includes(" & ")) {
-        const [p1, p2] = name.split(" & ");
-        return { name, p1, p2 };
-      }
-      return { name, p1: undefined, p2: undefined };
-    }
-    return { name: teamId ? "TEAM" : "TBD", p1: undefined, p2: undefined };
-  };
-
-  const t1Info = getTeamInfo(
+  const t1Formatted = getTeamDisplayName(
     match.team1Id,
     match.team1Name,
     match.team1PlayerNames,
-    (match as any)?.team1
+    (match as any)?.team1,
+    tournament,
+    "TEAM 1"
   );
-  const t2Info = getTeamInfo(
+  const t2Formatted = getTeamDisplayName(
     match.team2Id,
     match.team2Name,
     match.team2PlayerNames,
-    (match as any)?.team2
+    (match as any)?.team2,
+    tournament,
+    "TEAM 2"
   );
-
-  const t1Formatted = formatBroadcastName(t1Info.name, t1Info.p1, t1Info.p2);
-  const t2Formatted = formatBroadcastName(t2Info.name, t2Info.p1, t2Info.p2);
 
   // Server detection: ensure yellow ball 🟡 is active and visible
   const rawServer = String(match.score?.server || "").toLowerCase();
@@ -298,10 +246,10 @@ export default function OBSOverlay({
     });
   }
 
-  const p1Games = match.score?.p1Games ?? (completedSets.length > 0 ? p1SetScores[p1SetScores.length - 1] ?? 0 : 3);
-  const p2Games = match.score?.p2Games ?? (completedSets.length > 0 ? p2SetScores[p2SetScores.length - 1] ?? 0 : 3);
-  const p1Points = match.score?.p1Points ?? "15";
-  const p2Points = match.score?.p2Points ?? "15";
+  const p1Games = match.score?.p1Games ?? 0;
+  const p2Games = match.score?.p2Games ?? 0;
+  const p1Points = match.score?.p1Points ?? "0";
+  const p2Points = match.score?.p2Points ?? "0";
 
   return (
     <div className={styles.obsPage}>
@@ -351,6 +299,15 @@ export default function OBSOverlay({
 
           {/* Scores Section */}
           <div className={styles.obsScoresSection}>
+            {/* Completed / Previous Sets */}
+            {completedSets.map((set, idx) => (
+              <div key={idx} className={styles.obsSetCol}>
+                <div className={styles.obsSetNum}>{set.t1}</div>
+                <div className={styles.scoreRowDivider} />
+                <div className={styles.obsSetNum}>{set.t2}</div>
+              </div>
+            ))}
+
             {/* Active Set Games (White Outlined Box) */}
             <div className={styles.activeGameBox}>
               <div className={styles.activeGameNum} ref={p1GameRef}>
