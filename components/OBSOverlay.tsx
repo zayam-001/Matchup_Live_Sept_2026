@@ -220,7 +220,15 @@ export default function OBSOverlay({
     "TEAM 2"
   );
 
-  // Server detection: ensure yellow ball 🟡 is active and visible
+  const isMatchCompleted =
+    match.status === MatchStatus.COMPLETED ||
+    String(match.status).toUpperCase() === "COMPLETED" ||
+    Boolean(match.winnerTeamId) ||
+    ((match.score?.p1Sets ?? 0) >= 2 || (match.score?.p2Sets ?? 0) >= 2);
+
+  const isSetCompleted = Boolean(match.score?._isSetCompleted);
+
+  // Server detection: ensure yellow ball 🟡 is active and visible only during active play
   const rawServer = String(match.score?.server || "").toLowerCase();
   const isT1Serving =
     rawServer === "p1" ||
@@ -235,9 +243,11 @@ export default function OBSOverlay({
     rawServer === "t2" ||
     rawServer === "2";
 
-  // If server is not explicitly marked on Team 1, default to Team 2 matching Image 2
-  const showT1Ball = isT1Serving;
-  const showT2Ball = isT2Serving || !isT1Serving;
+  // If server is not explicitly marked on Team 1, default to Team 2 only while match is actively in progress
+  const showT1Ball = !isMatchCompleted && isT1Serving;
+  const showT2Ball =
+    !isMatchCompleted &&
+    (isT2Serving || (!isT1Serving && match.status === MatchStatus.IN_PROGRESS));
 
   const p1SetScores = match.score?.p1SetScores || [];
   const p2SetScores = match.score?.p2SetScores || [];
@@ -250,6 +260,21 @@ export default function OBSOverlay({
       t2: p2SetScores[i],
     });
   }
+
+  // Fallback: If match is marked completed but set scores array was empty, use game scores as the single completed set
+  if (
+    isMatchCompleted &&
+    completedSets.length === 0 &&
+    (match.score?.p1Games !== undefined || match.score?.p2Games !== undefined)
+  ) {
+    completedSets.push({
+      t1: match.score.p1Games ?? 0,
+      t2: match.score.p2Games ?? 0,
+    });
+  }
+
+  // Active set box and points column should only show when a set is actively being played and match is not over
+  const hasActiveSet = !isMatchCompleted && !isSetCompleted;
 
   const p1Games = match.score?.p1Games ?? 0;
   const p2Games = match.score?.p2Games ?? 0;
@@ -313,27 +338,31 @@ export default function OBSOverlay({
               </div>
             ))}
 
-            {/* Active Set Games (White Outlined Box) */}
-            <div className={styles.activeGameBox}>
-              <div className={styles.activeGameNum} ref={p1GameRef}>
-                {p1Games}
+            {/* Active Set Games (White Outlined Box) - only shown for current in-progress set */}
+            {hasActiveSet && (
+              <div className={styles.activeGameBox}>
+                <div className={styles.activeGameNum} ref={p1GameRef}>
+                  {p1Games}
+                </div>
+                <div className={styles.activeGameDivider} />
+                <div className={styles.activeGameNum} ref={p2GameRef}>
+                  {p2Games}
+                </div>
               </div>
-              <div className={styles.activeGameDivider} />
-              <div className={styles.activeGameNum} ref={p2GameRef}>
-                {p2Games}
-              </div>
-            </div>
+            )}
 
-            {/* Points Column */}
-            <div className={styles.pointsCol}>
-              <div className={styles.pointsNum} ref={points1Ref}>
-                {p1Points}
+            {/* Points Column - only shown during active set play */}
+            {hasActiveSet && (
+              <div className={styles.pointsCol}>
+                <div className={styles.pointsNum} ref={points1Ref}>
+                  {p1Points}
+                </div>
+                <div className={styles.pointsDivider} />
+                <div className={styles.pointsNum} ref={points2Ref}>
+                  {p2Points}
+                </div>
               </div>
-              <div className={styles.pointsDivider} />
-              <div className={styles.pointsNum} ref={points2Ref}>
-                {p2Points}
-              </div>
-            </div>
+            )}
           </div>
         </div>
       )}
