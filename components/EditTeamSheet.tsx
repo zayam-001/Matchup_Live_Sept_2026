@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Team, Tournament } from '../types';
 import { Sheet } from './ui/Sheet';
 import { Edit3, Loader2 } from 'lucide-react';
+import { CountrySelect } from './CountrySelect';
 
 function Input({ label, value, onChange, type="text", placeholder }: any) {
     return (
@@ -23,7 +24,7 @@ interface EditTeamSheetProps {
     onClose: () => void;
     tournament: Tournament;
     team: Team | null;
-    onConfirm: (name: string, player1Name: string, player2Name?: string) => Promise<void>;
+    onConfirm: (name: string, player1Name: string, player2Name?: string, countries?: { player1?: string; player2?: string }) => Promise<void>;
 }
 
 export const EditTeamSheet: React.FC<EditTeamSheetProps> = ({ 
@@ -32,15 +33,20 @@ export const EditTeamSheet: React.FC<EditTeamSheetProps> = ({
     const [teamName, setTeamName] = useState('');
     const [player1Name, setPlayer1Name] = useState('');
     const [player2Name, setPlayer2Name] = useState('');
+    const [player1Country, setPlayer1Country] = useState('');
+    const [player2Country, setPlayer2Country] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const isAmericanoMode = tournament.format === 'AMERICANO';
+    const askCountry = !!tournament.showNationFlags;
 
     useEffect(() => {
         if (team) {
             setTeamName(team.name || '');
             setPlayer1Name(team.player1?.name || '');
             setPlayer2Name(team.player2?.name || '');
+            setPlayer1Country(team.player1?.country || '');
+            setPlayer2Country(team.player2?.country || '');
         }
     }, [team]);
 
@@ -59,13 +65,19 @@ export const EditTeamSheet: React.FC<EditTeamSheetProps> = ({
             }
         }
 
+        if (askCountry && (!player1Country || (!isAmericanoMode && !player2Country))) {
+            alert("Please select the country for each player.");
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             const finalTeamName = isAmericanoMode ? player1Name.trim() : teamName.trim();
             await onConfirm(
                 finalTeamName,
                 player1Name.trim(),
-                isAmericanoMode ? undefined : player2Name.trim()
+                isAmericanoMode ? undefined : player2Name.trim(),
+                askCountry ? { player1: player1Country, player2: isAmericanoMode ? undefined : player2Country } : undefined
             );
             onClose();
         } catch (e) {
@@ -80,7 +92,7 @@ export const EditTeamSheet: React.FC<EditTeamSheetProps> = ({
         <Sheet 
             isOpen={isOpen} 
             onClose={onClose} 
-            title="Edit Player Names" 
+            title={askCountry ? "Edit Players" : "Edit Player Names"} 
             description="UPDATE NAMES AND REFLECT ACROSS ALL MATCHES" 
             size="sm"
         >
@@ -113,6 +125,9 @@ export const EditTeamSheet: React.FC<EditTeamSheetProps> = ({
                         onChange={setPlayer1Name} 
                         placeholder="Enter Player 1 Name" 
                     />
+                    {askCountry && (
+                        <CountrySelect required label={isAmericanoMode ? "Country" : "Player 1 Country"} value={player1Country} onChange={setPlayer1Country} />
+                    )}
 
                     {!isAmericanoMode && (
                         <Input 
@@ -121,6 +136,9 @@ export const EditTeamSheet: React.FC<EditTeamSheetProps> = ({
                             onChange={setPlayer2Name} 
                             placeholder="Enter Player 2 Name" 
                         />
+                    )}
+                    {askCountry && !isAmericanoMode && (
+                        <CountrySelect required label="Player 2 Country" value={player2Country} onChange={setPlayer2Country} />
                     )}
                 </div>
 

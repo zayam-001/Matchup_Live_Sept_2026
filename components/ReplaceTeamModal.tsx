@@ -3,6 +3,7 @@ import { Match, Team, Tournament, MatchStatus } from '../types';
 import { Sheet } from './ui/Sheet';
 import { toast } from './Toast';
 import { ChevronRight, ChevronLeft, AlertTriangle, Replace, RefreshCw, Plus, Users } from 'lucide-react';
+import { CountrySelect } from './CountrySelect';
 
 function Input({ label, value, onChange, type="text", placeholder }: any) {
     return (
@@ -38,6 +39,9 @@ export const ReplaceTeamModal: React.FC<ReplaceTeamModalProps> = ({
     const [newTeamName, setNewTeamName] = useState('');
     const [newPlayer1Name, setNewPlayer1Name] = useState('');
     const [newPlayer2Name, setNewPlayer2Name] = useState('');
+    const [newPlayer1Country, setNewPlayer1Country] = useState('');
+    const [newPlayer2Country, setNewPlayer2Country] = useState('');
+    const askCountry = !!tournament.showNationFlags;
     
     // Step 3 State
     const [confirmText, setConfirmText] = useState('');
@@ -51,6 +55,10 @@ export const ReplaceTeamModal: React.FC<ReplaceTeamModalProps> = ({
         if (step === 2) {
             if (selectionMode === 'new' && (!newTeamName || !newPlayer1Name || !newPlayer2Name)) {
                 alert("Please fill in all team details.");
+                return;
+            }
+            if (selectionMode === 'new' && askCountry && (!newPlayer1Country || !newPlayer2Country)) {
+                alert("Please select the country for each player.");
                 return;
             }
             if (selectionMode === 'existing' && !selectedExistingTeamId) {
@@ -73,6 +81,7 @@ export const ReplaceTeamModal: React.FC<ReplaceTeamModalProps> = ({
                 teamName: newTeamName,
                 player1Name: newPlayer1Name,
                 player2Name: newPlayer2Name,
+                ...(askCountry ? { player1Country: newPlayer1Country, player2Country: newPlayer2Country } : {}),
             } : {
                 teamId: selectedExistingTeamId,
                 teamName: tournament.teams?.find(t => t.id === selectedExistingTeamId)?.name || 'Unknown',
@@ -157,6 +166,12 @@ export const ReplaceTeamModal: React.FC<ReplaceTeamModalProps> = ({
                                 <div className="grid grid-cols-2 gap-4">
                                     <Input label="Player 1 Name" placeholder="Full name" value={newPlayer1Name} onChange={setNewPlayer1Name} />
                                     <Input label="Player 2 Name" placeholder="Full name" value={newPlayer2Name} onChange={setNewPlayer2Name} />
+                                    {askCountry && (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <CountrySelect required label="Player 1 Country" value={newPlayer1Country} onChange={setNewPlayer1Country} />
+                                            <CountrySelect required label="Player 2 Country" value={newPlayer2Country} onChange={setNewPlayer2Country} />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ) : (

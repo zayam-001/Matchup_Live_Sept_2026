@@ -54,6 +54,7 @@ import {
     OnboardedPlayer,
     OnboardedTeam
 } from '../types';
+import { getPointsSystem, getMatchStage, buildKnockoutRoundSizes, loserStage, placementPoints, STAGE_WEIGHT } from '../lib/pointsSystems';
 
 // ==================================================================
 // ⚙️ CONFIGURATION
@@ -462,6 +463,9 @@ const createMatchObject = (tId: string, name: string, round: number, stage: 'GRO
 // HELPERS
 // ------------------------------------------------------------------
 
+export const sortSponsors = <T extends { order?: number }>(list: T[]): T[] =>
+    [...list].sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
+
 // Helper to save sponsors to sub-collection
 const saveSponsorsToSubCollection = async (tId: string, sponsors: Sponsor[]) => {
     const batch = writeBatch(db);
@@ -479,12 +483,12 @@ const saveSponsorsToSubCollection = async (tId: string, sponsors: Sponsor[]) => 
         }
     });
 
-    // Set/Update new sponsors
-    sponsors.forEach(s => {
+    // Set/Update new sponsors; `order` keeps the organiser's Sponsor 1, 2, 3... sequence
+    sponsors.forEach((s, index) => {
         // Ensure ID
         const id = s.id || genId();
         const ref = doc(sponsorsCollection, id);
-        batch.set(ref, { ...s, id }, { merge: true });
+        batch.set(ref, { ...s, id, order: index }, { merge: true });
     });
 
     await batch.commit();
@@ -1171,7 +1175,7 @@ export const subscribeToTournament = (id: string, cb: (data: Tournament | null) 
             if (unsubM) unsubM();
 
             unsubS = onSnapshot(collection(db, "tournaments", tId, "sponsors"), (snap) => {
-                sData = snap.docs.map(d => ({ id: d.id, ...d.data() } as Sponsor));
+                sData = sortSponsors(snap.docs.map(d => ({ id: d.id, ...d.data() } as Sponsor)));
                 emit();
             });
 
@@ -2332,7 +2336,7 @@ export const checkAndHealTournamentStats = async (tournament: Tournament, matche
         if (targetCategoryId && targetCategoryId !== 'ALL' && targetCategoryId !== 'all') {
             const categoryTeams = teamsToUse.filter(t => isTeamInCategory(t, targetCategoryId, tournament, allMatches));
             const categoryMatches = allMatches.filter(m => isMatchInCategory(m, targetCategoryId, tournament));
-            const computedCategory = calculateStats(categoryTeams, categoryMatches, tournament.format, tournament.categories);
+            const computedCategory = calculateStats(categoryTeams, categoryMatches, tournament.format, tournament.categories, tournament.pointsSystem);
 
             if (force || teamsNeedUpdate(categoryTeams, computedCategory)) {
                 // Merge computed category teams into teamsToUse without touching other categories
@@ -2369,7 +2373,7 @@ export const checkAndHealTournamentStats = async (tournament: Tournament, matche
                     const catTeams = teamsToUse.filter(t => isTeamInCategory(t, cat.id, tournament, allMatches));
                     if (catTeams.length === 0) continue;
                     const catMatches = allMatches.filter(m => isMatchInCategory(m, cat.id, tournament));
-                    const compCat = calculateStats(catTeams, catMatches, tournament.format, tournament.categories);
+                    const compCat = calculateStats(catTeams, catMatches, tournament.format, tournament.categories, tournament.pointsSystem);
                     if (force || teamsNeedUpdate(catTeams, compCat)) {
                         anyUpdated = true;
                         compCat.forEach(tea => {
@@ -2385,7 +2389,7 @@ export const checkAndHealTournamentStats = async (tournament: Tournament, matche
                     }
                 }
             } else {
-                const computed = calculateStats(teamsToUse, allMatches, tournament.format, tournament.categories);
+                const computed = calculateStats(teamsToUse, allMatches, tournament.format, tournament.categories, tournament.pointsSystem);
                 if (force || teamsNeedUpdate(teamsToUse, computed)) {
                     anyUpdated = true;
                     updatedTeams = computed;
@@ -2422,8 +2426,12 @@ export const isKnockoutMatch = (m: any): boolean => {
     return /FINAL|QUARTER|SEMI|ROUND OF|PLAYOFF|KNOCKOUT|\b1\/[248]\b/.test(name);
 };
 
-export const calculateStats = (teams: Team[], matches: Match[], format: TournamentFormat, categories?: any[]): Team[] => {
+export const calculateStats = (teams: Team[], matches: Match[], format: TournamentFormat, categories?: any[], pointsSystemId?: string): Team[] => {
     if (!teams) return [];
+    const pointsSystem = getPointsSystem(pointsSystemId);
+    // Whole-draw round sizes so generically named knockout rounds can still be
+    // identified (e.g. a 16-match round is R32).
+    const knockoutRoundSizes = buildKnockoutRoundSizes(matches || [], isKnockoutMatch);
     
     // Create a map for easy lookup and to avoid mutating original teams
     const teamMap = new Map<string, Team>();
@@ -2653,32 +2661,17 @@ export const calculateStats = (teams: Team[], matches: Match[], format: Tourname
                 processTeamStats(m.team2Id, isT2Winner, isT1Winner, p2Sets, p1Sets, p2Games, p1Games, t2Points);
             }
 
-            // Detect Knockout round outcomes for priority rank & FIP/PPF points
-            const roundStr = String(m.round || m.roundName || m.stage || '').toUpperCase();
-            const isFinalMatch = (roundStr.includes('FINAL') || roundStr === 'F') && !roundStr.includes('SEMI') && !roundStr.includes('QUARTER') && !roundStr.includes('1/4') && !roundStr.includes('1/2');
-            const isSemiMatch = roundStr.includes('SEMI') || roundStr.includes('1/2') || roundStr === 'SF';
-            const isQuarterMatch = roundStr.includes('QUARTER') || roundStr.includes('1/4') || roundStr === 'QF';
-
-            if (isFinalMatch) {
-                if (isT1Winner) {
-                    setTeamKnockoutRank(m.team1Id, 'CHAMPION', 100000);
-                    setTeamKnockoutRank(m.team2Id, 'RUNNER_UP', 50000);
-                } else if (isT2Winner) {
-                    setTeamKnockoutRank(m.team2Id, 'CHAMPION', 100000);
-                    setTeamKnockoutRank(m.team1Id, 'RUNNER_UP', 50000);
-                }
-            } else if (isSemiMatch) {
-                if (isT1Winner) {
-                    setTeamKnockoutRank(m.team2Id, 'SEMI_FINALIST', 25000);
-                } else if (isT2Winner) {
-                    setTeamKnockoutRank(m.team1Id, 'SEMI_FINALIST', 25000);
-                }
-            } else if (isQuarterMatch) {
-                if (isT1Winner) {
-                    setTeamKnockoutRank(m.team2Id, 'QUARTER_FINALIST', 12000);
-                } else if (isT2Winner) {
-                    setTeamKnockoutRank(m.team1Id, 'QUARTER_FINALIST', 12000);
-                }
+            // Detect knockout round outcomes for priority rank & placement points.
+            // FIX: this used to read `m.round` first, which is always a number
+            // for generated matches ("1", "3"...), so finals/semis/quarters were
+            // never recognised and every team got participation points only.
+            const stage = getMatchStage(m, knockoutRoundSizes, isKnockoutMatch);
+            if (stage && (isT1Winner || isT2Winner)) {
+                const winnerId = isT1Winner ? m.team1Id : m.team2Id;
+                const loserId = isT1Winner ? m.team2Id : m.team1Id;
+                const lost = loserStage(stage);
+                setTeamKnockoutRank(loserId, lost, STAGE_WEIGHT[lost]);
+                if (stage === 'F') setTeamKnockoutRank(winnerId, 'CHAMPION', STAGE_WEIGHT.CHAMPION);
             }
         }
     });
@@ -2712,13 +2705,17 @@ export const calculateStats = (teams: Team[], matches: Match[], format: Tourname
         }
 
         let fipPts = 0;
-        if (t.knockoutStage === 'CHAMPION') fipPts = 1000;
-        else if (t.knockoutStage === 'RUNNER_UP') fipPts = 600;
-        else if (t.knockoutStage === 'SEMI_FINALIST') fipPts = 300;
-        else if (t.knockoutStage === 'QUARTER_FINALIST') fipPts = 150;
-        else fipPts = 50;
-
-        fipPts += (t.wins || 0) * 50;
+        if (pointsSystem.id === 'matchup') {
+            // Original Matchup team ranking points, unchanged.
+            if (t.knockoutStage === 'CHAMPION') fipPts = 1000;
+            else if (t.knockoutStage === 'RUNNER_UP') fipPts = 600;
+            else if (t.knockoutStage === 'SEMI_FINALIST') fipPts = 300;
+            else if (t.knockoutStage === 'QUARTER_FINALIST') fipPts = 150;
+            else fipPts = 50;
+            fipPts += (t.wins || 0) * 50;
+        } else {
+            fipPts = placementPoints(pointsSystem, t.knockoutStage) + (t.wins || 0) * pointsSystem.perWin;
+        }
         t.fipPpfPoints = fipPts;
     });
 
@@ -2815,7 +2812,7 @@ export const generateSchedule = async (tId: string, knockoutConfig?: any[], auto
                 .map(d => ({ id: d.id, ...d.data() } as Match))
                 .filter(m => (m.status === MatchStatus.COMPLETED || String(m.status).toUpperCase() === 'FINISHED') && (!autoConfig?.categoryId || m.categoryId === autoConfig.categoryId));
 
-            const initialStandings = calculateStats(teamsForStandings, preservedMatches, tData.format, tData.categories || []);
+            const initialStandings = calculateStats(teamsForStandings, preservedMatches, tData.format, tData.categories || [], tData.pointsSystem);
             initialStandings.forEach(team => {
                 const sRef = doc(standingsCol, team.id);
                 batch.set(sRef, cleanData(team));
@@ -2936,7 +2933,7 @@ export const updateMatchDetails = async (tId: any, mId: any, updates: any, ...ar
                         const tSnapStats = await transaction.get(tRefStats);
                         if (tSnapStats.exists()) {
                             const t = tSnapStats.data() as Tournament;
-                            const updatedTeams = calculateStats(t.teams, updatedMatches, t.format, t.categories || []);
+                            const updatedTeams = calculateStats(t.teams, updatedMatches, t.format, t.categories || [], t.pointsSystem);
                             transaction.update(tRefStats, cleanData({ teams: updatedTeams }));
                             const standingsCol = collection(db, "tournaments", tId, "standings");
                             updatedTeams.forEach(tea => { 
@@ -3066,7 +3063,7 @@ export const updateMatchScore = async (tId: string, mId: string, newScore: Score
                 const winnerName = winnerId === match.team1Id ? match.team1Name : (winnerId === match.team2Id ? match.team2Name : "TBD");
                 updatedMatches = advanceBracket(updatedMatches, match, winnerId, winnerName || "TBD");
             }
-            const updatedTeams = calculateStats(t.teams, updatedMatches, t.format, t.categories || []);
+            const updatedTeams = calculateStats(t.teams, updatedMatches, t.format, t.categories || [], t.pointsSystem);
             t.matches = updatedMatches;
             t.teams = updatedTeams;
             notifyMock();
@@ -3257,7 +3254,7 @@ export const recalculateMatchResult = async (tId: string, mId: string, sets: any
                     const tSnapStats = await transaction.get(tRefStats);
                     if (tSnapStats.exists()) {
                         const tData = tSnapStats.data() as Tournament;
-                        const updatedTeams = calculateStats(tData.teams, updatedMatches, tData.format, tData.categories || []);
+                        const updatedTeams = calculateStats(tData.teams, updatedMatches, tData.format, tData.categories || [], tData.pointsSystem);
                         transaction.update(tRefStats, cleanData({ teams: updatedTeams }));
                         
                         const standingsCol = collection(db, "tournaments", tId, "standings");
@@ -3347,7 +3344,7 @@ export const deleteMatch = async (tId: string, mId: string) => {
 export const replaceTeamInTournament = async (
     tId: string,
     oldTeamId: string,
-    incomingTeamData: { teamId?: string; teamName: string; player1Name: string; player2Name?: string }
+    incomingTeamData: { teamId?: string; teamName: string; player1Name: string; player2Name?: string; player1Country?: string; player2Country?: string }
 ) => {
     if (!db) return;
 
@@ -3370,8 +3367,8 @@ export const replaceTeamInTournament = async (
             : {
                 id: genId(),
                 name: incomingTeamData.teamName,
-                player1: { id: genId(), name: incomingTeamData.player1Name },
-                player2: isAmericanoMode ? undefined : { id: genId(), name: incomingTeamData.player2Name || '' },
+                player1: { id: genId(), name: incomingTeamData.player1Name, ...(incomingTeamData.player1Country ? { country: incomingTeamData.player1Country } : {}) },
+                player2: isAmericanoMode ? undefined : { id: genId(), name: incomingTeamData.player2Name || '', ...(incomingTeamData.player2Country ? { country: incomingTeamData.player2Country } : {}) },
                 registeredAt: new Date().toISOString(),
               };
 
@@ -3440,7 +3437,7 @@ export const replaceTeamInTournament = async (
 
     return newTeamId;
 };
-export const editTeamInTournament = async (tId: string, teamId: string, name: string, player1Name: string, player2Name: string) => {
+export const editTeamInTournament = async (tId: string, teamId: string, name: string, player1Name: string, player2Name: string, countries?: { player1?: string; player2?: string }) => {
     if (db) {
         try {
             await runTransaction(db, async (transaction) => {
@@ -3457,10 +3454,12 @@ export const editTeamInTournament = async (tId: string, teamId: string, name: st
                             
                             if (!updated.player1) updated.player1 = { id: genId(), name: '' };
                             updated.player1.name = player1Name;
+                            if (countries?.player1) updated.player1.country = countries.player1;
                             
                             if (!isAmericanoMode) {
                                 if (!updated.player2) updated.player2 = { id: genId(), name: '' };
                                 if (player2Name !== undefined) updated.player2.name = player2Name;
+                                if (countries?.player2) updated.player2.country = countries.player2;
                             }
                             return updated;
                         }

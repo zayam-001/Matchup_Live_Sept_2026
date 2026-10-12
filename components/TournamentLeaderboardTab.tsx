@@ -3,13 +3,16 @@ import { toJpeg } from 'html-to-image';
 import gifshot from 'gifshot';
 import { Tournament, Match, MatchStatus, Team } from '../types';
 import { useTournamentMatches } from '../hooks/useTournamentMatches';
-import { isMatchInCategory } from '../services/storage';
+import { isMatchInCategory, isKnockoutMatch } from '../services/storage';
+import { getPointsSystem, getMatchStage, buildKnockoutRoundSizes, loserStage, placementPoints, STAGE_LABELS, KnockoutStage, MatchStage } from '../lib/pointsSystems';
 import { Trophy, Medal, Star, Hash, User, Activity, Flame, Crown, X, ChevronRight, Download, Image as ImageIcon, Film } from 'lucide-react';
 import { Card } from './ui/Card';
 import { Logo } from './ui/Logo';
 
 export const TournamentLeaderboardTab = ({ tournament, categoryId }: { tournament: Tournament; categoryId: string | null }) => {
     const { matches: globalMatches } = useTournamentMatches(tournament.id);
+    // Points plan chosen at tournament setup (Matchup Standard unless changed).
+    const pointsSystem = getPointsSystem(tournament.pointsSystem);
     const [viewMode, setViewMode] = useState<"OVERALL" | "SKILLS">("OVERALL");
     const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
     const leaderboardRef = useRef<HTMLDivElement>(null);
@@ -130,10 +133,16 @@ export const TournamentLeaderboardTab = ({ tournament, categoryId }: { tournamen
     const leaderboardData = useMemo(() => {
         if (!globalMatches) return [];
 
-        const filteredMatches = globalMatches.filter(m => 
-            isMatchInCategory(m, categoryId, tournament) && 
+        const categoryMatches = globalMatches.filter(m => isMatchInCategory(m, categoryId, tournament));
+        const filteredMatches = categoryMatches.filter(m =>
             ((m.status === MatchStatus.COMPLETED || String(m.status).toUpperCase() === 'FINISHED') || String(m.status) === 'COMPLETED')
         );
+        // Round sizes over the whole draw (not just finished matches) so a
+        // generically named round can still be identified as R32, QF, etc.
+        const roundSizes = buildKnockoutRoundSizes(categoryMatches, isKnockoutMatch);
+        const winnerReaches: Record<MatchStage, KnockoutStage> = {
+            F: 'CHAMPION', SF: 'RUNNER_UP', QF: 'SEMI_FINALIST', R16: 'QUARTER_FINALIST', R32: 'ROUND_OF_16', R64: 'ROUND_OF_32',
+        };
 
         const teamMap = new Map<string, Team>();
         if (tournament.teams) {
@@ -156,7 +165,7 @@ export const TournamentLeaderboardTab = ({ tournament, categoryId }: { tournamen
             if (!pid) return;
             if (!playerStats.has(pid)) {
                 playerStats.set(pid, {
-                    id: pid, name, photoUrl, matchesWon: 0, placementBonus: 15, highestPlacementName: 'Participation', skillPoints: 0, skillCounts: {}
+                    id: pid, name, photoUrl, matchesWon: 0, placementBonus: pointsSystem.participation, highestPlacementName: 'Participation', skillPoints: 0, skillCounts: {}
                 });
             }
             return pid;
@@ -185,27 +194,13 @@ export const TournamentLeaderboardTab = ({ tournament, categoryId }: { tournamen
             }
 
             const wId = m.winnerTeamId;
-            const rName = m.roundName || '';
-            const isFinal = rName.toLowerCase().includes('final') && !rName.toLowerCase().includes('quarter') && !rName.toLowerCase().includes('semi');
-            const is3rd = rName.toLowerCase().includes('3rd');
-            const isSemi = rName.toLowerCase().includes('semi');
-            const isQuarter = rName.toLowerCase().includes('quarter') || rName.toLowerCase().includes('round of 8');
-            const isR16 = rName.toLowerCase().includes('round of 16');
-
-            let winnerPlacement = 15;
-            let loserPlacement = 15;
-
-            if (isFinal) {
-                winnerPlacement = 200; loserPlacement = 150;
-            } else if (is3rd) {
-                winnerPlacement = 100; loserPlacement = 80;
-            } else if (isSemi) {
-                winnerPlacement = 150; loserPlacement = 100;
-            } else if (isQuarter) {
-                winnerPlacement = 100; loserPlacement = 30;
-            } else if (isR16) {
-                winnerPlacement = 30; loserPlacement = 15;
-            }
+            // Placement = furthest stage reached: the loser is credited with the
+            // stage they went out in, the winner with the next one.
+            const stage = getMatchStage(m, roundSizes, isKnockoutMatch);
+            const winnerStage = stage ? winnerReaches[stage] : null;
+            const loserStageReached = stage ? loserStage(stage) : null;
+            const winnerPlacement = winnerStage ? placementPoints(pointsSystem, winnerStage) : pointsSystem.participation;
+            const loserPlacement = loserStageReached ? placementPoints(pointsSystem, loserStageReached) : pointsSystem.participation;
 
             const processTeam = (teamId: string, isWinner: boolean) => {
                 const t = teamMap.get(teamId);
@@ -215,9 +210,10 @@ export const TournamentLeaderboardTab = ({ tournament, categoryId }: { tournamen
                     if (!ps) return;
                     if (isWinner) ps.matchesWon++;
                     const placement = isWinner ? winnerPlacement : loserPlacement;
+                    const reached = isWinner ? winnerStage : loserStageReached;
                     if (placement > ps.placementBonus) {
                         ps.placementBonus = placement;
-                        ps.highestPlacementName = isWinner ? `Winner (${rName})` : `Reached ${rName}`;
+                        ps.highestPlacementName = reached ? STAGE_LABELS[reached] : 'Participation';
                     }
                 };
                 if (t.player1) {
@@ -256,7 +252,7 @@ export const TournamentLeaderboardTab = ({ tournament, categoryId }: { tournamen
                                 if (actualPlayerId) {
                                     const ps = playerStats.get(actualPlayerId);
                                     if (ps) {
-                                        ps.skillPoints += 5;
+                                        ps.skillPoints += pointsSystem.perSkillShot;
                                         ps.skillCounts[finisher] = (ps.skillCounts[finisher] || 0) + 1;
                                     }
                                 }
@@ -277,7 +273,7 @@ export const TournamentLeaderboardTab = ({ tournament, categoryId }: { tournamen
                         if (actualPlayerId && ['smash', 'vibora', 'bandeja', 'volley', 'drop shot', 'drop'].includes(finisher)) {
                             const ps = playerStats.get(actualPlayerId);
                             if (ps) {
-                                ps.skillPoints += 5;
+                                ps.skillPoints += pointsSystem.perSkillShot;
                                 ps.skillCounts[finisher] = (ps.skillCounts[finisher] || 0) + 1;
                             }
                         }
@@ -288,13 +284,13 @@ export const TournamentLeaderboardTab = ({ tournament, categoryId }: { tournamen
 
         const arr = Array.from(playerStats.values()).map(ps => ({
             ...ps,
-            totalPoints: ps.placementBonus + (15 * ps.matchesWon) + ps.skillPoints
+            totalPoints: ps.placementBonus + (pointsSystem.perWin * ps.matchesWon) + ps.skillPoints
         }));
 
         arr.sort((a, b) => b.totalPoints - a.totalPoints || b.matchesWon - a.matchesWon || b.skillPoints - a.skillPoints);
         return arr;
 
-    }, [globalMatches, tournament, categoryId]);
+    }, [globalMatches, tournament, categoryId, pointsSystem]);
 
     
     const skillsChampionsData = useMemo(() => {
@@ -324,7 +320,10 @@ export const TournamentLeaderboardTab = ({ tournament, categoryId }: { tournamen
                     <h3 className="text-xl font-black text-white flex items-center gap-2 italic uppercase tracking-tight">
                         <Medal className="text-[#E65C31]" size={24} /> Tournament Leaderboard
                     </h3>
-                    <p className="text-content-secondary text-sm mt-1">Individual player points based on placement, match wins, and skill shots.</p>
+                    <p className="text-content-secondary text-sm mt-1 flex flex-wrap items-center gap-2">
+                        <span className="px-2 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider text-white" style={{ background: pointsSystem.color }}>{pointsSystem.label}</span>
+                        <span>{pointsSystem.description}</span>
+                    </p>
                 </div>
                 <div className="flex items-center gap-2" data-html2canvas-ignore>
                     <button 
@@ -398,7 +397,7 @@ export const TournamentLeaderboardTab = ({ tournament, categoryId }: { tournamen
                                         <td className="px-6 py-4 whitespace-nowrap text-center">
                                             <div className="flex flex-col items-center justify-center">
                                                 <span className="text-white font-bold">{player.matchesWon}</span>
-                                                <span className="text-[10px] text-white/40 uppercase">+{player.matchesWon * 15}</span>
+                                                <span className="text-[10px] text-white/40 uppercase">+{player.matchesWon * pointsSystem.perWin}</span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -788,10 +787,10 @@ export const TournamentLeaderboardTab = ({ tournament, categoryId }: { tournamen
                                         <Medal size={20} className="text-blue-400" />
                                         <div>
                                             <div className="text-sm font-bold text-white">Match Wins</div>
-                                            <div className="text-xs text-content-secondary">{selectedPlayer.matchesWon} wins × 15 pts</div>
+                                            <div className="text-xs text-content-secondary">{selectedPlayer.matchesWon} wins × {pointsSystem.perWin} pts</div>
                                         </div>
                                     </div>
-                                    <span className="text-lg font-black text-white">{selectedPlayer.matchesWon * 15}</span>
+                                    <span className="text-lg font-black text-white">{selectedPlayer.matchesWon * pointsSystem.perWin}</span>
                                 </div>
 
                                 <div className="bg-white/5 rounded-xl p-4 border border-white/5 space-y-3">
@@ -813,7 +812,7 @@ export const TournamentLeaderboardTab = ({ tournament, categoryId }: { tournamen
                                                     <span className="text-xs text-white capitalize">{shot}</span>
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-xs text-white/50">{count}x</span>
-                                                        <span className="text-xs font-bold text-[#E65C31]">+{count * 5}</span>
+                                                        <span className="text-xs font-bold text-[#E65C31]">+{count * pointsSystem.perSkillShot}</span>
                                                     </div>
                                                 </div>
                                             ))}

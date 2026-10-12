@@ -7,6 +7,7 @@ import { Card } from './ui/Card';
 import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
 import { useAuth } from '../hooks/useAuth';
+import { CountrySelect } from './CountrySelect';
 
 export const RegistrationForm: React.FC<{ initialTournamentId?: string }> = ({ initialTournamentId }) => {
   const { user: currentPlayer, loading: authLoading } = useAuth();
@@ -22,8 +23,8 @@ export const RegistrationForm: React.FC<{ initialTournamentId?: string }> = ({ i
 
   const [formData, setFormData] = useState({
     teamName: '',
-    p1Name: '', p1Phone: '', p1Email: '', p1Photo: '', p1Cnic: '',
-    p2Name: '', p2Phone: '', p2Email: '', p2Photo: '', p2Cnic: ''
+    p1Name: '', p1Phone: '', p1Email: '', p1Photo: '', p1Cnic: '', p1Country: '',
+    p2Name: '', p2Phone: '', p2Email: '', p2Photo: '', p2Cnic: '', p2Country: ''
   });
 
   const p1FileInputRef = useRef<HTMLInputElement>(null);
@@ -131,6 +132,13 @@ export const RegistrationForm: React.FC<{ initialTournamentId?: string }> = ({ i
                            selectedTournament.format === 'MEXICANO' || 
                            currentCategory?.format === 'AMERICANO' || 
                            currentCategory?.format === 'MEXICANO';
+
+    const askCountry = !!selectedTournament.showNationFlags;
+    if (askCountry && (!formData.p1Country || (!isAmericanoMode && !formData.p2Country))) {
+        toast.error("Country required", "Please select the country for each player.");
+        setLoading(false);
+        return;
+    }
     
     try {
         await registerTeam(selectedTournament.id, {
@@ -144,7 +152,8 @@ export const RegistrationForm: React.FC<{ initialTournamentId?: string }> = ({ i
                 email: formData.p1Email,
                 cnic: formData.p1Cnic, 
                 verified: !isRegisteringForSomeoneElse && !!currentPlayer,
-                photoUrl: formData.p1Photo 
+                photoUrl: formData.p1Photo,
+                ...(askCountry ? { country: formData.p1Country } : {})
             },
             player2: isAmericanoMode ? { name: 'N/A', phone: '0', email: 'none@none', verified: false } : { 
                 name: formData.p2Name, 
@@ -152,7 +161,8 @@ export const RegistrationForm: React.FC<{ initialTournamentId?: string }> = ({ i
                 email: formData.p2Email, 
                 cnic: formData.p2Cnic,
                 verified: false,
-                photoUrl: formData.p2Photo
+                photoUrl: formData.p2Photo,
+                ...(askCountry ? { country: formData.p2Country } : {})
             }
         });
         setSubmitted(true);
@@ -312,7 +322,7 @@ export const RegistrationForm: React.FC<{ initialTournamentId?: string }> = ({ i
                 Team <span className="text-brand">{formData.teamName}</span> has been submitted for approval. 
             </p>
             <button 
-                onClick={() => { setSubmitted(false); setSelectedTournamentId(null); setSelectedTournament(null); setFormData({ teamName: '', p1Name: '', p1Phone: '', p1Email: '', p1Photo: '', p1Cnic: '', p2Name: '', p2Phone: '', p2Email: '', p2Photo: '', p2Cnic: '' })}}
+                onClick={() => { setSubmitted(false); setSelectedTournamentId(null); setSelectedTournament(null); setFormData({ teamName: '', p1Name: '', p1Phone: '', p1Email: '', p1Photo: '', p1Cnic: '', p1Country: '', p2Name: '', p2Phone: '', p2Email: '', p2Photo: '', p2Cnic: '', p2Country: '' })}}
                 className="mt-8 text-sm text-content-muted hover:text-white underline"
             >
                 Back to Tournaments
@@ -591,6 +601,9 @@ export const RegistrationForm: React.FC<{ initialTournamentId?: string }> = ({ i
                             <Input label="CNIC (Optional)" value={formData.p1Cnic} onChange={(v: string) => setFormData({...formData, p1Cnic: v})} placeholder="XXXXX-XXXXXXX-X" />
                         </>
                     )}
+                    {selectedTournament.showNationFlags && (
+                        <CountrySelect required label="Country" value={formData.p1Country} onChange={(code) => setFormData(prev => ({ ...prev, p1Country: code }))} />
+                    )}
                 </div>
             </Card>
 
@@ -641,6 +654,9 @@ export const RegistrationForm: React.FC<{ initialTournamentId?: string }> = ({ i
                                 <Input required label="Email" value={formData.p2Email} onChange={(v: string) => setFormData({...formData, p2Email: v})} icon={<Mail size={16}/>} type="email" />
                                 <Input label="CNIC (Optional)" value={formData.p2Cnic} onChange={(v: string) => setFormData({...formData, p2Cnic: v})} placeholder="XXXXX-XXXXXXX-X" />
                             </>
+                        )}
+                        {selectedTournament.showNationFlags && (
+                            <CountrySelect required label="Country" value={formData.p2Country} onChange={(code) => setFormData(prev => ({ ...prev, p2Country: code }))} />
                         )}
                     </div>
                 </Card>

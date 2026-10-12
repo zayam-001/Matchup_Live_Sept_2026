@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { getFirestore, collectionGroup, query, onSnapshot } from 'firebase/firestore';
-import { db, subscribeToTournaments, subscribeToStandings, isTeamInCategory, isMatchInCategory, calculateStats, checkAndHealTournamentStats } from '../services/storage';
+import { getFirestore, collection, collectionGroup, query, onSnapshot } from 'firebase/firestore';
+import { db, sortSponsors, subscribeToTournaments, subscribeToStandings, isTeamInCategory, isMatchInCategory, calculateStats, checkAndHealTournamentStats } from '../services/storage';
 import { useMatchResult } from '../hooks/useMatchResult';
 import { useTournamentDoc } from '../hooks/useTournamentDoc';
 import { useTournamentMatches } from '../hooks/useTournamentMatches';
-import { MatchStatus, Tournament, TournamentFormat, RoundRobinType, Team, Match, SponsorTier, MatchEvent } from '../types';
+import { MatchStatus, Tournament, TournamentFormat, RoundRobinType, Team, Match, SponsorTier, MatchEvent, BroadcastTheme } from '../types';
+import { CountryFlag } from './CountrySelect';
 import { Search, Filter, ChevronRight, ChevronLeft, Play, Info, Trophy, History, Timer, MapPin, Award, X, Activity, ChevronDown, Users, Mic, DollarSign, Tv, Calendar, Check, LayoutGrid, List } from 'lucide-react';
 import { Avatar } from './ui/Avatar';
 import { Card } from './ui/Card';
@@ -1381,7 +1382,7 @@ export const StandingsTable = ({ tournamentId, categoryId, initialTeams, onTeamS
         // totals and spectators cannot self-heal them), so re-derive the stat columns from matches.
         const overlayDerivedStats = (teams: any[]) => {
             if (!tournament || !matches || matches.length === 0 || teams.length === 0) return teams;
-            const derived = calculateStats(teams, matches, tournament.format, tournament.categories);
+            const derived = calculateStats(teams, matches, tournament.format, tournament.categories, tournament.pointsSystem);
             const byId = new Map(derived.map((d: any) => [d.id, d]));
             return teams.map((t: any) => {
                 const d: any = byId.get(t.id);
@@ -1401,7 +1402,7 @@ export const StandingsTable = ({ tournamentId, categoryId, initialTeams, onTeamS
             if ((filtered.length === 0 || allZeroes) && matches && matches.length > 0 && tournament) {
                 const categoryTeams = (tournament.teams || source).filter((t: any) => isTeamInCategory(t, categoryId, tournament));
                 if (categoryTeams.length > 0) {
-                    const computed = calculateStats(categoryTeams, matches, tournament.format, tournament.categories);
+                    const computed = calculateStats(categoryTeams, matches, tournament.format, tournament.categories, tournament.pointsSystem);
                     setStandings(filterAccepted(computed));
                     return;
                 }
@@ -1626,37 +1627,267 @@ const PaginationBar = ({ page, totalPages, onChange }: { page: number; totalPage
     );
 };
 
+// ─── Broadcast mode (court-side TV wall) ────────────────────────────────────
+// Scoreboard wall: up to 6 live matches per page (2 x 3 grid), S1/S2/S3 set
+// columns + current point box per team, sponsor strip at the bottom. With more
+// than 6 live matches the operator pages manually. Colours come from the
+// tournament's broadcastTheme (Matchup dark by default, FIP blue, or light).
+const FIP_FONT = "'Barlow Condensed', 'Barlow', 'Inter', sans-serif";
+// Shared by the card header and both team rows so labels line up with values.
+const FIP_COLS = 'minmax(0,1fr) repeat(3, 8.5cqw) 17cqw';
+
+interface BroadcastPalette {
+    pageBg: string;
+    decor: false | 'fip' | 'ribbon'; // background decoration set
+    pageText: string;
+    pageMuted: string;
+    chipBg: string;
+    chipBorder: string;
+    logoColor?: string; // undefined = white Matchup logo
+    cardBorder: string;
+    cardShadow: string;
+    cardAccent?: string; // left accent bar
+    cardTopAccent?: string; // thin stripe across the top of each card
+    titleAccent?: string; // short bar under the tournament title
+    headBg: string;
+    headText: string;
+    bodyBg: string;
+    divider: string;
+    nameText: string;
+    setText: string;
+    setCurrent: string;
+    scoreBg: string;
+    scoreText: string;
+    serveDot: string;
+    footBg: string;
+    footText: string;
+    statusBg: string;
+    roundBg: string;
+    roundText: string;
+    flashBg: string;
+    flashText: string;
+    stripBg: string;
+    stripBorder: string;
+    tickerLabelBg: string;
+    tickerText: string;
+}
+
+const BROADCAST_THEMES: Record<BroadcastTheme, BroadcastPalette> = {
+    // Matchup brand: near-black stage, graphite cards, logo blue accents.
+    matchup: {
+        pageBg: [
+            'radial-gradient(ellipse 60% 50% at 85% -10%, rgba(77,120,255,0.20), transparent 70%)',
+            'radial-gradient(ellipse 50% 45% at 0% 110%, rgba(230,92,49,0.10), transparent 70%)',
+            '#0d0d0f',
+        ].join(', '),
+        decor: false,
+        pageText: '#ffffff',
+        pageMuted: 'rgba(255,255,255,0.6)',
+        chipBg: 'rgba(255,255,255,0.05)',
+        chipBorder: 'rgba(255,255,255,0.1)',
+        cardBorder: '1px solid rgba(255,255,255,0.06)',
+        cardShadow: '0 1.6cqh 4.5cqh rgba(0,0,0,0.55)',
+        cardAccent: '#4D78FF',
+        headBg: '#1c1c22',
+        headText: 'rgba(255,255,255,0.55)',
+        bodyBg: '#16161a',
+        divider: 'rgba(255,255,255,0.08)',
+        nameText: '#ffffff',
+        setText: '#ffffff',
+        setCurrent: '#7093FF',
+        scoreBg: 'linear-gradient(180deg, #4D78FF, #2F59E5)',
+        scoreText: '#ffffff',
+        serveDot: '#E65C31',
+        footBg: '#111114',
+        footText: 'rgba(255,255,255,0.75)',
+        statusBg: 'rgba(255,255,255,0.08)',
+        roundBg: 'rgba(77,120,255,0.18)',
+        roundText: '#9db3ff',
+        flashBg: 'rgba(13,13,15,0.9)',
+        flashText: '#ffffff',
+        stripBg: '#ffffff',
+        stripBorder: 'transparent',
+        tickerLabelBg: '#4D78FF',
+        tickerText: '#0d0d0f',
+    },
+    // FIP federation look: Midnight Blue (#002C5C) stage with Big Stone
+    // (#17253F) and white, kept deliberately clear of any warm/orange glow.
+    fip: {
+        pageBg: [
+            'radial-gradient(ellipse 70% 60% at 100% 0%, rgba(58,124,214,0.38) 0%, rgba(58,124,214,0.10) 45%, transparent 72%)',
+            'radial-gradient(ellipse 60% 55% at 0% 100%, rgba(23,37,63,0.85) 0%, transparent 70%)',
+            'linear-gradient(155deg, #17253F 0%, #002C5C 48%, #003b78 100%)',
+        ].join(', '),
+        decor: 'fip',
+        pageText: '#ffffff',
+        pageMuted: 'rgba(255,255,255,0.68)',
+        chipBg: 'rgba(255,255,255,0.08)',
+        chipBorder: 'rgba(255,255,255,0.16)',
+        cardBorder: '1px solid rgba(255,255,255,0.08)',
+        cardShadow: '0 1.6cqh 4.5cqh rgba(0,10,30,0.5)',
+        cardTopAccent: 'linear-gradient(90deg, #ffffff 0%, #9cc2ff 35%, #2f6fd6 70%, #002C5C 100%)',
+        titleAccent: 'linear-gradient(90deg, transparent, #ffffff 30%, #9cc2ff 70%, transparent)',
+        headBg: '#17253F',
+        headText: 'rgba(255,255,255,0.78)',
+        bodyBg: '#ffffff',
+        divider: 'rgba(0,44,92,0.1)',
+        nameText: '#002C5C',
+        setText: '#17253F',
+        setCurrent: '#2f6fd6',
+        scoreBg: 'linear-gradient(180deg, #003a78 0%, #002C5C 100%)',
+        scoreText: '#ffffff',
+        serveDot: '#2f6fd6',
+        footBg: '#17253F',
+        footText: 'rgba(255,255,255,0.8)',
+        statusBg: 'rgba(255,255,255,0.1)',
+        roundBg: '#ffffff',
+        roundText: '#002C5C',
+        flashBg: 'rgba(0,44,92,0.92)',
+        flashText: '#ffffff',
+        stripBg: '#ffffff',
+        stripBorder: 'transparent',
+        tickerLabelBg: '#002C5C',
+        tickerText: '#002C5C',
+    },
+    // Pink Ribbon: for Pinktober / breast-cancer awareness events. Deep plum
+    // to raspberry stage, white cards, hot-pink scores, awareness ribbon motif.
+    pinktober: {
+        pageBg: [
+            'radial-gradient(ellipse 55% 50% at 8% 0%, rgba(255,140,198,0.42) 0%, rgba(255,140,198,0.10) 50%, transparent 72%)',
+            'radial-gradient(ellipse 60% 60% at 100% 100%, rgba(232,62,140,0.45) 0%, transparent 70%)',
+            'linear-gradient(150deg, #3a0a2a 0%, #6b1048 48%, #9c1857 100%)',
+        ].join(', '),
+        decor: 'ribbon',
+        pageText: '#ffffff',
+        pageMuted: 'rgba(255,255,255,0.72)',
+        chipBg: 'rgba(255,255,255,0.10)',
+        chipBorder: 'rgba(255,255,255,0.20)',
+        cardBorder: '1px solid rgba(255,255,255,0.10)',
+        cardShadow: '0 1.6cqh 4.5cqh rgba(40,0,25,0.5)',
+        cardTopAccent: 'linear-gradient(90deg, #ffd6e8 0%, #ff8cc6 40%, #e83e8c 75%, #9c1857 100%)',
+        titleAccent: 'linear-gradient(90deg, transparent, #ffd6e8 30%, #ff8cc6 70%, transparent)',
+        headBg: '#4a0d35',
+        headText: 'rgba(255,255,255,0.8)',
+        bodyBg: '#ffffff',
+        divider: 'rgba(107,16,72,0.1)',
+        nameText: '#4a0d35',
+        setText: '#4a0d35',
+        setCurrent: '#e83e8c',
+        scoreBg: 'linear-gradient(180deg, #ff4f9a 0%, #d6336c 100%)',
+        scoreText: '#ffffff',
+        serveDot: '#e83e8c',
+        footBg: '#4a0d35',
+        footText: 'rgba(255,255,255,0.82)',
+        statusBg: 'rgba(255,255,255,0.10)',
+        roundBg: '#ffd6e8',
+        roundText: '#6b1048',
+        flashBg: 'rgba(74,13,53,0.92)',
+        flashText: '#ffffff',
+        stripBg: '#ffffff',
+        stripBorder: 'transparent',
+        tickerLabelBg: '#d6336c',
+        tickerText: '#4a0d35',
+    },
+    // Light: for bright venues and daytime screens.
+    light: {
+        pageBg: [
+            'radial-gradient(ellipse 60% 50% at 90% -10%, rgba(77,120,255,0.14), transparent 70%)',
+            'radial-gradient(ellipse 50% 45% at 0% 110%, rgba(230,92,49,0.08), transparent 70%)',
+            'linear-gradient(160deg, #f7f9fc 0%, #eaeef5 100%)',
+        ].join(', '),
+        decor: false,
+        pageText: '#0f172a',
+        pageMuted: 'rgba(15,23,42,0.55)',
+        chipBg: '#ffffff',
+        chipBorder: 'rgba(15,23,42,0.1)',
+        logoColor: '#4D78FF',
+        cardBorder: '1px solid rgba(15,23,42,0.08)',
+        cardShadow: '0 1.2cqh 3.5cqh rgba(15,23,42,0.10)',
+        headBg: '#f1f4fa',
+        headText: 'rgba(15,23,42,0.5)',
+        bodyBg: '#ffffff',
+        divider: 'rgba(15,23,42,0.08)',
+        nameText: '#0f172a',
+        setText: '#0f172a',
+        setCurrent: '#4D78FF',
+        scoreBg: 'linear-gradient(180deg, #4D78FF, #2F59E5)',
+        scoreText: '#ffffff',
+        serveDot: '#E65C31',
+        footBg: '#f8fafc',
+        footText: 'rgba(15,23,42,0.65)',
+        statusBg: 'rgba(15,23,42,0.06)',
+        roundBg: '#4D78FF',
+        roundText: '#ffffff',
+        flashBg: 'rgba(255,255,255,0.94)',
+        flashText: '#0f172a',
+        stripBg: '#ffffff',
+        stripBorder: 'rgba(15,23,42,0.08)',
+        tickerLabelBg: '#4D78FF',
+        tickerText: '#0f172a',
+    },
+};
+
+const getBroadcastPalette = (t?: Tournament | null) => BROADCAST_THEMES[(t?.broadcastTheme as BroadcastTheme) || 'matchup'] || BROADCAST_THEMES.matchup;
+
+const isMatchFinished = (m: any) => {
+    const s = String(m?.status || '').toUpperCase();
+    return s === 'COMPLETED' || s === 'FINISHED' || !!m?.winnerTeamId;
+};
+
+const isMatchLive = (m: any) => {
+    const s = String(m?.status || '').toUpperCase();
+    return (m?.status === MatchStatus.IN_PROGRESS || s === 'LIVE' || s === 'IN_PROGRESS') && !m?.winnerTeamId;
+};
+
+// Broadcast-style names: short names stay whole ("SAFINA EJAZ"), long ones
+// keep the surname and shorten the rest to initials ("M M FERNANDES").
+const formatBroadcastPlayerName = (name?: string | null) => {
+    const parts = formatCleanName(name).split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '';
+    const full = parts.join(' ');
+    if (parts.length === 1 || full.length <= 14) return full.toUpperCase();
+    return [...parts.slice(0, -1).map(p => p[0]), parts[parts.length - 1]].join(' ').toUpperCase();
+};
+
+const describePoint = (finisher?: string, tag?: string) => {
+    if (finisher === 'smash') return 'SMASH WINNER';
+    if (finisher === 'vibora') return 'VIBORA WINNER';
+    if (finisher === 'drop' || finisher === 'drop shot') return 'DROP SHOT WINNER';
+    if (finisher === 'bandeja') return 'BANDEJA WINNER';
+    if (finisher === 'volley') return 'VOLLEY WINNER';
+    if (tag === 'winner') return 'WINNER';
+    if (tag === 'error') return 'UNFORCED ERROR';
+    if (finisher === 'net') return 'NET ERROR';
+    if (finisher === 'glass') return 'GLASS ERROR';
+    if (finisher === 'double fault') return 'DOUBLE FAULT';
+    if (finisher === 'grill') return 'GRILL ERROR';
+    return 'POINT WON';
+};
+
 const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClose: () => void }) => {
     const { matches: globalMatches } = useTournamentMatches(tournament.id);
     const [selectedMatchId, setSelectedMatchId] = useState<string | 'ALL'>('ALL');
     const [page, setPage] = useState(0);
-    const liveMatches = globalMatches.filter(m => 
-        (m.status === MatchStatus.IN_PROGRESS || String(m.status).toUpperCase() === 'LIVE' || String(m.status).toUpperCase() === 'IN_PROGRESS') && 
-        !m.winnerTeamId
-    );
-    
-    const baseWatchers = Math.max(800, (liveMatches.length * 400) + Math.floor(Math.random() * 500));
-    const [watchers, setWatchers] = useState(baseWatchers);
+    const [sponsors, setSponsors] = useState<any[]>([]);
+    const liveMatches = globalMatches.filter(isMatchLive);
+    const theme = getBroadcastPalette(tournament);
+
+    // useTournamentDoc doesn't load the sponsors subcollection, so subscribe
+    // here for the bottom sponsor strip.
+    useEffect(() => {
+        if (!db || !tournament.id) return;
+        const unsub = onSnapshot(
+            collection(db, 'tournaments', tournament.id, 'sponsors'),
+            snap => setSponsors(sortSponsors(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)))),
+            err => console.error('Error loading sponsors:', err)
+        );
+        return () => unsub();
+    }, [tournament.id]);
 
     useEffect(() => {
-        const interval = setInterval(() => {
-            setWatchers(prev => {
-                const shift = Math.floor(Math.random() * 7) - 3;
-                return Math.max(10, prev + shift);
-            });
-        }, 3500);
-        return () => clearInterval(interval);
-    }, []);
-
-    useEffect(() => {
-        if (!selectedMatchId && liveMatches.length > 0) {
-            setSelectedMatchId('ALL');
-            return;
-        }
-        // If the specific match being viewed full-screen just ended (or
-        // otherwise dropped out of the live list), fall back to the grid
-        // instead of showing "no live matches" while other matches are
-        // still actually live.
+        // If the match being viewed full-screen ended (or otherwise dropped out
+        // of the live list), fall back to the grid instead of showing "no live
+        // matches" while other matches are still live.
         if (selectedMatchId !== 'ALL' && !liveMatches.some(m => m.id === selectedMatchId)) {
             setSelectedMatchId('ALL');
         }
@@ -1667,208 +1898,341 @@ const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClos
     const totalPages = Math.max(1, Math.ceil(liveMatches.length / LIVE_PAGE_SIZE));
     const safePage = Math.min(page, totalPages - 1);
     const pageMatches = liveMatches.slice(safePage * LIVE_PAGE_SIZE, (safePage + 1) * LIVE_PAGE_SIZE);
-    
-    const globalRecentEvents = [];
-    liveMatches.forEach(m => {
-        const hist = m.score?.history || [];
-        hist.slice(-2).forEach((ev) => {
-            if(ev.startsWith('T1') || ev.startsWith('T2')) {
-                const parts = ev.split('|');
-                const type = parts[0];
-                const pIdx = parseInt(parts[2] || "1");
-                const tag = parts[3];
-                const finisher = parts[4];
-                const t1 = tournament.teams.find((t) => t.id === m.team1Id);
-                const t2 = tournament.teams.find((t) => t.id === m.team2Id);
-                const team = type === 'T1' ? t1 : t2;
-                const player = pIdx === 1 ? team?.player1?.name : team?.player2?.name;
-                const teamName = team?.name || type;
-                let actionStr = "Point Won";
-                if (finisher === 'smash') actionStr = "SMASH WINNER";
-                else if (finisher === 'vibora') actionStr = "VIBORA WINNER";
-                else if (finisher === 'drop' || finisher === 'drop shot') actionStr = "DROP SHOT WINNER";
-                else if (finisher === 'bandeja') actionStr = "BANDEJA WINNER";
-                else if (finisher === 'volley') actionStr = "VOLLEY WINNER";
-                else if (tag === 'winner') actionStr = "WINNER";
-                else if (tag === 'error') actionStr = "UNFORCED ERROR";
-                else if (finisher === 'net') actionStr = "NET ERROR";
-                else if (finisher === 'glass') actionStr = "GLASS ERROR";
-                
-                globalRecentEvents.push(`${m.court || 'Court'} - ${player || teamName}: ${actionStr}`);
-            }
-        });
-    });
+
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'ArrowRight') setPage(p => Math.min(p + 1, totalPages - 1));
+            else if (e.key === 'ArrowLeft') setPage(p => Math.max(p - 1, 0));
+            else if (e.key === 'Escape' && selectedMatchId !== 'ALL') setSelectedMatchId('ALL');
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [totalPages, selectedMatchId]);
+
+    const stripSponsors = (sponsors.length > 0 ? sponsors : (tournament.sponsors || [])).filter((s: any) => s?.logo);
+
+    const yearSource = tournament.startDate || tournament.createdAt;
+    const year = yearSource && !isNaN(new Date(yearSource).getFullYear()) ? String(new Date(yearSource).getFullYear()) : '';
+    const showYear = !!year && !String(tournament.name || '').includes(year);
+
+    // While paging, every page keeps the full 6-slot grid so a lone match on
+    // the last page doesn't blow up to full-screen and look like it was opened.
+    const n = totalPages > 1 ? LIVE_PAGE_SIZE : pageMatches.length;
+    const gridClass =
+        n === 1 ? 'h-full flex items-center justify-center' :
+        n === 2 ? 'h-full flex flex-col items-center justify-center gap-[2.5vh]' :
+        n <= 4 ? 'grid grid-cols-1 md:grid-cols-2 md:grid-rows-2 gap-[2vh] md:h-full' :
+        'grid grid-cols-1 md:grid-cols-2 md:grid-rows-3 gap-[1.6vh] md:h-full';
+    // Every cell is a size container so the card's cqh/cqw-based type scales
+    // with whatever space the layout gives it.
+    const cellClass =
+        n === 1 ? 'w-full max-w-[1500px] aspect-[2.6/1] md:aspect-auto md:h-[62%]' :
+        n === 2 ? 'w-full max-w-[1500px] aspect-[2.6/1] md:aspect-auto md:h-[45%]' :
+        'aspect-[2.4/1] md:aspect-auto md:min-h-0';
+
+    const chipStyle = { background: theme.chipBg, borderColor: theme.chipBorder };
 
     return createPortal(
-        // SAFE-ZONE FIX (found live testing this real app): this rendered
-        // content flush to the true edges of the viewport, but many
-        // TVs/LCD panels driven over HDMI apply their own overscan crop
-        // (commonly 3-5% per edge) that this page has no way to detect —
-        // so names, the close button, and score boxes got cut off on a
-        // real court-side display even though the page looked fine in a
-        // browser tab. Percentage-based padding on the outer frame keeps
-        // everything inside a safe area that scales with the actual
-        // screen size, instead of the old fixed pixel padding (p-6/p-12)
-        // which was a negligible fraction of a large TV's resolution.
-        <div className="fixed inset-0 z-[11000] bg-[#0d0d0f] text-white flex flex-col font-sans selection:bg-[#4D78FF]/30 overflow-hidden p-[3%] sm:p-[4%] gap-4">
-            {/* Minimal floating exit button */}
-            <button
-                onClick={onClose}
-                className="fixed top-[3%] right-[3%] sm:top-[4%] sm:right-[4%] z-[12000] p-3 hover:bg-white/20 bg-black/60 rounded-full transition-colors border border-white/10 shrink-0 cursor-pointer shadow-xl backdrop-blur-md opacity-40 hover:opacity-100"
-                title="Close Broadcast Mode"
-            >
-                <X size={20} className="text-white" />
-            </button>
+        // SAFE-ZONE: many TVs driven over HDMI crop 3-5% per edge (overscan),
+        // so the percentage padding keeps everything inside a safe area that
+        // scales with the actual screen size.
+        <div
+            className="fixed inset-0 z-[11000] flex flex-col overflow-hidden p-[3%] sm:p-[2.5%] gap-[1.8vh] select-none"
+            style={{ background: theme.pageBg, color: theme.pageText, fontFamily: FIP_FONT }}
+        >
+            {theme.decor === 'fip' && (
+                <>
+                    {/* Sporty decoration, purely visual: fine speed lines fading in
+                        from the right, a broad diagonal slash band, and a faint
+                        padel-court outline in the bottom-left corner. */}
+                    <div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                            backgroundImage: 'repeating-linear-gradient(115deg, rgba(255,255,255,0.06) 0 2px, transparent 2px 26px)',
+                            maskImage: 'linear-gradient(90deg, transparent 35%, black 90%)',
+                            WebkitMaskImage: 'linear-gradient(90deg, transparent 35%, black 90%)',
+                        }}
+                    />
+                    <div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                            background: [
+                                'linear-gradient(115deg, transparent 0 58%, rgba(255,255,255,0.065) 58% 70%, transparent 70%)',
+                                'linear-gradient(115deg, transparent 0 71.5%, rgba(255,255,255,0.09) 71.5% 72.2%, transparent 72.2%)',
+                            ].join(', '),
+                        }}
+                    />
+                    <svg
+                        className="absolute pointer-events-none"
+                        style={{ left: '-4vw', bottom: '-10vh', width: '42vw', height: '60vh', opacity: 0.07 }}
+                        viewBox="0 0 200 100"
+                        preserveAspectRatio="none"
+                        fill="none"
+                        stroke="#ffffff"
+                        strokeWidth="0.8"
+                        aria-hidden="true"
+                    >
+                        <rect x="2" y="2" width="196" height="96" />
+                        <line x1="100" y1="2" x2="100" y2="98" />
+                        <line x1="30" y1="2" x2="30" y2="98" />
+                        <line x1="170" y1="2" x2="170" y2="98" />
+                        <line x1="30" y1="50" x2="170" y2="50" />
+                    </svg>
+                </>
+            )}
+            {theme.decor === 'ribbon' && (
+                <>
+                    {/* Pink Ribbon decoration, purely visual: soft light spots and
+                        a large faint awareness-ribbon outline on the right. */}
+                    <div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                            background: [
+                                'radial-gradient(circle at 18% 72%, rgba(255,214,232,0.10) 0 6vh, transparent 6.2vh)',
+                                'radial-gradient(circle at 42% 18%, rgba(255,214,232,0.07) 0 3.5vh, transparent 3.7vh)',
+                                'radial-gradient(circle at 63% 88%, rgba(255,214,232,0.06) 0 9vh, transparent 9.2vh)',
+                                'radial-gradient(circle at 88% 40%, rgba(255,214,232,0.05) 0 4vh, transparent 4.2vh)',
+                                'linear-gradient(120deg, transparent 0 62%, rgba(255,255,255,0.05) 62% 66%, transparent 66%)',
+                            ].join(', '),
+                        }}
+                    />
+                    <svg
+                        className="absolute pointer-events-none"
+                        style={{ right: '3vw', top: '8vh', height: '88vh', width: 'auto', opacity: 0.09 }}
+                        viewBox="0 0 120 200"
+                        fill="none"
+                        stroke="#ffd6e8"
+                        strokeWidth="14"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                    >
+                        <path d="M60 18 C 34 18, 26 52, 44 82 L 92 186" />
+                        <path d="M60 18 C 86 18, 94 52, 76 82 L 28 186" />
+                    </svg>
+                </>
+            )}
 
-            {/* Main Stage */}
-            <main className="flex-1 overflow-y-auto overflow-x-hidden">
-                {selectedMatchId === 'ALL' && liveMatches.length > 0 ? (
-                    // UI FIX (found live testing this real app): with only
-                    // 1-2 live matches, this forced lg:grid-cols-3 and always
-                    // compact=true, leaving matches small and top-left with
-                    // most of the screen empty black space - exactly the
-                    // "tiny card on a real TV" complaint reported earlier for
-                    // the sibling Vercel build, ported here since the
-                    // single-match "activeMatch" branch below is never
-                    // actually reachable (nothing ever sets selectedMatchId
-                    // to a specific match). Column count now tracks the
-                    // actual number of live matches, and h-full +
-                    // auto-rows-fr makes the grid (and every card in it,
-                    // since BroadcastMatchCard is already h-full) stretch to
-                    // fill the whole stage instead of sitting at its own
-                    // content height; compact mode only kicks in once there
-                    // are enough matches that full-size cards wouldn't fit.
-                    <div className="h-full flex flex-col min-h-0">
-                    <div className={`grid flex-1 min-h-0 auto-rows-fr gap-4 md:gap-8 ${
-                        pageMatches.length === 1 ? 'grid-cols-1' :
-                        pageMatches.length === 2 || pageMatches.length === 4 ? 'grid-cols-1 md:grid-cols-2' :
-                        'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
-                    }`}>
-                        {pageMatches.map(m => (
-                            // FEATURE (requested): with multiple matches live
-                            // at once there was no way to focus on just one -
-                            // clicking a card now switches to that match's
-                            // full-screen view (wires up the selectedMatchId
-                            // state that already existed but nothing ever
-                            // set). A single live match is already full-screen
-                            // via the grid above, so the click affordance only
-                            // shows once there's actually something to switch
-                            // between.
-                            <div
-                                key={m.id}
-                                onClick={liveMatches.length > 1 ? () => setSelectedMatchId(m.id) : undefined}
-                                className={liveMatches.length > 1 ? 'cursor-pointer transition-transform hover:scale-[1.015]' : ''}
-                                title={liveMatches.length > 1 ? 'Click to view this match full-screen' : undefined}
-                            >
-                                <BroadcastMatchCard match={m} teams={tournament.teams} categories={tournament.categories} tournament={tournament} compact={pageMatches.length > 2} />
+            {/* Header: Matchup logo | brand logo · tournament title · live count, pages, close */}
+            <header className="relative z-10 shrink-0 grid grid-cols-[1fr_auto_1fr] items-center gap-4 min-h-[max(10vh,56px)]">
+                <div className="flex items-center h-full min-w-0 gap-[1.2vw]">
+                    <Logo size={84} variant="white" color={theme.logoColor} className="shrink-0 !w-[clamp(48px,8vh,84px)] !h-auto aspect-[800/586]" />
+                    {tournament.organizerLogo && (
+                        <>
+                            <span className="w-px h-[clamp(28px,5.5vh,64px)] shrink-0" style={{ background: theme.pageMuted }} />
+                            <img
+                                src={tournament.organizerLogo}
+                                alt={tournament.organizer || 'Organiser'}
+                                className="h-[clamp(36px,7vh,80px)] w-auto max-w-[16vw] object-contain rounded-[0.6vh]"
+                            />
+                        </>
+                    )}
+                </div>
+                <div className="text-center min-w-0">
+                    {/* Italic (slanted) text overhangs its box: the padding keeps
+                        the last glyph from being clipped by truncate's overflow. */}
+                    <div className={`italic font-bold uppercase tracking-tight whitespace-nowrap truncate leading-[1.1] px-[0.2em] text-[clamp(22px,5.4vh,72px)] ${theme.decor ? 'drop-shadow-[0_3px_10px_rgba(0,0,0,0.35)]' : ''}`}>
+                        {tournament.name}
+                        {showYear && (
+                            <>
+                                <span className="mx-[0.3em] font-normal opacity-80">|</span>
+                                {year}
+                            </>
+                        )}
+                    </div>
+                    {theme.titleAccent && (
+                        <div className="mx-auto mt-[0.4vh] h-[3px] w-[40%] rounded-full" style={{ background: theme.titleAccent }} />
+                    )}
+                    {tournament.venue && (
+                        <div className="mt-[0.6vh] flex items-center justify-center gap-[0.5em] text-[clamp(10px,1.5vh,18px)] font-bold tracking-[0.35em] uppercase truncate" style={{ color: theme.pageMuted }}>
+                            {theme.decor === 'ribbon' && (
+                                // Awareness ribbon mark for Pinktober events.
+                                <svg viewBox="0 0 120 200" className="h-[1.6em] w-auto shrink-0" fill="none" stroke="#ff8cc6" strokeWidth="18" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <path d="M60 18 C 34 18, 26 52, 44 82 L 92 186" />
+                                    <path d="M60 18 C 86 18, 94 52, 76 82 L 28 186" />
+                                </svg>
+                            )}
+                            <span className="truncate">{tournament.venue}</span>
+                        </div>
+                    )}
+                </div>
+                <div className="flex flex-col items-end justify-center gap-[0.8vh]">
+                    <div className="flex items-center gap-2">
+                        {liveMatches.length > 0 && (
+                            <div className="inline-flex items-center gap-2 rounded-md border px-3 py-1 text-[clamp(11px,1.6vh,20px)] font-bold uppercase tracking-widest" style={chipStyle}>
+                                <span className="w-2 h-2 rounded-full bg-[#ff3b3b] animate-pulse shadow-[0_0_8px_#ff3b3b]" />
+                                {liveMatches.length} Live
                             </div>
-                        ))}
+                        )}
+                        <button
+                            onClick={onClose}
+                            className="p-1.5 rounded-full border cursor-pointer opacity-40 hover:opacity-100 transition-opacity"
+                            style={{ ...chipStyle, color: theme.pageText }}
+                            title="Close Broadcast Mode"
+                            aria-label="Close Broadcast Mode"
+                        >
+                            <X size={16} />
+                        </button>
                     </div>
-                    <PaginationBar page={safePage} totalPages={totalPages} onChange={setPage} />
-                    </div>
+                    {selectedMatchId === 'ALL' && totalPages > 1 && (
+                        <div className="flex items-center gap-2 text-[clamp(11px,1.5vh,18px)] font-bold uppercase tracking-widest">
+                            <button
+                                onClick={() => setPage(Math.max(safePage - 1, 0))}
+                                disabled={safePage === 0}
+                                aria-label="Previous page"
+                                className="p-1.5 rounded-full border disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-opacity hover:opacity-80"
+                                style={chipStyle}
+                            >
+                                <ChevronLeft size={16} />
+                            </button>
+                            <span className="tabular-nums">Page {safePage + 1} / {totalPages}</span>
+                            <button
+                                onClick={() => setPage(Math.min(safePage + 1, totalPages - 1))}
+                                disabled={safePage >= totalPages - 1}
+                                aria-label="Next page"
+                                className="p-1.5 rounded-full border disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-opacity hover:opacity-80"
+                                style={chipStyle}
+                            >
+                                <ChevronRight size={16} />
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </header>
+
+            {/* Main stage */}
+            <main className="relative z-10 flex-1 min-h-0 overflow-y-auto md:overflow-hidden">
+                {selectedMatchId === 'ALL' && liveMatches.length > 0 ? (
+                    // Keyed fade-in only: an exit animation would hold the old
+                    // page on screen until it finished.
+                    <motion.div
+                            key={safePage}
+                            initial={{ opacity: 0, y: 14 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.35, ease: 'easeOut' }}
+                            className={gridClass}
+                        >
+                            {pageMatches.map(m => (
+                                // Clicking a card switches to that match full-screen
+                                // (only meaningful when there's more than one live).
+                                <div
+                                    key={m.id}
+                                    onClick={liveMatches.length > 1 ? () => setSelectedMatchId(m.id) : undefined}
+                                    className={`${cellClass} [container-type:size] ${liveMatches.length > 1 ? 'cursor-pointer transition-transform hover:scale-[1.01]' : ''}`}
+                                    title={liveMatches.length > 1 ? 'Click to view this match full-screen' : undefined}
+                                >
+                                    <BroadcastMatchCard match={m} tournament={tournament} theme={theme} />
+                                </div>
+                            ))}
+                        </motion.div>
                 ) : activeMatch ? (
-                    <div className="h-full flex flex-col min-h-0">
+                    <div className="h-full flex flex-col items-center justify-center gap-[2vh]">
                         {liveMatches.length > 1 && (
                             <button
                                 onClick={() => setSelectedMatchId('ALL')}
-                                className="self-start mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-4 py-2 transition-colors shrink-0"
+                                className="self-start flex items-center gap-2 text-sm font-bold uppercase tracking-widest border rounded-full px-4 py-2 transition-opacity hover:opacity-80 shrink-0 cursor-pointer"
+                                style={chipStyle}
                             >
                                 <ChevronLeft size={14} /> All {liveMatches.length} Live Matches
                             </button>
                         )}
-                        {/* Just the scoreboard, full-width - no side "Action Log" panel.
-                            This single-match view was previously unreachable code (nothing
-                            ever set selectedMatchId to a real match), so the MatchTimeline
-                            panel that used to sit here had never actually been seen live
-                            until the click-to-select feature exposed it - not something
-                            anyone asked for in this broadcast context. */}
-                        <div className="flex-1 flex items-center justify-center max-w-5xl mx-auto w-full min-h-0">
-                            <div className="w-full flex flex-col justify-center min-h-0">
-                                <BroadcastMatchCard match={activeMatch} teams={tournament.teams} categories={tournament.categories} tournament={tournament} />
-                            </div>
+                        <div className="w-full max-w-[1500px] aspect-[2.6/1] md:aspect-auto md:h-[68%] [container-type:size]">
+                            <BroadcastMatchCard match={activeMatch} tournament={tournament} theme={theme} />
                         </div>
                     </div>
                 ) : (
-                    <div className="h-full flex items-center justify-center text-white/50 font-black uppercase tracking-widest text-sm md:text-base text-center">
-                        No live matches currently broadcasting
+                    <div className="h-full flex flex-col items-center justify-center gap-3 text-center">
+                        <Tv size={44} style={{ color: theme.pageMuted }} />
+                        <div className="font-bold uppercase tracking-[0.25em] text-[clamp(16px,3vh,36px)]">
+                            No live matches right now
+                        </div>
+                        <div className="font-bold uppercase tracking-[0.2em] text-[clamp(11px,1.6vh,18px)]" style={{ color: theme.pageMuted }}>
+                            Scores appear here as soon as a referee starts a match
+                        </div>
                     </div>
                 )}
             </main>
 
-            {/* Global Animated Ticker Slider at Bottom */}
-            {true && (() => {
-                const tickerEvents: string[] = [];
-
-                // 1. Add active live match alerts
-                liveMatches.forEach(m => {
-                    const t1 = tournament.teams?.find((t: any) => t.id === m.team1Id);
-                    const t2 = tournament.teams?.find((t: any) => t.id === m.team2Id);
-                    const t1Name = t1?.name || m.team1Name || 'Team 1';
-                    const t2Name = t2?.name || m.team2Name || 'Team 2';
-                    const score = m.score || { p1Points: '0', p2Points: '0', p1Games: 0, p2Games: 0, p1Sets: 0, p2Sets: 0 };
-                    tickerEvents.push(`COURT: ${m.court || 'Main'} • LIVE SCORE: ${t1Name} ${score.p1Points === '0' ? '00' : score.p1Points} - ${score.p2Points === '0' ? '00' : score.p2Points} ${t2Name} (Sets: ${score.p1Sets}-${score.p2Sets})`);
-                });
-
-                // 2. Add completed match results
-                const completedMatches = (globalMatches || []).filter(m => 
-                    m.status === MatchStatus.COMPLETED || String(m.status).toUpperCase() === 'COMPLETED' || String(m.status).toUpperCase() === 'FINISHED' || !!m.winnerTeamId
-                );
-                completedMatches.slice(0, 5).forEach(m => {
-                    const t1 = tournament.teams?.find((t: any) => t.id === m.team1Id);
-                    const t2 = tournament.teams?.find((t: any) => t.id === m.team2Id);
-                    const t1Name = t1?.name || m.team1Name || 'Team 1';
-                    const t2Name = t2?.name || m.team2Name || 'Team 2';
-                    const winnerId = m.winnerTeamId;
-                    const winnerName = winnerId === m.team1Id ? t1Name : winnerId === m.team2Id ? t2Name : 'TBD';
-                    const score = m.score || { p1Sets: 0, p2Sets: 0 };
-                    tickerEvents.push(`RESULT: ${t1Name} VS ${t2Name} • WINNER: ${winnerName} (Sets: ${score.p1Sets}-${score.p2Sets})`);
-                });
-
-                // 3. Fallback standard ticker info if nothing is available
-                if (tickerEvents.length === 0) {
-                    tickerEvents.push(`${tournament.name} • LIVE FROM ${tournament?.venue || 'GLOBAL ARENA'} • EXQUISITE PADEL ACTION STREAMING LIVE ON MATCHUP`);
-                }
-
-                return (
-                    <footer className="bg-[#4D78FF] text-white flex items-center gap-8 font-mono text-[0.75rem] uppercase font-bold shrink-0">
-                        <div className="bg-black/20 px-6 py-3 shrink-0 uppercase tracking-widest font-black">
-                            Live Updates
-                        </div>
-                        <div className="flex-1 overflow-hidden whitespace-nowrap fade-edges relative">
-                            <div className="inline-block animate-marquee">
-                                {tickerEvents.map((evt, j) => (
-                                    <span key={j} className="mx-8 font-black">{evt}</span>
-                                ))}
-                                {tickerEvents.map((evt, j) => (
-                                    <span key={`dup-${j}`} className="mx-8 font-black">{evt}</span>
-                                ))}
-                            </div>
-                        </div>
-                    </footer>
-                );
-            })()}
+            {stripSponsors.length > 0 ? (
+                <BroadcastSponsorStrip sponsors={stripSponsors} theme={theme} />
+            ) : (
+                <BroadcastTicker tournament={tournament} liveMatches={liveMatches} allMatches={globalMatches} theme={theme} />
+            )}
         </div>,
         document.body
     );
 };
-const BroadcastMatchCard = ({ match: initialMatch, teams, compact, categories, tournament }: any) => {
+
+const BroadcastSponsorStrip = ({ sponsors, theme }: { sponsors: any[]; theme: BroadcastPalette }) => {
+    const ordered = sortSponsors(sponsors);
+    // Up to 6 logos sit static and evenly spaced; more scroll as a slider
+    // (list doubled for a seamless loop).
+    const scroll = ordered.length > 6;
+    const items = scroll ? [...ordered, ...ordered] : ordered;
+    return (
+        <footer
+            className="relative z-10 shrink-0 h-[9vh] min-h-[48px] rounded-[1vh] overflow-hidden flex items-center"
+            style={{ background: theme.stripBg, border: `1px solid ${theme.stripBorder}`, boxShadow: theme.cardShadow.replace(/cqh/g, 'vh') }}
+        >
+            <div className={scroll ? 'flex items-center h-full w-max animate-marquee' : 'flex items-center justify-around h-full w-full px-[2%]'}>
+                {items.map((s, i) => (
+                    <img
+                        key={`${s.id}-${i}`}
+                        src={s.logo}
+                        alt={s.name || 'Sponsor'}
+                        className={`h-[62%] w-auto max-w-[200px] object-contain ${scroll ? 'mx-[2.5vw]' : 'mx-2'}`}
+                    />
+                ))}
+            </div>
+        </footer>
+    );
+};
+
+const BroadcastTicker = ({ tournament, liveMatches, allMatches, theme }: { tournament: Tournament; liveMatches: Match[]; allMatches: Match[]; theme: BroadcastPalette }) => {
+    const teamName = (m: any, side: 1 | 2) => {
+        const t = tournament.teams?.find((t: any) => t.id === (side === 1 ? m.team1Id : m.team2Id));
+        return t?.name || (side === 1 ? m.team1Name : m.team2Name) || `Team ${side}`;
+    };
+    const events: string[] = [];
+    liveMatches.forEach((m: any) => {
+        const s = m.score || {};
+        events.push(`${m.courtName || m.court || 'Court'} • ${teamName(m, 1)} ${s.p1Sets ?? 0}-${s.p2Sets ?? 0} ${teamName(m, 2)}`);
+    });
+    allMatches.filter(isMatchFinished).slice(0, 5).forEach((m: any) => {
+        const winner = m.winnerTeamId === m.team1Id ? teamName(m, 1) : m.winnerTeamId === m.team2Id ? teamName(m, 2) : null;
+        const s = m.score || {};
+        events.push(`Result • ${teamName(m, 1)} vs ${teamName(m, 2)}${winner ? ` • Winner: ${winner}` : ''} (${s.p1Sets ?? 0}-${s.p2Sets ?? 0})`);
+    });
+    if (events.length === 0) {
+        events.push(`${tournament.name}${tournament.venue ? ` • Live from ${tournament.venue}` : ''} • Streaming live on Matchup`);
+    }
+    return (
+        <footer
+            className="relative z-10 shrink-0 h-[6.5vh] min-h-[40px] rounded-[1vh] overflow-hidden flex items-center"
+            style={{ background: theme.stripBg, border: `1px solid ${theme.stripBorder}` }}
+        >
+            <div className="h-full flex items-center px-[1.5vw] text-white font-bold uppercase tracking-widest italic shrink-0 text-[clamp(12px,2vh,24px)]" style={{ background: theme.tickerLabelBg }}>
+                Live Updates
+            </div>
+            <div className="flex-1 overflow-hidden whitespace-nowrap fade-edges">
+                <div className="inline-block animate-marquee">
+                    {[...events, ...events].map((evt, j) => (
+                        <span key={j} className="mx-[2.5vw] font-bold uppercase text-[clamp(12px,2.1vh,26px)]" style={{ color: theme.tickerText }}>{evt}</span>
+                    ))}
+                </div>
+            </div>
+        </footer>
+    );
+};
+
+const BroadcastMatchCard = ({ match: initialMatch, tournament, theme }: { match: Match; tournament: Tournament; theme: BroadcastPalette }) => {
     const { matchData } = useMatchResult(initialMatch.id);
-    const match = matchData || initialMatch;
+    const match: any = matchData || initialMatch;
 
-    const t1 = teams.find((t: any) => t.id === match.team1Id);
-    const t2 = teams.find((t: any) => t.id === match.team2Id);
-    const category = categories?.find((c: any) => c.id === match.categoryId);
-    const catName = category?.name || 'General';
-
-    const t1P1Name = t1?.player1?.name;
-    const t1P2Name = t1?.player2?.name;
-    const t2P1Name = t2?.player1?.name;
-    const t2P2Name = t2?.player2?.name;
-
-    let t1FullName = formatCleanName(t1?.name || match.team1Name || [ t1P1Name, t1P2Name ].filter(n => n && n.trim()).join(' & ') || 'TBA') || 'TBA';
-    t1FullName = t1FullName.replace(/^&\s*/, '').replace(/\s*&$/, '').trim() || 'TBA';
-    let t2FullName = formatCleanName(t2?.name || match.team2Name || [ t2P1Name, t2P2Name ].filter(n => n && n.trim()).join(' & ') || 'TBA') || 'TBA';
-    t2FullName = t2FullName.replace(/^&\s*/, '').replace(/\s*&$/, '').trim() || 'TBA';
+    const teams = tournament.teams || [];
+    const t1: any = teams.find((t: any) => t.id === match.team1Id);
+    const t2: any = teams.find((t: any) => t.id === match.team2Id);
+    const category = tournament.categories?.find((c: any) => c.id === match.categoryId);
 
     const [displayScore, setDisplayScore] = useState(match.score);
     const [flashOverlayTitle, setFlashOverlayTitle] = useState<string | null>(null);
@@ -1876,46 +2240,23 @@ const BroadcastMatchCard = ({ match: initialMatch, teams, compact, categories, t
     const [lastHistoryLength, setLastHistoryLength] = useState(0);
 
     const effectiveHistory = getEffectiveEvents(match.score?.history || []);
+    const finished = isMatchFinished(match);
 
     useEffect(() => {
-        const isFinished = (match.status === 'COMPLETED' || String(match.status).toUpperCase() === 'FINISHED') || String(match.status).toUpperCase() === 'COMPLETED';
-        if (isFinished) {
+        if (finished) {
             setDisplayScore(match.score);
             return;
         }
-        
+        // On a new point, flash what happened first, then reveal the new score.
         if (effectiveHistory.length > lastHistoryLength && lastHistoryLength > 0) {
             const ev = effectiveHistory[effectiveHistory.length - 1];
             if (ev && (ev.startsWith('T1') || ev.startsWith('T2'))) {
                 const parts = ev.split('|');
-                const type = parts[0];
-                const playerIdx = parseInt(parts[2] || "1");
-                const tag = parts[3];
-                const finisher = parts[4];
-                
-                const team = type === 'T1' ? t1 : t2;
-                const player = playerIdx === 1 ? team?.player1?.name : team?.player2?.name;
-                const teamName = team?.name || type;
-                let actionStr = "POINT WON";
-                if (finisher === 'smash') actionStr = "SMASH WINNER";
-                else if (finisher === 'vibora') actionStr = "VIBORA WINNER";
-                else if (finisher === 'drop' || finisher === 'drop shot') actionStr = "DROP SHOT WINNER";
-                else if (finisher === 'bandeja') actionStr = "BANDEJA WINNER";
-                else if (finisher === 'volley') actionStr = "VOLLEY WINNER";
-                else if (tag === 'winner') actionStr = "WINNER";
-                else if (tag === 'error') actionStr = "UNFORCED ERROR";
-                else if (finisher === 'net') actionStr = "NET ERROR";
-                else if (finisher === 'glass') actionStr = "GLASS ERROR";
-                else if (finisher === 'double fault') actionStr = "DOUBLE FAULT";
-                else if (finisher === 'grill') actionStr = "GRILL ERROR";
-
-                setFlashOverlayTitle(actionStr);
-                setFlashOverlaySubtitle(player || teamName);
-                
-                setTimeout(() => {
-                    setDisplayScore(match.score);
-                }, 1000);
-
+                const team = parts[0] === 'T1' ? t1 : t2;
+                const player = parseInt(parts[2] || '1') === 1 ? team?.player1?.name : team?.player2?.name;
+                setFlashOverlayTitle(describePoint(parts[4], parts[3]));
+                setFlashOverlaySubtitle(player || team?.name || parts[0]);
+                setTimeout(() => setDisplayScore(match.score), 1000);
                 setTimeout(() => {
                     setFlashOverlayTitle(null);
                     setFlashOverlaySubtitle(null);
@@ -1929,101 +2270,198 @@ const BroadcastMatchCard = ({ match: initialMatch, teams, compact, categories, t
         setLastHistoryLength(effectiveHistory.length);
     }, [effectiveHistory.length, match.score, match.status]);
 
-    const activeScore = displayScore || { p1Points: '0', p2Points: '0', p1Games: 0, p2Games: 0, p1Sets: 0, p2Sets: 0, currentSet: 1 };
-    
-    const isT1Serving = match.score?.server === 'p1' || match.score?.server === 'p2';
-    const isT2Serving = match.score?.server === 'p3' || match.score?.server === 'p4';
+    const score: any = displayScore || { p1Points: '0', p2Points: '0', p1Games: 0, p2Games: 0, p1Sets: 0, p2Sets: 0, p1SetScores: [], p2SetScores: [] };
+    const p1SetScores: number[] = score.p1SetScores || [];
+    const p2SetScores: number[] = score.p2SetScores || [];
+    const doneSets = Math.min(p1SetScores.length, p2SetScores.length);
+    const setInProgress = !finished && !score._isSetCompleted;
 
-    const scoreFlash = !!flashOverlayTitle;
+    // S1-S3: finished sets, then the set in progress, then dashes.
+    const setCells = (side: 1 | 2) => [0, 1, 2].map(i => {
+        if (i < doneSets) {
+            const mine = side === 1 ? p1SetScores[i] : p2SetScores[i];
+            const theirs = side === 1 ? p2SetScores[i] : p1SetScores[i];
+            return { value: String(mine), state: mine > theirs ? 'won' : 'lost' };
+        }
+        if (i === doneSets && setInProgress) {
+            return { value: String((side === 1 ? score.p1Games : score.p2Games) ?? 0), state: 'current' };
+        }
+        // Completed match whose set history was never recorded: show the games.
+        if (i === 0 && finished && doneSets === 0) {
+            return { value: String((side === 1 ? score.p1Games : score.p2Games) ?? 0), state: 'won' };
+        }
+        return { value: '-', state: 'empty' };
+    });
+
+    const points = (v: any) => (v === undefined || v === null || String(v) === '0' ? '00' : String(v));
+
+    const server = String(match.score?.server || '').toLowerCase();
+    const servingSlot = finished ? null : ({ p1: [1, 0], p2: [1, 1], p3: [2, 0], p4: [2, 1] } as Record<string, number[]>)[server] || null;
+
+    const showFlags = !!tournament.showNationFlags;
+    const playersOf = (t: any) => [t?.player1, t?.player2]
+        .map(p => ({ name: formatBroadcastPlayerName(p?.name), country: showFlags ? p?.country : undefined }))
+        .filter(p => p.name);
+    const teamLabel = (t: any, fallback?: string) => formatCleanName(t?.name || fallback).toUpperCase() || 'TBA';
+
+    const live = isMatchLive(match);
+    const statusLabel = finished ? 'Completed' : live ? 'Live' : 'Upcoming';
+    const roundLabel = [match.roundName, category?.name].filter(Boolean).join(' - ');
+    const courtLabel = match.courtName || match.court || '';
 
     return (
-        <div className={`bg-[#16161a] border-l-4 border-l-[#4D78FF] ${compact ? "p-3 pb-8 md:p-4 md:pb-12 gap-2 md:gap-3" : "p-6 pb-16 lg:p-8 lg:pb-18 gap-6 lg:gap-8"} flex flex-col relative overflow-hidden h-full shadow-2xl rounded-sm w-full`}>
-            <div className="absolute top-0 right-0 w-[150px] h-[150px] bg-[radial-gradient(circle_at_top_right,rgba(77,120,255,0.15),transparent)] pointer-events-none" />
-            
+        <div
+            className="relative h-full w-full flex flex-col overflow-hidden"
+            style={{ borderRadius: '1.4cqh', boxShadow: theme.cardShadow, border: theme.cardBorder, fontFamily: FIP_FONT }}
+        >
+            {theme.cardAccent && (
+                <div className="absolute left-0 top-0 bottom-0 z-10" style={{ width: 'min(1cqh, 0.5cqw)', background: theme.cardAccent }} />
+            )}
+            {theme.cardTopAccent && (
+                <div className="shrink-0" style={{ height: 'min(1cqh, 0.45cqw)', background: theme.cardTopAccent }} />
+            )}
+            <div
+                className="grid items-center shrink-0 font-bold uppercase tracking-wider"
+                style={{ gridTemplateColumns: FIP_COLS, height: '11cqh', fontSize: 'min(6.4cqh, 2.6cqw)', background: theme.headBg, color: theme.headText }}
+            >
+                <span className="pl-[3cqw]">Players</span>
+                <span className="text-center">S1</span>
+                <span className="text-center">S2</span>
+                <span className="text-center">S3</span>
+                <span className="text-center pr-[1.6cqw]">Score</span>
+            </div>
+
+            <div className="flex-1 min-h-0 flex flex-col" style={{ padding: '0.8cqh 0.6cqw', background: theme.bodyBg }}>
+                <BroadcastTeamRow
+                    theme={theme}
+                    players={playersOf(t1)}
+                    fallback={teamLabel(t1, match.team1Name)}
+                    sets={setCells(1)}
+                    points={finished ? '' : points(score.p1Points)}
+                    servingIdx={servingSlot && servingSlot[0] === 1 ? servingSlot[1] : null}
+                    isWinner={finished && !!match.winnerTeamId && match.winnerTeamId === match.team1Id}
+                />
+                <div className="shrink-0 mx-[2cqw]" style={{ height: 1, background: theme.divider }} />
+                <BroadcastTeamRow
+                    theme={theme}
+                    players={playersOf(t2)}
+                    fallback={teamLabel(t2, match.team2Name)}
+                    sets={setCells(2)}
+                    points={finished ? '' : points(score.p2Points)}
+                    servingIdx={servingSlot && servingSlot[0] === 2 ? servingSlot[1] : null}
+                    isWinner={finished && !!match.winnerTeamId && match.winnerTeamId === match.team2Id}
+                />
+            </div>
+
+            <div
+                className="grid grid-cols-[1fr_auto_1fr] items-center shrink-0 font-bold uppercase tracking-wider"
+                style={{ height: '13cqh', fontSize: 'min(6.4cqh, 2.6cqw)', gap: '2cqw', padding: '0 1.6cqw', background: theme.footBg, color: theme.footText }}
+            >
+                <span
+                    className="justify-self-start inline-flex items-center"
+                    style={{ gap: '0.8cqw', padding: '0.7cqh 1.4cqw', borderRadius: '0.7cqh', background: live ? 'rgba(255,59,59,0.18)' : theme.statusBg }}
+                >
+                    {live && <span className="rounded-full bg-[#ff3b3b] animate-pulse" style={{ width: 'min(2.4cqh, 1cqw)', height: 'min(2.4cqh, 1cqw)' }} />}
+                    {statusLabel}
+                </span>
+                <span className="text-center truncate">{courtLabel}</span>
+                {roundLabel ? (
+                    <span className="justify-self-end truncate max-w-full" style={{ padding: '0.7cqh 1.4cqw', borderRadius: '0.7cqh', background: theme.roundBg, color: theme.roundText }}>
+                        {roundLabel}
+                    </span>
+                ) : <span />}
+            </div>
+
             <AnimatePresence>
-                {scoreFlash && (
-                    <motion.div 
-                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                        transition={{ duration: 0.3, ease: 'easeOut' }}
-                        className="absolute inset-x-0 top-[40%] z-40 flex justify-center pointer-events-none"
+                {flashOverlayTitle && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute inset-0 z-20 flex flex-col items-center justify-center text-center pointer-events-none backdrop-blur-sm"
+                        style={{ background: theme.flashBg, color: theme.flashText, padding: '0 4cqw' }}
                     >
-                        <div className="bg-gradient-to-r from-blue-600 to-[#4D78FF] px-5 py-1.5 rounded-full shadow-[0_0_15px_rgba(77,120,255,0.4)] border border-blue-300/50 flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                            <span className="text-white font-black uppercase tracking-widest text-xs drop-shadow-md">Point Won</span>
-                        </div>
+                        <span className="uppercase font-bold opacity-60 truncate max-w-full" style={{ fontSize: 'min(6cqh, 2.6cqw)', letterSpacing: '0.25em' }}>
+                            {flashOverlaySubtitle}
+                        </span>
+                        <motion.span
+                            initial={{ scale: 0.8 }}
+                            animate={{ scale: 1 }}
+                            transition={{ duration: 0.3, ease: 'easeOut' }}
+                            className="italic font-bold uppercase leading-none"
+                            style={{ fontSize: 'min(20cqh, 8cqw)' }}
+                        >
+                            {flashOverlayTitle}
+                        </motion.span>
                     </motion.div>
                 )}
             </AnimatePresence>
+        </div>
+    );
+};
 
-            {flashOverlayTitle && (
-                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center pointer-events-none p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="relative w-full px-4 py-6 bg-[#16161a] border-l-4 border-[#4D78FF] shadow-2xl flex flex-col items-center justify-center animate-in zoom-in-75 duration-300">
-                        <span className="font-mono uppercase tracking-[0.2em] text-[10px] text-white/50 mb-1 z-10 text-center">{flashOverlaySubtitle}</span>
-                        <span className="font-black text-white text-2xl md:text-3xl uppercase z-10 text-center leading-tight">
-                           {flashOverlayTitle}
-                        </span>
+const BroadcastTeamRow = ({ theme, players, fallback, sets, points, servingIdx, isWinner }: {
+    theme: BroadcastPalette;
+    players: { name: string; country?: string }[];
+    fallback: string;
+    sets: { value: string; state: string }[];
+    points: string;
+    servingIdx: number | null;
+    isWinner: boolean;
+}) => {
+    const nameStyle = { fontSize: 'min(14cqh, 6.4cqw)', color: theme.nameText };
+    const flagStyle = { height: 'min(10cqh, 4.4cqw)', width: 'min(15cqh, 6.6cqw)', borderRadius: '0.5cqh', boxShadow: '0 0 0 1px rgba(0,0,0,0.08)' };
+    const serveDot = (
+        <span
+            className="shrink-0 rounded-full"
+            style={{ width: 'min(3cqh, 1.4cqw)', height: 'min(3cqh, 1.4cqw)', background: theme.serveDot, boxShadow: `0 0 0.8cqh ${theme.serveDot}` }}
+        />
+    );
+    const trophy = <Trophy className="shrink-0 text-amber-500" style={{ width: 'min(8cqh, 3.4cqw)', height: 'min(8cqh, 3.4cqw)' }} />;
+    return (
+        <div className="flex-1 min-h-0 grid items-center" style={{ gridTemplateColumns: FIP_COLS }}>
+            <div className="min-w-0 flex flex-col justify-center" style={{ paddingLeft: '2.4cqw', gap: '0.8cqh' }}>
+                {players.length > 0 ? players.map((p, i) => (
+                    <div key={i} className="flex items-center min-w-0" style={{ gap: '1.2cqw' }}>
+                        {p.country && <CountryFlag code={p.country} style={flagStyle} />}
+                        <span className="truncate font-bold uppercase leading-[0.95]" style={nameStyle}>{p.name}</span>
+                        {servingIdx === i && serveDot}
+                        {isWinner && i === 0 && trophy}
                     </div>
-                </div>
-            )}
-            
-            <div className="flex flex-col gap-6 relative z-10 flex-1 justify-center min-h-0">
-                {/* FIX: the name column had no min-w-0, so a flex item's
-                    default min-width (auto) refused to let long/wrapping
-                    names shrink to fit - they pushed past the card edge and
-                    got clipped by the container instead of wrapping cleanly
-                    inside it. min-w-0 lets flex-basis actually shrink; the
-                    score box keeps shrink-0 so it never gets squeezed. */}
-                <div className="flex justify-between items-center gap-4 group">
-                    <div className={`min-w-0 flex-1 font-black uppercase leading-[1.15] text-white break-words ${compact ? "text-base" : "text-xl md:text-3xl lg:text-4xl xl:text-5xl"}`}>
-                        {t1FullName}
-                        {isT1Serving && <span className="w-2 h-2 bg-[#E65C31] rounded-full inline-block ml-2 mb-1 shadow-[0_0_10px_#E65C31]" />}
+                )) : (
+                    <div className="flex items-center min-w-0" style={{ gap: '1.2cqw' }}>
+                        <span className="line-clamp-2 font-bold uppercase leading-[0.95]" style={nameStyle}>{fallback}</span>
+                        {servingIdx !== null && serveDot}
+                        {isWinner && trophy}
                     </div>
-                    <div className={`bg-white/5 rounded font-mono font-bold text-white shrink-0 ${compact ? "px-3 py-1.5 text-base" : "px-5 py-2 lg:px-8 lg:py-4 text-4xl lg:text-6xl"}`}>
-                        {activeScore.p1Points === "0" ? "00" : activeScore.p1Points}
-                    </div>
-                </div>
-
-                <div className="h-[1px] bg-white/10 w-full relative">
-                    <div className={`absolute left-0 -top-[12px] font-black bg-[#16161a] pr-2.5 text-[#4D78FF] uppercase ${compact ? "text-[0.6rem]" : "text-sm lg:text-base"}`}>VS</div>
-                </div>
-
-                <div className="flex justify-between items-center gap-4 group">
-                    <div className={`min-w-0 flex-1 font-black uppercase leading-[1.15] text-white break-words ${compact ? "text-base" : "text-xl md:text-3xl lg:text-4xl xl:text-5xl"}`}>
-                        {t2FullName}
-                        {isT2Serving && <span className="w-2 h-2 bg-[#E65C31] rounded-full inline-block ml-2 mb-1 shadow-[0_0_10px_#E65C31]" />}
-                    </div>
-                    <div className={`bg-white/5 rounded font-mono font-bold text-white shrink-0 ${compact ? "px-3 py-1.5 text-base" : "px-5 py-2 lg:px-8 lg:py-4 text-4xl lg:text-6xl"}`}>
-                        {activeScore.p2Points === "0" ? "00" : activeScore.p2Points}
-                    </div>
-                </div>
+                )}
             </div>
-
-            <div className="relative z-10 mt-auto shrink-0">
-                <div className="flex justify-between items-center mb-2">
-                    <div className="font-mono text-[0.65rem] uppercase tracking-[0.15em] opacity-50 text-white flex items-center gap-2">
-                        {catName}
-                    </div>
-                    {match.court && (
-                        <div className="bg-[#4D78FF]/20 text-[#4D78FF] px-2 py-0.5 rounded text-[0.6rem] font-black uppercase tracking-widest border border-[#4D78FF]/30">
-                            {match.court}
-                        </div>
-                    )}
+            {sets.map((cell, i) => (
+                <div
+                    key={i}
+                    className="text-center font-bold tabular-nums leading-none"
+                    style={{
+                        fontSize: 'min(17cqh, 7cqw)',
+                        color: cell.state === 'current' ? theme.setCurrent : theme.setText,
+                        opacity: cell.state === 'lost' ? 0.45 : cell.state === 'empty' ? 0.3 : 1,
+                    }}
+                >
+                    {cell.value}
                 </div>
-                <div className="grid grid-cols-2 gap-[1px] bg-white/10 mt-1">
-                    <div className={`bg-[#16161a] text-center flex flex-col items-center ${compact ? "py-1.5" : "py-4 lg:py-6"}`}>
-                        <div className="font-mono text-[0.6rem] lg:text-[0.65rem] uppercase tracking-[0.15em] opacity-50 text-white">Sets</div>
-                        <div className={`font-black font-mono text-white mt-1 ${compact ? "text-lg" : "text-3xl lg:text-5xl"}`}>
-                            {activeScore.p1Sets} - {activeScore.p2Sets}
-                        </div>
-                    </div>
-                    <div className={`bg-[#16161a] text-center flex flex-col items-center ${compact ? "py-1.5" : "py-4 lg:py-6"}`}>
-                        <div className="font-mono text-[0.6rem] lg:text-[0.65rem] uppercase tracking-[0.15em] opacity-50 text-white">Games</div>
-                        <div className={`font-black font-mono text-white mt-1 ${compact ? "text-lg" : "text-3xl lg:text-5xl"}`}>
-                            {activeScore.p1Games} - {activeScore.p2Games}
-                        </div>
-                    </div>
+            ))}
+            <div className="h-full" style={{ padding: '1.4cqh 1.2cqw 1.4cqh 0.4cqw' }}>
+                <div
+                    className="h-full flex items-center justify-center font-bold tabular-nums leading-none"
+                    style={{
+                        fontSize: 'min(22cqh, 9cqw)',
+                        borderRadius: '0.8cqh',
+                        background: theme.scoreBg,
+                        color: theme.scoreText,
+                        boxShadow: 'inset 0 -0.7cqh 0 rgba(0,0,0,0.18)',
+                    }}
+                >
+                    {points}
                 </div>
             </div>
         </div>

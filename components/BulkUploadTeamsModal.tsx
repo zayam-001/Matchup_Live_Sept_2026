@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { X, Upload, CheckCircle, AlertCircle, Download, Link as LinkIcon, UploadCloud, Loader2 } from 'lucide-react';
 import { Tournament } from '../types';
+import { resolveCountryCode, getCountryName } from '../lib/countries';
+import { CountryFlag } from './CountrySelect';
 
 interface BulkUploadTeamsModalProps {
     isOpen: boolean;
@@ -10,17 +12,19 @@ interface BulkUploadTeamsModalProps {
     onUpload: (teams: any[]) => Promise<void>;
 }
 
-export const downloadTeamUploadTemplate = (isAmericanoMode: boolean) => {
+export const downloadTeamUploadTemplate = (isAmericanoMode: boolean, withCountry = false) => {
+  // Country columns are only part of the template when the tournament shows
+  // nation flags; they accept a country name ("Pakistan") or ISO code ("PK").
   const headers = isAmericanoMode ? 
-    ["PLAYER NAME", "Player phone", "Player email", "Player CNIC"] :
-    ["TEAM NAME", "PLAYER 01", "Player 1 phone", "Player 1 email", "PLAYER 02", "Player 2 phone", "Player 2 email"];
+    ["PLAYER NAME", "Player phone", "Player email", "Player CNIC", ...(withCountry ? ["Player country"] : [])] :
+    ["TEAM NAME", "PLAYER 01", "Player 1 phone", "Player 1 email", ...(withCountry ? ["Player 1 country"] : []), "PLAYER 02", "Player 2 phone", "Player 2 email", ...(withCountry ? ["Player 2 country"] : [])];
 
   const sampleRows = isAmericanoMode ? [
-    ["Syed Ali Sharjeel", "+923001234567", "ali@example.com", "42201-1234567-1"],
-    ["Zayam Anjum", "+923331112222", "zayam@example.com", "42201-7654321-1"]
+    ["Syed Ali Sharjeel", "+923001234567", "ali@example.com", "42201-1234567-1", ...(withCountry ? ["Pakistan"] : [])],
+    ["Zayam Anjum", "+923331112222", "zayam@example.com", "42201-7654321-1", ...(withCountry ? ["Pakistan"] : [])]
   ] : [
-    ["Karachi Padel Smashers", "Syed Ali Sharjeel", "+923001234567", "ali@example.com", "Taha Bin Nadeem", "+923007654321", "taha@example.com"],
-    ["Clifton Futsal Kings", "Zayam Anjum", "+923331112222", "zayam@example.com", "Ahad Farhan", "+923339998888", "ahad@example.com"]
+    ["Karachi Padel Smashers", "Syed Ali Sharjeel", "+923001234567", "ali@example.com", ...(withCountry ? ["Pakistan"] : []), "Taha Bin Nadeem", "+923007654321", "taha@example.com", ...(withCountry ? ["Pakistan"] : [])],
+    ["Clifton Futsal Kings", "Zayam Anjum", "+923331112222", "zayam@example.com", ...(withCountry ? ["Pakistan"] : []), "Ahad Farhan", "+923339998888", "ahad@example.com", ...(withCountry ? ["Spain"] : [])]
   ];
 
   const csvContent = [
@@ -136,9 +140,16 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
                 }
 
                 const errors: Record<string, string> = {};
+                const askCountry = !!tournament.showNationFlags;
+                const countryOf = (raw: string, key: string) => {
+                    const code = resolveCountryCode(raw);
+                    if (askCountry && !code) errors[key] = raw ? `Unknown country "${raw}"` : 'Missing country';
+                    return code;
+                };
                 
                 if (isAmericanoMode) {
                     if (!row.playername && !row.player01) errors.playername = 'Missing Player Name';
+                    const pCountry = countryOf(row.playercountry || row.player1country || row.country || '', 'player1country');
                     
                     const isValid = Object.keys(errors).length === 0;
                     if (isValid) {
@@ -161,7 +172,8 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
                                 name: pName,
                                 phone: row.playerphone || row.player1phone || '',
                                 email: row.playeremail || row.player1email || '',
-                                cnic: row.playercnic || row.player1cnic || ''
+                                cnic: row.playercnic || row.player1cnic || '',
+                                ...(pCountry ? { country: pCountry } : {})
                             },
                             player2: { name: '', phone: '', email: '' },
                             status: 'PENDING',
@@ -174,6 +186,8 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
                     if (!row.teamname) errors.teamname = 'Missing Team Name';
                     if (!row.player1name && !row.player01) errors.player1name = 'Missing Player 1';
                     if (!row.player2name && !row.player02) errors.player2name = 'Missing Player 2';
+                    const p1Country = countryOf(row.player1country || row.playercountry || '', 'player1country');
+                    const p2Country = countryOf(row.player2country || '', 'player2country');
                     
                     const isValid = Object.keys(errors).length === 0;
                     if (isValid) {
@@ -197,13 +211,15 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
                                 name: p1Name,
                                 phone: row.player1phone || row.playerphone || '',
                                 email: row.player1email || row.playeremail || '',
-                                cnic: row.player1cnic || row.playercnic || ''
+                                cnic: row.player1cnic || row.playercnic || '',
+                                ...(p1Country ? { country: p1Country } : {})
                             },
                             player2: {
                                 name: p2Name,
                                 phone: row.player2phone || '',
                                 email: row.player2email || '',
-                                cnic: row.player2cnic || ''
+                                cnic: row.player2cnic || '',
+                                ...(p2Country ? { country: p2Country } : {})
                             },
                             status: 'PENDING',
                             registeredAt: new Date().toISOString(),
@@ -392,7 +408,7 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
                                             Need help formatting your data? Download our template to ensure all rows are parsed properly.
                                         </p>
                                         <button 
-                                            onClick={() => downloadTeamUploadTemplate(isAmericanoMode)}
+                                            onClick={() => downloadTeamUploadTemplate(isAmericanoMode, !!tournament.showNationFlags)}
                                             className="self-start px-4 py-2 text-sm font-medium text-white bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors duration-200 flex items-center gap-2"
                                         >
                                             <Download size={16} />
@@ -482,6 +498,12 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
                                                         {row.data.player1.name || <span className="text-red-400/50 italic">Missing Name</span>}
                                                     </div>
                                                     <div className="text-xs text-content-muted font-mono mt-0.5">{row.data.player1.phone || 'No phone'}</div>
+                                                    {(row.data.player1.country || row.errors.player1country) && (
+                                                        <div className={`text-xs mt-0.5 flex items-center gap-1.5 ${row.errors.player1country ? 'text-red-400' : 'text-content-muted'}`}>
+                                                            <CountryFlag code={row.data.player1.country} className="w-4 h-3 rounded-[1px]" />
+                                                            {row.errors.player1country || getCountryName(row.data.player1.country)}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 {!isAmericanoMode && (
                                                     <td className="px-4 py-3">
@@ -489,6 +511,12 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
                                                             {row.data.player2.name || <span className="text-red-400/50 italic">Missing Name</span>}
                                                         </div>
                                                         <div className="text-xs text-content-muted font-mono mt-0.5">{row.data.player2.phone || 'No phone'}</div>
+                                                        {(row.data.player2.country || row.errors.player2country) && (
+                                                            <div className={`text-xs mt-0.5 flex items-center gap-1.5 ${row.errors.player2country ? 'text-red-400' : 'text-content-muted'}`}>
+                                                                <CountryFlag code={row.data.player2.country} className="w-4 h-3 rounded-[1px]" />
+                                                                {row.errors.player2country || getCountryName(row.data.player2.country)}
+                                                            </div>
+                                                        )}
                                                     </td>
                                                 )}
                                             </tr>

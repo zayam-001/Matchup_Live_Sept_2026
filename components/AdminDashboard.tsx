@@ -2,9 +2,9 @@ import { CloneTournamentModal } from "./CloneTournamentModal";
 import { BulkUploadTeamsModal } from "./BulkUploadTeamsModal";
 import { TournamentLiveBadge } from "./TournamentLiveBadge";
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { TournamentFormat, SkillLevel, Tournament, MatchStatus, RoundRobinType, Team, Match, SponsorTier, Sponsor, Venue } from '../types';
+import { TournamentFormat, SkillLevel, Tournament, MatchStatus, RoundRobinType, Team, Match, SponsorTier, Sponsor, Venue, BroadcastTheme } from '../types';
 import { createTournament, deleteTournament, updateTournament, subscribeToTournaments, subscribeToTournament, updateTeamStatus, generateSchedule, assignTeamGroup, updateTournamentTeamsGroups, updateMatchDetails, addKnockoutMatch, subscribeToVenues, uploadSystemImage, getOrganiserCredits, deductOrganiserCredits, enrollTeamManually, subscribeToStandings, searchGlobalTeams, refundOrganiserCredits, retireTournament, appendNewMexicanoRound, deleteMatch, replaceTeamInTournament, editTeamInTournament, syncAllDataToGlobal, checkAndHealTournamentStats, bulkUploadPendingTeams, isTeamInCategory, isMatchInCategory } from '../services/storage';
-import { Check, X, Calendar, Users, Trophy, PlayCircle, Lock, RefreshCcw, ChevronLeft, Plus, ChevronRight, Grid, ArrowRight, Settings, Edit3, ArrowUpRight, MapPin, DollarSign, Database, Trash2, Mail, Phone, Hash, AlertTriangle, Loader2, LogOut, Camera, Image as ImageIcon, Crown, Gem, Star, Medal, Activity, Clock, PlusCircle, Download, Share2, Copy, QrCode, ExternalLink, List, Archive, ChevronDown, History, RotateCcw } from 'lucide-react';
+import { Check, X, Calendar, Users, Trophy, PlayCircle, Lock, RefreshCcw, ChevronLeft, Plus, ChevronRight, Grid, ArrowRight, Settings, Edit3, ArrowUpRight, MapPin, DollarSign, Database, Trash2, Mail, Phone, Hash, AlertTriangle, Loader2, LogOut, Camera, Image as ImageIcon, Medal, Activity, Clock, PlusCircle, Download, Share2, Copy, QrCode, ExternalLink, List, Archive, ChevronDown, History, RotateCcw } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useTournamentMatches } from '../hooks/useTournamentMatches';
@@ -22,6 +22,8 @@ import { toast } from './Toast';
 import { TournamentLeaderboardTab } from './TournamentLeaderboardTab';
 import { EditTeamSheet } from './EditTeamSheet';
 import { StandingsOverlayExporter } from './StandingsOverlayExporter';
+import { SponsorLogoCropper } from './SponsorLogoCropper';
+import { POINTS_SYSTEM_LIST, getPointsSystem, STAGE_ORDER, STAGE_LABELS } from '../lib/pointsSystems';
 import { Tv } from 'lucide-react';
 
 import { collection, doc, getDoc, query, where, getDocs } from 'firebase/firestore';
@@ -1390,7 +1392,7 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
     
     // Sponsor Upload State
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [newSponsor, setNewSponsor] = useState<{logo: string, tier: SponsorTier}>({ logo: '', tier: SponsorTier.SILVER });
+    const [sponsorFileToCrop, setSponsorFileToCrop] = useState<File | null>(null);
 
     // Handle legacy string[] sponsors vs new Sponsor[] object
     const initialSponsors = initialData?.sponsors?.map((s: any) => {
@@ -1429,6 +1431,9 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
         registrationDeadline: '',
         prizeMoney: 1000,
         sponsors: [] as Sponsor[],
+        showNationFlags: false,
+        broadcastTheme: 'matchup' as BroadcastTheme,
+        pointsSystem: 'matchup',
         categories: [] as any[],
         isMultiCategory: false,
         multipleVenues: false
@@ -1572,30 +1577,48 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
         }
     };
 
-    const handleSponsorUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            try {
-                const url = await uploadSystemImage('sponsors', e.target.files[0]);
-                setNewSponsor(prev => ({ ...prev, logo: url }));
-            } catch (error) {
-                console.error("Upload error:", error);
-                alert("Failed to upload sponsor image.");
-            }
+    // Picking a file opens the cropper; the cropped 3:1 PNG is what gets uploaded.
+    const handleSponsorFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (file) setSponsorFileToCrop(file);
+    };
+
+    const handleSponsorCropped = async (blob: Blob) => {
+        try {
+            const file = new File([blob], `sponsor_logo.png`, { type: 'image/png' });
+            const url = await uploadSystemImage('sponsors', file);
+            setData((prev: any) => ({
+                ...prev,
+                sponsors: [...prev.sponsors, {
+                    id: Math.random().toString(36).substr(2, 9),
+                    name: `Sponsor ${prev.sponsors.length + 1}`,
+                    logo: url,
+                    tier: SponsorTier.SILVER,
+                }]
+            }));
+            setSponsorFileToCrop(null);
+        } catch (error) {
+            console.error("Upload error:", error);
+            alert("Failed to upload sponsor image.");
         }
     };
 
-    const addSponsor = () => {
-        if (!newSponsor.logo) return;
+    const updateSponsor = (index: number, changes: Partial<Sponsor>) => {
         setData((prev: any) => ({
             ...prev,
-            sponsors: [...prev.sponsors, { 
-                id: Math.random().toString(36).substr(2,9),
-                name: 'Sponsor', // Can add name field if needed later
-                logo: newSponsor.logo,
-                tier: newSponsor.tier 
-            }]
+            sponsors: prev.sponsors.map((s: Sponsor, i: number) => i === index ? { ...s, ...changes } : s)
         }));
-        setNewSponsor({ logo: '', tier: SponsorTier.SILVER }); // Reset
+    };
+
+    const moveSponsor = (index: number, dir: -1 | 1) => {
+        setData((prev: any) => {
+            const list = [...prev.sponsors];
+            const target = index + dir;
+            if (target < 0 || target >= list.length) return prev;
+            [list[index], list[target]] = [list[target], list[index]];
+            return { ...prev, sponsors: list };
+        });
     };
 
     const removeSponsor = (index: number) => {
@@ -1603,15 +1626,6 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
             ...prev,
             sponsors: prev.sponsors.filter((_: any, i: number) => i !== index)
         }));
-    };
-
-    const getTierIcon = (tier: SponsorTier) => {
-        switch(tier) {
-            case SponsorTier.TITLE: return <Crown size={14} className="text-yellow-400" />;
-            case SponsorTier.PLATINUM: return <Gem size={14} className="text-[#4D78FF]" />;
-            case SponsorTier.GOLD: return <Star size={14} className="text-[#E65C31]" />;
-            case SponsorTier.SILVER: return <Medal size={14} className="text-gray-400" />;
-        }
     };
 
     return (
@@ -2293,47 +2307,173 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
                             }} />
                         </div>
 
+                        <div className="space-y-3">
+                            <div className="flex items-end justify-between gap-3">
+                                <label className="block text-content-secondary text-sm font-bold uppercase tracking-wider">Points Table</label>
+                                <span className="text-[11px] text-content-muted text-right">How players and teams earn ranking points in this tournament.</span>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {POINTS_SYSTEM_LIST.map(plan => {
+                                    const active = (data.pointsSystem || 'matchup') === plan.id;
+                                    return (
+                                        <button
+                                            key={plan.id}
+                                            type="button"
+                                            onClick={() => setData({ ...data, pointsSystem: plan.id })}
+                                            className={`text-left rounded-xl border px-3 py-2.5 transition-all ${active ? 'border-brand ring-2 ring-brand/40 bg-brand/5' : 'border-white/10 hover:border-white/30 bg-surface-panel'}`}
+                                        >
+                                            <span className="inline-block px-2 py-0.5 rounded text-[11px] font-black italic uppercase tracking-wide text-white" style={{ background: plan.color }}>
+                                                {plan.label}
+                                            </span>
+                                            <span className="block text-[10px] text-content-muted mt-1.5">
+                                                {plan.id === 'matchup' ? 'Default · current logic' : `Winner ${plan.placement.CHAMPION} pts`}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {(() => {
+                                const plan = getPointsSystem(data.pointsSystem);
+                                const stages = STAGE_ORDER.filter(st => plan.placement[st] > 0);
+                                return (
+                                    <div className="rounded-xl border border-white/10 overflow-x-auto">
+                                        <table className="w-full text-xs text-center">
+                                            <thead className="bg-white/5 text-content-muted uppercase tracking-wider">
+                                                <tr>
+                                                    {stages.map(st => <th key={st} className="px-2 py-2 font-bold whitespace-nowrap">{STAGE_LABELS[st]}</th>)}
+                                                    {plan.participation > 0 && <th className="px-2 py-2 font-bold whitespace-nowrap">Others</th>}
+                                                    {plan.perWin > 0 && <th className="px-2 py-2 font-bold whitespace-nowrap">Per Win</th>}
+                                                    {plan.perSkillShot > 0 && <th className="px-2 py-2 font-bold whitespace-nowrap">Skill Shot</th>}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr className="text-white font-bold text-sm">
+                                                    {stages.map(st => <td key={st} className="px-2 py-2">{plan.placement[st]}</td>)}
+                                                    {plan.participation > 0 && <td className="px-2 py-2">{plan.participation}</td>}
+                                                    {plan.perWin > 0 && <td className="px-2 py-2">+{plan.perWin}</td>}
+                                                    {plan.perSkillShot > 0 && <td className="px-2 py-2">+{plan.perSkillShot}</td>}
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        <div className="space-y-4">
+                            <label className="block text-content-secondary text-sm font-bold uppercase tracking-wider">Broadcast & Display</label>
+
+                            <label className="flex items-start gap-3 bg-surface-panel rounded-xl border border-white/10 p-4 cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={!!data.showNationFlags}
+                                    onChange={(e) => setData({ ...data, showNationFlags: e.target.checked })}
+                                    className="mt-0.5 w-4 h-4 accent-[#4D78FF]"
+                                />
+                                <span>
+                                    <span className="block text-white text-sm font-bold">Display nation flags</span>
+                                    <span className="block text-xs text-content-muted mt-0.5">
+                                        Every player must pick their country when registering or being added, and their flag shows next to their name on the broadcast screen.
+                                    </span>
+                                </span>
+                            </label>
+
+                            <div>
+                                <span className="block text-xs text-content-muted mb-2">Broadcast screen theme</span>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    {([
+                                        { id: 'matchup', label: 'Matchup', hint: 'Dark · default', bg: '#0d0d0f', card: '#16161a', accent: '#4D78FF', text: '#ffffff' },
+                                        { id: 'fip', label: 'FIP Navy', hint: 'Federation broadcast', bg: 'linear-gradient(155deg,#17253F,#002C5C 50%,#003b78)', card: '#ffffff', accent: '#002C5C', text: '#002C5C' },
+                                        { id: 'light', label: 'Light', hint: 'Bright venues', bg: '#eef1f7', card: '#ffffff', accent: '#4D78FF', text: '#0f172a' },
+                                        { id: 'pinktober', label: 'Pink Ribbon', hint: 'Pinktober events', bg: 'linear-gradient(150deg,#3a0a2a,#6b1048 50%,#9c1857)', card: '#ffffff', accent: '#e83e8c', text: '#4a0d35' },
+                                    ] as const).map(opt => {
+                                        const active = (data.broadcastTheme || 'matchup') === opt.id;
+                                        return (
+                                            <button
+                                                key={opt.id}
+                                                type="button"
+                                                onClick={() => setData({ ...data, broadcastTheme: opt.id })}
+                                                className={`text-left rounded-xl border p-2 transition-all ${active ? 'border-brand ring-2 ring-brand/40' : 'border-white/10 hover:border-white/30'}`}
+                                            >
+                                                <div className="aspect-video rounded-lg p-1.5 flex flex-col gap-1" style={{ background: opt.bg }}>
+                                                    {[0, 1].map(r => (
+                                                        <div key={r} className="flex-1 rounded-[4px] flex items-center gap-1 px-1" style={{ background: opt.card }}>
+                                                            <div className="h-1 flex-1 rounded-full opacity-70" style={{ background: opt.text }} />
+                                                            <div className="h-2.5 w-3 rounded-[2px]" style={{ background: opt.accent }} />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="mt-2 text-xs font-bold text-white">{opt.label}</div>
+                                                <div className="text-[10px] text-content-muted">{opt.hint}</div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
                         <div>
-                            <label className="block text-content-secondary text-sm mb-3 font-bold uppercase tracking-wider">Configure Sponsors</label>
-                            <div className="flex gap-4 mb-4">
-                                <div 
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="w-24 h-24 border border-dashed border-white/20 rounded-2xl flex items-center justify-center text-content-muted hover:text-white hover:border-brand cursor-pointer bg-black/20 transition-all hover:bg-black/40 overflow-hidden"
-                                >
-                                    {newSponsor.logo ? <img src={newSponsor.logo} className="w-full h-full object-contain p-2" /> : <Plus size={32}/>}
-                                </div>
-                                <div className="flex-1 space-y-3">
-                                    <select 
-                                        className="w-full bg-surface-panel text-white border border-white/10 rounded-xl p-3 text-sm focus:border-brand outline-none transition-all shadow-inner"
-                                        value={newSponsor.tier}
-                                        onChange={(e) => setNewSponsor({...newSponsor, tier: e.target.value as SponsorTier})}
-                                    >
-                                        <option value={SponsorTier.SILVER}>Silver Tier (80k Credit)</option>
-                                        <option value={SponsorTier.GOLD}>Gold Tier (150k Credit)</option>
-                                        <option value={SponsorTier.PLATINUM}>Platinum Tier (300k Credit)</option>
-                                        <option value={SponsorTier.TITLE}>Title Sponsor (750k Credit)</option>
-                                    </select>
-                                    <button 
-                                        onClick={addSponsor}
-                                        disabled={!newSponsor.logo}
-                                        className="w-full bg-brand disabled:opacity-50 text-content-inverse text-xs font-bold py-3 rounded-xl hover:bg-brand-light transition-all shadow-md active:translate-y-px"
-                                    >
-                                        Register Sponsor
-                                    </button>
-                                </div>
-                                <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleSponsorUpload} />
+                            <div className="flex items-end justify-between gap-3 mb-3">
+                                <label className="block text-content-secondary text-sm font-bold uppercase tracking-wider">Sponsors</label>
+                                <span className="text-[11px] text-content-muted text-right">
+                                    Shown on the broadcast screen in this order. Up to 6 stay fixed; more than 6 scroll.
+                                </span>
                             </div>
 
-                            {data.sponsors?.length > 0 && (
-                                <div className="flex flex-wrap gap-2 pt-2">
-                                    {data.sponsors.map((s: Sponsor, i: number) => (
-                                        <div key={s.id} className="relative group bg-surface-panel p-2 rounded-xl border border-white/10 min-w-[60px] h-16 flex items-center justify-center">
-                                            <img src={s.logo} className="max-w-full max-h-full object-contain" />
-                                            <div className="absolute -top-1 -right-1 bg-brand rounded-full p-0.5 shadow-sm">{getTierIcon(s.tier)}</div>
-                                            <button onClick={() => removeSponsor(i)} className="absolute -top-1 -left-1 bg-accent-error text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"><X size={10}/></button>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {(data.sponsors || []).map((s: Sponsor, i: number) => (
+                                    <div key={s.id} className="bg-surface-panel rounded-xl border border-white/10 p-3 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-bold uppercase tracking-widest text-brand">Sponsor {i + 1}</span>
+                                            <div className="flex items-center gap-1">
+                                                <button type="button" onClick={() => moveSponsor(i, -1)} disabled={i === 0} className="p-1 rounded-md text-content-muted hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none" aria-label="Move earlier"><ChevronLeft size={14} /></button>
+                                                <button type="button" onClick={() => moveSponsor(i, 1)} disabled={i === data.sponsors.length - 1} className="p-1 rounded-md text-content-muted hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none" aria-label="Move later"><ChevronRight size={14} /></button>
+                                                <button type="button" onClick={() => removeSponsor(i)} className="p-1 rounded-md text-content-muted hover:text-accent-error hover:bg-white/10" aria-label="Remove sponsor"><Trash2 size={14} /></button>
+                                            </div>
                                         </div>
-                                    ))}
-                                </div>
+                                        <div className="w-full aspect-[3/1] bg-white rounded-lg flex items-center justify-center overflow-hidden">
+                                            <img src={s.logo} alt={s.name} className="w-full h-full object-contain" />
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <input
+                                                value={s.name || ''}
+                                                onChange={(e) => updateSponsor(i, { name: e.target.value })}
+                                                placeholder={`Sponsor ${i + 1} name`}
+                                                className="flex-1 min-w-0 bg-surface-ground text-white border border-white/10 rounded-lg px-3 py-2 text-xs focus:border-brand outline-none"
+                                            />
+                                            <select
+                                                value={s.tier}
+                                                onChange={(e) => updateSponsor(i, { tier: e.target.value as SponsorTier })}
+                                                className="bg-surface-ground text-white border border-white/10 rounded-lg px-2 py-2 text-xs focus:border-brand outline-none"
+                                                aria-label="Sponsor tier"
+                                            >
+                                                <option value={SponsorTier.SILVER}>Silver</option>
+                                                <option value={SponsorTier.GOLD}>Gold</option>
+                                                <option value={SponsorTier.PLATINUM}>Platinum</option>
+                                                <option value={SponsorTier.TITLE}>Title</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="min-h-[140px] border border-dashed border-white/20 rounded-xl flex flex-col items-center justify-center gap-2 text-content-muted hover:text-white hover:border-brand bg-black/20 hover:bg-black/40 transition-all"
+                                >
+                                    <Plus size={26} />
+                                    <span className="text-xs font-bold">Add Sponsor {(data.sponsors?.length || 0) + 1}</span>
+                                    <span className="text-[10px]">PNG with transparent background works best</span>
+                                </button>
+                            </div>
+                            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleSponsorFilePicked} />
+                            {sponsorFileToCrop && (
+                                <SponsorLogoCropper
+                                    file={sponsorFileToCrop}
+                                    title={`Sponsor ${(data.sponsors?.length || 0) + 1} logo`}
+                                    onCancel={() => setSponsorFileToCrop(null)}
+                                    onConfirm={handleSponsorCropped}
+                                />
                             )}
                         </div>
                     </div>
@@ -2790,8 +2930,8 @@ const TeamsTab = ({ tournament, categoryId, setView }: { tournament: Tournament;
                     onClose={() => setEditingTeam(null)}
                     tournament={tournament}
                     team={editingTeam}
-                    onConfirm={async (name, p1Name, p2Name) => {
-                        await editTeamInTournament(tournament.id, editingTeam.id, name, p1Name, p2Name);
+                    onConfirm={async (name, p1Name, p2Name, countries) => {
+                        await editTeamInTournament(tournament.id, editingTeam.id, name, p1Name, p2Name, countries);
                     }}
                 />
             )}

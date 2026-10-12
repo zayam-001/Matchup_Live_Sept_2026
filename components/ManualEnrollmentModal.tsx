@@ -4,6 +4,7 @@ import { uploadSystemImage } from '../services/storage';
 import { toast } from './Toast';
 import { Loader2 } from 'lucide-react';
 import { Tournament, Team } from '../types';
+import { CountrySelect } from './CountrySelect';
 
 export const ManualEnrollmentModal: React.FC<{
   isOpen: boolean;
@@ -23,6 +24,8 @@ export const ManualEnrollmentModal: React.FC<{
   const [p2Email, setP2Email] = useState('');
   const [p2Cnic, setP2Cnic] = useState('');
   const [p2Photo, setP2Photo] = useState('');
+  const [p1Country, setP1Country] = useState('');
+  const [p2Country, setP2Country] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fileInputRef1 = useRef<HTMLInputElement>(null);
@@ -46,8 +49,14 @@ export const ManualEnrollmentModal: React.FC<{
                          currentCategory?.format === 'AMERICANO' || 
                          currentCategory?.format === 'MEXICANO';
 
+  const askCountry = !!tournament?.showNationFlags;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (askCountry && (!p1Country || (!isAmericanoMode && !p2Country))) {
+        toast.error("Country required", "Please select the country for each player.");
+        return;
+    }
     setIsSubmitting(true);
     
     const newTeam: Omit<Team, 'id' | 'status'> = {
@@ -58,7 +67,8 @@ export const ManualEnrollmentModal: React.FC<{
         email: p1Email,
         cnic: p1Cnic,
         photoUrl: p1Photo,
-        verified: false
+        verified: false,
+        ...(askCountry ? { country: p1Country } : {})
       },
       player2: isAmericanoMode ? { name: 'N/A', phone: '0', email: 'none@none', verified: false } : {
         name: p2Name,
@@ -66,7 +76,8 @@ export const ManualEnrollmentModal: React.FC<{
         email: p2Email,
         cnic: p2Cnic,
         photoUrl: p2Photo,
-        verified: false
+        verified: false,
+        ...(askCountry ? { country: p2Country } : {})
       },
       registeredAt: new Date().toISOString()
     };
@@ -104,6 +115,7 @@ export const ManualEnrollmentModal: React.FC<{
                     <input autoComplete="off" required placeholder="Number" className="w-full bg-surface-ground p-2 rounded border border-white/10 text-white text-sm outline-none" value={p1Phone} onChange={e => setP1Phone(e.target.value)} />
                     <input autoComplete="off" required type="email" placeholder="Email" className="w-full bg-surface-ground p-2 rounded border border-white/10 text-white text-sm outline-none" value={p1Email} onChange={e => setP1Email(e.target.value)} />
                     <input autoComplete="off" placeholder="CNIC (Optional)" className="w-full bg-surface-ground p-2 rounded border border-white/10 text-white text-sm outline-none" value={p1Cnic} onChange={e => setP1Cnic(e.target.value)} />
+                    {askCountry && <CountrySelect compact required placeholder="Country" value={p1Country} onChange={setP1Country} />}
                     <div 
                         onClick={() => fileInputRef1.current?.click()}
                         className="w-full h-20 border border-dashed border-white/20 rounded flex items-center justify-center text-xs text-content-muted cursor-pointer hover:bg-white/5 relative overflow-hidden"
@@ -120,6 +132,7 @@ export const ManualEnrollmentModal: React.FC<{
                         <input autoComplete="off" required placeholder="Number" className="w-full bg-surface-ground p-2 rounded border border-white/10 text-white text-sm outline-none" value={p2Phone} onChange={e => setP2Phone(e.target.value)} />
                         <input autoComplete="off" required type="email" placeholder="Email" className="w-full bg-surface-ground p-2 rounded border border-white/10 text-white text-sm outline-none" value={p2Email} onChange={e => setP2Email(e.target.value)} />
                         <input autoComplete="off" placeholder="CNIC (Optional)" className="w-full bg-surface-ground p-2 rounded border border-white/10 text-white text-sm outline-none" value={p2Cnic} onChange={e => setP2Cnic(e.target.value)} />
+                        {askCountry && <CountrySelect compact required placeholder="Country" value={p2Country} onChange={setP2Country} />}
                         <div 
                             onClick={() => fileInputRef2.current?.click()}
                             className="w-full h-20 border border-dashed border-white/20 rounded flex items-center justify-center text-xs text-content-muted cursor-pointer hover:bg-white/5 relative overflow-hidden"

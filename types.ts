@@ -36,11 +36,14 @@ export enum SponsorTier {
   TITLE = 'TITLE'
 }
 
+export type BroadcastTheme = 'matchup' | 'fip' | 'light' | 'pinktober';
+
 export interface Sponsor {
   id: string;
   name: string;
   logo: string; // Base64
   tier: SponsorTier;
+  order?: number; // Display position on the broadcast sponsor strip
 }
 
 export interface PlayerStats {
@@ -87,6 +90,7 @@ export interface Player {
   cnic?: string;
   photoUrl?: string;
   verified: boolean;
+  country?: string; // ISO 3166-1 alpha-2, required when the tournament shows nation flags
 }
 
 export interface Squad {
@@ -350,6 +354,9 @@ export interface Tournament {
   multipleVenues?: boolean;
   venueIds?: string[];
   sponsors?: Sponsor[]; 
+  showNationFlags?: boolean; // Ask each player's country and show flags on broadcast
+  broadcastTheme?: BroadcastTheme;
+  pointsSystem?: string; // PointsSystemId from lib/pointsSystems; unset = Matchup Standard
   bannerUrl?: string;
   status: 'DRAFT' | 'ACTIVE' | 'COMPLETED' | 'RETIRED';
   slug?: string;

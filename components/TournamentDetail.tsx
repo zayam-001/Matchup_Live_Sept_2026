@@ -178,24 +178,19 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
   return (
     <div className="pb-32 pt-28 max-w-[1400px] mx-auto w-full animate-in fade-in duration-500 px-4 md:px-8 relative">
       
-      {/* Top Controls Row */}
-      <div className="max-w-7xl mx-auto px-4 pt-4 md:pt-6 pb-4 flex justify-between items-center relative z-10">
-        <button 
-          onClick={onBack} 
-          className="text-white hover:text-[#4D78FF] flex items-center gap-2 transition-all cursor-pointer border-none bg-transparent whitespace-nowrap text-xs font-black uppercase tracking-widest bg-white/5 px-4 py-2 rounded-full border border-white/5 hover:bg-white/10"
-        >
-          &larr; Back to Lobby
-        </button>
-        {onEnterBroadcastMode && (
-          <button 
+      {/* Top Controls Row. No back button here: the sticky bar above already
+          has "‹ Tournaments", which did exactly the same thing. */}
+      {onEnterBroadcastMode && (
+      <div className="max-w-7xl mx-auto px-4 pt-4 md:pt-6 pb-4 flex justify-end items-center relative z-10">
+          <button
             onClick={onEnterBroadcastMode} 
             className="bg-[#E65C31] text-white px-4 py-2 rounded-full font-black flex items-center gap-2 hover:bg-[#ff6d3f] transition-colors cursor-pointer border-none text-xs uppercase tracking-widest shadow-lg shadow-[#E65C31]/20 animate-pulse-subtle"
           >
             <Tv size={14} />
             <span>Broadcast Mode</span>
           </button>
-        )}
       </div>
+      )}
 
       {/* Hero Header */}
       <div className="max-w-7xl mx-auto mb-10 px-4 md:px-0">
