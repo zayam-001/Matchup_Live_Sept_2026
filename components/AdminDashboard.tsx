@@ -24,6 +24,11 @@ import { EditTeamSheet } from './EditTeamSheet';
 import { StandingsOverlayExporter } from './StandingsOverlayExporter';
 import { SponsorLogoCropper } from './SponsorLogoCropper';
 import { POINTS_SYSTEM_LIST, getPointsSystem, STAGE_ORDER, STAGE_LABELS } from '../lib/pointsSystems';
+import { formatLabel, getActiveFormat, isTeamAmericanoFormat, summarizeTeamAmericano } from '../lib/teamAmericano';
+import { TeamAmericanoSetup } from './TeamAmericanoSetup';
+import { NAME_DISPLAY_OPTIONS } from '../lib/nameDisplay';
+import { TeamAmericanoPanel } from './TeamAmericanoPanel';
+import { TeamAmericanoStandings } from './TeamAmericanoStandings';
 import { Tv } from 'lucide-react';
 
 import { collection, doc, getDoc, query, where, getDocs } from 'firebase/firestore';
@@ -108,8 +113,10 @@ export const ScoreCorrectionModal = ({ match, tournamentId, onCancel, onComplete
         match.score?.sets?.length ? match.score.sets : (match.score?.p1SetScores?.length ? match.score.p1SetScores.map((_:any,i:number) => ({team1: match.score.p1SetScores[i], team2: match.score.p2SetScores[i]})) : [{team1: match.score?.p1Games || (match.winnerTeamId === match.team1Id ? 1 : 0), team2: match.score?.p2Games || (match.winnerTeamId === match.team2Id ? 1 : 0)}])
     );
 
-    const team1SetsWon = sets.filter(s => s.team1 > s.team2).length;
-    const team2SetsWon = sets.filter(s => s.team2 > s.team1).length;
+    // Americano-style matches are one running points total, not sets.
+    const isPointsMatch = match.score?.americanoMode !== undefined || match.score?.americanoTargetPoints !== undefined;
+    const team1SetsWon = isPointsMatch ? (sets[0]?.team1 || 0) : sets.filter(s => s.team1 > s.team2).length;
+    const team2SetsWon = isPointsMatch ? (sets[0]?.team2 || 0) : sets.filter(s => s.team2 > s.team1).length;
 
     const handleSave = async () => {
         try {
@@ -156,20 +163,20 @@ export const ScoreCorrectionModal = ({ match, tournamentId, onCancel, onComplete
                         <div className="flex-1 p-4 text-center border-r border-white/5">
                             <div className="text-white font-black truncate mb-2">{match.team1Name || 'TBD'}</div>
                             <div className="text-3xl font-display text-brand">{team1SetsWon}</div>
-                            <div className="text-[10px] text-content-muted uppercase tracking-widest mt-1">Sets Won</div>
+                            <div className="text-[10px] text-content-muted uppercase tracking-widest mt-1">{isPointsMatch ? 'Points' : 'Sets Won'}</div>
                         </div>
                         <div className="flex-1 p-4 text-center">
                             <div className="text-white font-black truncate mb-2">{match.team2Name || 'TBD'}</div>
                             <div className="text-3xl font-display text-brand">{team2SetsWon}</div>
-                            <div className="text-[10px] text-content-muted uppercase tracking-widest mt-1">Sets Won</div>
+                            <div className="text-[10px] text-content-muted uppercase tracking-widest mt-1">{isPointsMatch ? 'Points' : 'Sets Won'}</div>
                         </div>
                     </div>
 
                     <div className="space-y-3 mb-6">
-                        <label className="block text-xs font-bold text-content-muted uppercase tracking-widest">Set Scores</label>
+                        <label className="block text-xs font-bold text-content-muted uppercase tracking-widest">{isPointsMatch ? 'Points Scored' : 'Set Scores'}</label>
                         {sets.map((set, i) => (
                             <div key={i} className="flex items-center gap-3 bg-white/5 p-3 rounded-lg border border-white/5">
-                                <span className="text-content-muted font-bold w-12 shrink-0 text-sm">SET {i+1}</span>
+                                <span className="text-content-muted font-bold w-12 shrink-0 text-sm">{isPointsMatch ? 'PTS' : `SET ${i+1}`}</span>
                                 <div className="flex-1 flex gap-2">
                                     <input type="number" min="0" value={set.team1} onChange={(e) => {
                                         const newSets = [...sets];
@@ -193,7 +200,7 @@ export const ScoreCorrectionModal = ({ match, tournamentId, onCancel, onComplete
                                 </button>
                             </div>
                         ))}
-                        {sets.length < 5 && (
+                        {sets.length < 5 && !isPointsMatch && (
                             <button onClick={() => setSets([...sets, {team1:0, team2:0}])} className="w-full py-3 bg-surface-elevated hover:bg-surface-dark border border-white/5 border-dashed rounded-lg text-sm font-bold text-brand transition-colors flex items-center justify-center gap-2">
                                 <Plus size={16}/> Add Set
                             </button>
@@ -1114,7 +1121,7 @@ const getTournamentCredits = (t: any) => {
                   <div className="min-w-0">
                     <h1 className="text-xl sm:text-2xl md:text-3xl mb-0 truncate">{activeTournament.name}</h1>
                     <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-content-muted mt-1">
-                        <span className="text-brand shrink-0">{activeTournament.format.replace(/_/g, ' ')}</span>
+                        <span className="text-brand shrink-0">{formatLabel(activeTournament.format)}</span>
                         <span className="shrink-0">•</span>
                         <span className="truncate max-w-[200px] sm:max-w-none min-w-0 break-words">{activeTournament.venue} &bull; {activeTournament.city || 'Karachi'}</span>
                     </div>
@@ -1439,8 +1446,11 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
         multipleVenues: false
     });
 
-    const calculateCategoryMatches = (format: TournamentFormat, teams: number, rrType?: RoundRobinType, groupSize?: number) => {
+    const calculateCategoryMatches = (format: TournamentFormat, teams: number, rrType?: RoundRobinType, groupSize?: number, teamAmericano?: any) => {
         if (!teams || teams < 2) return 0;
+        if (isTeamAmericanoFormat(format)) {
+            return summarizeTeamAmericano(teams, 1, teamAmericano).totalMatches;
+        }
         if (format === TournamentFormat.SINGLE_ELIMINATION) {
             return teams - 1;
         } else if (format === TournamentFormat.DOUBLE_ELIMINATION) {
@@ -1479,12 +1489,13 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
                     cat.format || data.format, 
                     cat.maxTeams || 0, 
                     cat.rrType || data.rrType, 
-                    cat.groupSize || data.groupSize
+                    cat.groupSize || data.groupSize,
+                    { ...(data.teamAmericano || {}), ...(cat.teamAmericano || {}) }
                 );
             }, 0);
         }
-        return calculateCategoryMatches(data.format, data.maxTeams || 0, data.rrType, data.groupSize);
-    }, [data.maxTeams, data.format, data.rrType, data.groupSize, data.isMultiCategory, data.categories]);
+        return calculateCategoryMatches(data.format, data.maxTeams || 0, data.rrType, data.groupSize, data.teamAmericano);
+    }, [data.maxTeams, data.format, data.rrType, data.groupSize, data.isMultiCategory, data.categories, data.teamAmericano]);
 
     const validateAmericanoMultipleOf4 = () => {
         if (data.isMultiCategory) {
@@ -1913,7 +1924,8 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
                                     <option value="DOUBLE_ELIMINATION">Double Elimination</option>
                                     <option value="ROUND_ROBIN">Round Robin</option>
                                     <option value="GROUP_TO_KNOCKOUT">Group Stage + Knockout</option>
-                                    <option value="AMERICANO">Americano</option>
+                                    <option value="AMERICANO">Player Americano</option>
+                                    <option value="TEAM_AMERICANO">Team Americano</option>
                                     <option value="MEXICANO">Mexicano</option>
                                 </select>
                             </div>
@@ -2095,10 +2107,23 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
                                                 <option value="DOUBLE_ELIMINATION">Double Elimination</option>
                                                 <option value="ROUND_ROBIN">Round Robin</option>
                                                 <option value="GROUP_TO_KNOCKOUT">Group Stage + Knockout</option>
-                                                <option value="AMERICANO">Americano</option>
+                                                <option value="AMERICANO">Player Americano</option>
+                                                <option value="TEAM_AMERICANO">Team Americano</option>
                                                 <option value="MEXICANO">Mexicano</option>
                                             </select>
                                         </div>
+                                        {cat.format === 'TEAM_AMERICANO' && (
+                                            <TeamAmericanoSetup
+                                                value={cat.teamAmericano}
+                                                onChange={(next) => {
+                                                    const newCats = [...data.categories];
+                                                    newCats[idx].teamAmericano = next;
+                                                    setData({...data, categories: newCats});
+                                                }}
+                                                teamCount={cat.maxTeams || 0}
+                                                courtCount={(cat.courts || []).length}
+                                            />
+                                        )}
                                         {(cat.format === 'ROUND_ROBIN' || cat.format === 'GROUP_TO_KNOCKOUT') && (
                                             <div className="space-y-4 bg-surface-ground p-4 rounded-xl border border-white/5">
                                                 <div className="grid grid-cols-2 gap-4">
@@ -2264,6 +2289,16 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
                                         <Input label="Group Points (Win)" type="number" value={data.pointsForWin || 2} onChange={(v: string) => setData({...data, pointsForWin: parseInt(v)})} />
                                     </div>
                                 )}
+                                {data.format === 'TEAM_AMERICANO' && (
+                                    <div className="mt-4">
+                                        <TeamAmericanoSetup
+                                            value={data.teamAmericano}
+                                            onChange={(next) => setData({...data, teamAmericano: next})}
+                                            teamCount={data.maxTeams || 0}
+                                            courtCount={(Array.isArray(data.courts) ? data.courts : String(data.courts || '').split(',')).filter(Boolean).length}
+                                        />
+                                    </div>
+                                )}
                              </div>
                         </div>
                     )}
@@ -2362,6 +2397,26 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
 
                         <div className="space-y-4">
                             <label className="block text-content-secondary text-sm font-bold uppercase tracking-wider">Broadcast & Display</label>
+
+                            <div>
+                                <span className="block text-xs text-content-muted mb-2">Show on broadcast screen & OBS overlay</span>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    {NAME_DISPLAY_OPTIONS.map(opt => {
+                                        const active = (data.nameDisplay || '') === opt.id;
+                                        return (
+                                            <button
+                                                key={opt.id || 'default'}
+                                                type="button"
+                                                onClick={() => setData({ ...data, nameDisplay: opt.id || undefined })}
+                                                className={`text-left rounded-xl border px-3 py-2.5 transition-all ${active ? 'border-brand ring-2 ring-brand/40 bg-brand/5' : 'border-white/10 hover:border-white/30 bg-surface-panel'}`}
+                                            >
+                                                <span className="block text-white text-sm font-bold">{opt.label}</span>
+                                                <span className="block text-[11px] text-content-muted mt-0.5">{opt.hint}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
 
                             <label className="flex items-start gap-3 bg-surface-panel rounded-xl border border-white/10 p-4 cursor-pointer select-none">
                                 <input
@@ -3208,6 +3263,7 @@ const StandingsTab = ({ tournament, categoryId }: any) => {
     }, [tournament.teams, categoryId]);
 
     const isAmericano = tournament?.format === 'AMERICANO' || tournament?.format === 'MEXICANO';
+    const isTeamAmericanoStandings = isTeamAmericanoFormat(getActiveFormat(tournament, categoryId));
     const [standings, setStandings] = useState<Team[]>(acceptedTeams);
     const [selectedGroup, setSelectedGroup] = useState<string>('All');
     const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
@@ -3336,6 +3392,9 @@ const StandingsTab = ({ tournament, categoryId }: any) => {
                 </div>
             </div>
 
+            {isTeamAmericanoStandings ? (
+                <TeamAmericanoStandings tournament={tournament} categoryId={categoryId} matches={categoryMatches} onTeamSelect={setSelectedTeam} showExport />
+            ) : (
             <Card variant="panel" className="p-0 overflow-hidden mb-6">
                 <div className="space-y-0">
                     {groupKeys.length === 0 && (
@@ -3448,6 +3507,7 @@ const StandingsTab = ({ tournament, categoryId }: any) => {
                     ))}
                 </div>
             </Card>
+            )}
 
             {selectedTeam && (
                 <TeamDetailsOverlay 
@@ -4235,7 +4295,11 @@ const ScheduleTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                 </div>
             </div>
             
-            <AutoMatchSuggestions tournament={tournament} matches={filteredMatches} categoryId={categoryId} />
+            {isTeamAmericanoFormat(getActiveFormat(tournament, categoryId)) ? (
+                <TeamAmericanoPanel tournament={tournament} categoryId={categoryId} matches={filteredMatches} />
+            ) : (
+                <AutoMatchSuggestions tournament={tournament} matches={filteredMatches} categoryId={categoryId} />
+            )}
 
             {/* Print Only Layout */}
             <div className="hidden print:block w-full text-black bg-white p-8">

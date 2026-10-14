@@ -667,7 +667,7 @@ export const RefereeInterface: React.FC<{ initialTournamentId?: string, initialA
                     const fmt = selectedMatch.categoryId && selectedTournament.categories
                         ? (selectedTournament.categories.find(c => c.id === selectedMatch.categoryId)?.format || selectedTournament.format)
                         : selectedTournament.format;
-                    return fmt === 'AMERICANO' || fmt === 'MEXICANO';
+                    return fmt === 'AMERICANO' || fmt === 'MEXICANO' || fmt === 'TEAM_AMERICANO';
                 })()}
                 onUpdate={(m: Match) => {
                     setSelectedMatch(m);

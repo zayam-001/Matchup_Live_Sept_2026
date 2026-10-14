@@ -14,6 +14,7 @@ import {
 import gsap from 'gsap';
 import { Tournament, Match, Team, MatchStatus, SponsorTier } from '../types';
 import { isMatchInCategory, isTeamInCategory } from '../services/storage';
+import { formatLabel } from '../lib/teamAmericano';
 import { Badge } from './ui/Badge';
 import { 
   LiveMatchesTable, 
@@ -273,7 +274,7 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
               <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-right shrink-0">
                 <div className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">Tournament Format</div>
                 <div className="text-xs font-black text-white uppercase tracking-wider mt-0.5">
-                  {tournament.format?.replace(/_/g, ' ') || 'STANDARD'}
+                  {tournament.format ? formatLabel(tournament.format) : 'STANDARD'}
                 </div>
               </div>
 

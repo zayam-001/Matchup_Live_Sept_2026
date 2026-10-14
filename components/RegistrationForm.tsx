@@ -8,6 +8,7 @@ import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
 import { useAuth } from '../hooks/useAuth';
 import { CountrySelect } from './CountrySelect';
+import { formatLabel, getActiveFormat, isTeamAmericanoFormat } from '../lib/teamAmericano';
 
 export const RegistrationForm: React.FC<{ initialTournamentId?: string }> = ({ initialTournamentId }) => {
   const { user: currentPlayer, loading: authLoading } = useAuth();
@@ -139,10 +140,20 @@ export const RegistrationForm: React.FC<{ initialTournamentId?: string }> = ({ i
         setLoading(false);
         return;
     }
+
+    // Team Americano: a team is exactly two different players; the team name is optional.
+    const isTeamAmericano = isTeamAmericanoFormat(getActiveFormat(selectedTournament, selectedCategoryId));
+    const same = (a?: string, b?: string) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+    if (isTeamAmericano && (same(formData.p1Email, formData.p2Email) || same(formData.p1Phone, formData.p2Phone))) {
+        toast.error("Two different players needed", "Player 1 and Player 2 can't share the same email or phone number.");
+        setLoading(false);
+        return;
+    }
+    const teamName = formData.teamName?.trim() || (isTeamAmericano ? `${formData.p1Name.trim()} & ${formData.p2Name.trim()}` : formData.teamName);
     
     try {
         await registerTeam(selectedTournament.id, {
-            name: isAmericanoMode ? formData.p1Name : formData.teamName,
+            name: isAmericanoMode ? formData.p1Name : teamName,
             categoryId: selectedCategoryId || undefined,
             registeredBy: isRegisteringForSomeoneElse ? currentPlayer?.id : undefined,
             player1: { 
@@ -348,6 +359,7 @@ export const RegistrationForm: React.FC<{ initialTournamentId?: string }> = ({ i
                          
   const displayBanner = currentCategory?.bannerUrl || selectedTournament.bannerUrl;
   const displayFee = currentCategory?.entryFee ?? selectedTournament.entryFee;
+  const isTeamAmericanoMode = isTeamAmericanoFormat(getActiveFormat(selectedTournament, selectedCategoryId));
   const displayPrize = currentCategory?.prizeMoney ?? selectedTournament.prizeMoney;
   const displayVenue = (currentCategory as any)?.venue || selectedTournament.venue;
 
@@ -462,9 +474,14 @@ export const RegistrationForm: React.FC<{ initialTournamentId?: string }> = ({ i
                  <MapPin size={14} /> {displayVenue || "Venue TBD"}
              </div>
              <div className="flex flex-col md:flex-row items-center gap-2 md:gap-4 text-sm md:text-base">
-                <span className="text-white font-bold">Entry: {selectedTournament.currency || 'PKR'} {displayFee}</span>
+                <span className="text-white font-bold">
+                    Entry: {selectedTournament.currency || 'PKR'} {displayFee}{isTeamAmericanoMode && ' per team'}
+                    {isTeamAmericanoMode && Number(displayFee) > 0 && (
+                        <span className="text-content-muted font-medium"> ({selectedTournament.currency || 'PKR'} {Math.round(Number(displayFee) / 2)} per player)</span>
+                    )}
+                </span>
                 <span className="hidden md:inline text-white/20">•</span>
-                <span className="text-content-secondary">{currentCategory?.format?.replace(/_/g, ' ') || selectedTournament.format.replace(/_/g, ' ')}</span>
+                <span className="text-content-secondary">{formatLabel(currentCategory?.format || selectedTournament.format)}</span>
              </div>
              {displayPrize && (
                  <div className="flex items-center gap-2 text-accent-success font-black text-sm md:text-base mt-2 px-4 py-2 bg-accent-success/5 rounded-xl border border-accent-success/20">
@@ -526,15 +543,18 @@ export const RegistrationForm: React.FC<{ initialTournamentId?: string }> = ({ i
                 <Users className="text-brand" size={20} /> Team Details
               </h3>
               <div>
-                <label className="block text-sm text-content-secondary mb-2">Team Name</label>
+                <label className="block text-sm text-content-secondary mb-2">Team Name{isTeamAmericanoMode && <span className="text-content-muted"> (optional)</span>}</label>
                 <input 
-                  required
+                  required={!isTeamAmericanoMode}
                   value={formData.teamName}
                   onChange={e => setFormData({...formData, teamName: e.target.value})}
                   disabled={!!selectedSquadId}
                   className="w-full bg-surface-ground border border-white/10 rounded-lg p-3 text-white focus:border-brand focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                  placeholder="e.g. The Match Up Pros"
+                  placeholder={isTeamAmericanoMode ? "Leave blank to use both players' names" : "e.g. The Match Up Pros"}
                 />
+                {isTeamAmericanoMode && (
+                    <p className="text-xs text-content-muted mt-2">Team Americano: you and your partner play every round together against a different team each time.</p>
+                )}
               </div>
             </Card>
         )}

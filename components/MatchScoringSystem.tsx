@@ -75,7 +75,8 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
     if (score && (score as any).americanoTargetPoints) return Number((score as any).americanoTargetPoints);
     return 24;
   });
-  const [americanoMode, setAmericanoMode] = useState<'first_to' | 'fixed_total'>(() => {
+  // 'timed' (Team Americano): no automatic end, the referee ends the match at the buzzer.
+  const [americanoMode, setAmericanoMode] = useState<'first_to' | 'fixed_total' | 'timed'>(() => {
     if (score && (score as any).americanoMode) return (score as any).americanoMode;
     return 'fixed_total';
   });
@@ -284,7 +285,7 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
     ? {
         a: matchState.pointsA.toString(),
         b: matchState.pointsB.toString(),
-        label: `Americano Rally Play (Target: ${americanoTargetPoints})`,
+        label: americanoMode === 'timed' ? 'Americano Rally Play (Timed)' : `Americano Rally Play (Target: ${americanoTargetPoints})`,
         isDeuce: false,
         advTeam: matchState.pointsA === matchState.pointsB ? null : (matchState.pointsA > matchState.pointsB ? 'A' : 'B')
       }
@@ -365,7 +366,7 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
         if (nextState.pointsA >= americanoTargetPoints || nextState.pointsB >= americanoTargetPoints) {
           isCompleted = true;
         }
-      } else { // fixed_total
+      } else if (americanoMode === 'fixed_total') {
         if (nextState.pointsA + nextState.pointsB >= americanoTargetPoints) {
           isCompleted = true;
         }
@@ -646,6 +647,7 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
               <div className="flex flex-wrap items-center justify-center gap-1 px-2 py-0.5 rounded-lg bg-[#1A1A1A] border border-white/5">
                 <span className="text-[9px] font-black tracking-wider uppercase text-[#E65C31] mr-1">Americano</span>
                 
+                {americanoMode !== 'timed' && (
                 <div className="flex items-center gap-1 text-[9px] text-gray-400 font-bold">
                   <span>Target:</span>
                   <select 
@@ -653,11 +655,12 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
                     onChange={(e) => setAmericanoTargetPoints(Number(e.target.value))}
                     className="bg-black border border-white/10 text-white rounded px-1.5 py-0.5 text-[9px] focus:outline-none focus:border-[#4D78FF]"
                   >
-                    {[12, 16, 21, 24, 32, 40].map(pt => (
+                    {Array.from(new Set([12, 16, 21, 24, 32, 40, americanoTargetPoints])).sort((a, b) => a - b).map(pt => (
                       <option key={pt} value={pt}>{pt}</option>
                     ))}
                   </select>
                 </div>
+                )}
 
                 <div className="flex items-center gap-1 text-[9px] text-gray-400 font-bold">
                   <span>Rule:</span>
@@ -668,6 +671,7 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
                   >
                     <option value="fixed_total">Fixed (Sum)</option>
                     <option value="first_to">First to</option>
+                    <option value="timed">Timed</option>
                   </select>
                 </div>
               </div>

@@ -55,6 +55,26 @@ import {
     OnboardedTeam
 } from '../types';
 import { getPointsSystem, getMatchStage, buildKnockoutRoundSizes, loserStage, placementPoints, STAGE_WEIGHT } from '../lib/pointsSystems';
+import {
+    TEAM_AMERICANO,
+    isTeamAmericanoFormat,
+    getActiveFormat,
+    getTeamAmericanoConfig,
+    resolveTeamAmericanoConfig,
+    suggestedRounds,
+    buildRoundRobinPlan,
+    planRemainingRounds,
+    layoutRound,
+    getRoundOverview,
+    computeTeamAmericanoStandings,
+    buildFinalsPlan,
+    isTeamActive,
+    isMatchStarted,
+    isMatchFinished,
+    isFinalsMatch,
+    formatLabel,
+} from '../lib/teamAmericano';
+import type { TeamAmericanoConfig } from '../types';
 
 // ==================================================================
 // ⚙️ CONFIGURATION
@@ -223,6 +243,8 @@ export const syncPlayerMatchToHistory = async (match: Match, tournament?: Tourna
                     matchId: match.id,
                     tournamentId: match.tournamentId,
                     tournamentName: tData?.name || '',
+                    tournamentFormat: tData?.format || null,
+                    formatLabel: formatLabel(tData?.format),
                     teamId: team.id,
                     opponentTeamId: opponent ? opponent.id : null,
                     won: isWinner,
@@ -1748,6 +1770,30 @@ export const updateTournamentTeamsGroups = async (tId: string, updates: Record<s
 
 // --- HELPER FUNCTIONS ---
 
+const AMERICANO_SCORE_MODE: Record<string, string> = { points_total: 'fixed_total', first_to: 'first_to', timed: 'timed' };
+
+/** Court/time + the scoring rule the referee screen should start with. */
+const withTeamAmericanoSlot = (m: Match, slot: { court: string; scheduledTime: string }, cfg: ReturnType<typeof resolveTeamAmericanoConfig>): Match => ({
+    ...m,
+    court: slot.court,
+    courtId: slot.court,
+    courtName: slot.court,
+    scheduledCourtId: slot.court,
+    scheduledTime: slot.scheduledTime,
+    scheduledStartTime: slot.scheduledTime,
+    score: {
+        ...m.score,
+        americanoTargetPoints: cfg.targetPoints,
+        americanoMode: AMERICANO_SCORE_MODE[cfg.scoringMode] || 'fixed_total',
+    } as any,
+});
+
+const teamAmericanoRoundStart = (start: Date, round: number, plans: { pairings: unknown[] }[], courts: string[], cfg: ReturnType<typeof resolveTeamAmericanoConfig>) => {
+    const maxMatches = Math.max(1, ...plans.map(p => p.pairings.length));
+    const waves = Math.ceil(maxMatches / Math.max(1, courts.length));
+    return new Date(start.getTime() + (round - 1) * waves * (cfg.roundDuration + cfg.breakMinutes) * 60000);
+};
+
 const calculateSchedule = (tournament: Tournament, knockoutConfig?: any[], autoConfig?: AutoScheduleConfig): Match[] => {
     let teams = tournament.teams?.filter(t => t.status === 'ACCEPTED') || [];
     if (autoConfig?.categoryId) {
@@ -1992,6 +2038,24 @@ const calculateSchedule = (tournament: Tournament, knockoutConfig?: any[], autoC
             s2.nextMatchId = f.id;
             matches = [...matches, s1, s2, f];
         }
+    } else if (isTeamAmericanoFormat(activeFormat)) {
+        // Fixed pairs, rotating opponents. Odd counts give one team a bye per
+        // round (byes aren't stored as matches; standings derive them).
+        const cfg = getTeamAmericanoConfig(tournament, autoConfig?.categoryId);
+        if (teams.length < cfg.minTeams) {
+            throw new Error(`Team Americano needs at least ${cfg.minTeams} confirmed teams. Currently accepted: ${teams.length}`);
+        }
+        const rounds = cfg.rounds || suggestedRounds(teams.length);
+        const plans = buildRoundRobinPlan(teams.map(t => t.id), rounds);
+        const category = autoConfig?.categoryId ? tournament.categories?.find(c => c.id === autoConfig.categoryId) : undefined;
+        const courts = (autoConfig?.courts?.length ? autoConfig.courts : (category?.courts?.length ? category.courts : tournament.courts)) || [];
+        const start = tournament.startDate ? new Date(tournament.startDate) : new Date();
+        matches = plans.flatMap(plan =>
+            layoutRound(plan, courts, cfg, teamAmericanoRoundStart(start, plan.round, plans, courts, cfg)).map(slot => {
+                const m = createMatchBase(slot.team1Id, slot.team2Id, slot.round, `Round ${slot.round}`, 'GROUP');
+                return withTeamAmericanoSlot(m, slot, cfg);
+            })
+        );
     } else if (activeFormat === TournamentFormat.AMERICANO || activeFormat === TournamentFormat.MEXICANO) {
         const rawPlayers = teams.map(t => ({ id: t.id, name: t.name }));
         const genIdStr = () => Math.random().toString(36).substr(2, 9);
@@ -2298,6 +2362,10 @@ const teamsNeedUpdate = (current: Team[], computed: Team[]): boolean => {
             (c.pointDifferential || 0) !== (comp.pointDifferential || 0) ||
             (c.gd || 0) !== (comp.gd || 0) ||
             (c.missedMatchPoints || 0) !== (comp.missedMatchPoints || 0) ||
+            (c.byes || 0) !== (comp.byes || 0) ||
+            (c.standingRank || 0) !== (comp.standingRank || 0) ||
+            !!c.tieUnresolved !== !!comp.tieUnresolved ||
+            (c.knockoutStage || '') !== (comp.knockoutStage || '') ||
             (comp.categoryId && c.categoryId !== comp.categoryId) ||
             (comp.categoryName && c.categoryName !== comp.categoryName)
         ) {
@@ -2336,7 +2404,7 @@ export const checkAndHealTournamentStats = async (tournament: Tournament, matche
         if (targetCategoryId && targetCategoryId !== 'ALL' && targetCategoryId !== 'all') {
             const categoryTeams = teamsToUse.filter(t => isTeamInCategory(t, targetCategoryId, tournament, allMatches));
             const categoryMatches = allMatches.filter(m => isMatchInCategory(m, targetCategoryId, tournament));
-            const computedCategory = calculateStats(categoryTeams, categoryMatches, tournament.format, tournament.categories, tournament.pointsSystem);
+            const computedCategory = calculateStatsForTournament(tournament, categoryTeams, categoryMatches, targetCategoryId);
 
             if (force || teamsNeedUpdate(categoryTeams, computedCategory)) {
                 // Merge computed category teams into teamsToUse without touching other categories
@@ -2373,7 +2441,7 @@ export const checkAndHealTournamentStats = async (tournament: Tournament, matche
                     const catTeams = teamsToUse.filter(t => isTeamInCategory(t, cat.id, tournament, allMatches));
                     if (catTeams.length === 0) continue;
                     const catMatches = allMatches.filter(m => isMatchInCategory(m, cat.id, tournament));
-                    const compCat = calculateStats(catTeams, catMatches, tournament.format, tournament.categories, tournament.pointsSystem);
+                    const compCat = calculateStatsForTournament(tournament, catTeams, catMatches, cat.id);
                     if (force || teamsNeedUpdate(catTeams, compCat)) {
                         anyUpdated = true;
                         compCat.forEach(tea => {
@@ -2389,7 +2457,7 @@ export const checkAndHealTournamentStats = async (tournament: Tournament, matche
                     }
                 }
             } else {
-                const computed = calculateStats(teamsToUse, allMatches, tournament.format, tournament.categories, tournament.pointsSystem);
+                const computed = calculateStatsForTournament(tournament, teamsToUse, allMatches);
                 if (force || teamsNeedUpdate(teamsToUse, computed)) {
                     anyUpdated = true;
                     updatedTeams = computed;
@@ -2415,6 +2483,48 @@ export const checkAndHealTournamentStats = async (tournament: Tournament, matche
     }
 };
 
+// Team placement + per-win ranking points for the tournament's points plan.
+const rankingPointsFor = (t: Team, pointsSystem: ReturnType<typeof getPointsSystem>) => {
+    if (pointsSystem.id === 'matchup') {
+        // Original Matchup team ranking points, unchanged.
+        let pts = 50;
+        if (t.knockoutStage === 'CHAMPION') pts = 1000;
+        else if (t.knockoutStage === 'RUNNER_UP') pts = 600;
+        else if (t.knockoutStage === 'SEMI_FINALIST') pts = 300;
+        else if (t.knockoutStage === 'QUARTER_FINALIST') pts = 150;
+        return pts + (t.wins || 0) * 50;
+    }
+    return placementPoints(pointsSystem, t.knockoutStage) + (t.wins || 0) * pointsSystem.perWin;
+};
+
+/**
+ * calculateStats with the right format/config for a tournament or one of its
+ * categories. Non-Team-Americano tournaments behave exactly as before; a Team
+ * Americano tournament (or category) is ranked with its own rules.
+ */
+export const calculateStatsForTournament = (t: Tournament, teams: Team[], matches: Match[], categoryId?: string | null): Team[] => {
+    const statsFor = (catId: string | null | undefined, ts: Team[], ms: Match[]) => {
+        const isTA = isTeamAmericanoFormat(getActiveFormat(t, catId));
+        return calculateStats(ts, ms, isTA ? TEAM_AMERICANO as TournamentFormat : t.format, t.categories || [], t.pointsSystem, isTA ? getTeamAmericanoConfig(t, catId) : undefined);
+    };
+    if (categoryId && categoryId !== 'ALL' && categoryId !== 'all') return statsFor(categoryId, teams, matches);
+
+    const taCategories = (t.categories || []).filter(c => isTeamAmericanoFormat(c.format));
+    if (taCategories.length === 0) return statsFor(null, teams, matches);
+
+    // Mixed tournament: rank each Team Americano category on its own.
+    const handled = new Set<string>();
+    const out: Team[] = [];
+    taCategories.forEach(cat => {
+        const catTeams = teams.filter(tm => isTeamInCategory(tm, cat.id, t, matches));
+        catTeams.forEach(tm => handled.add(tm.id));
+        out.push(...statsFor(cat.id, catTeams, matches.filter(m => isMatchInCategory(m, cat.id, t))));
+    });
+    const rest = teams.filter(tm => !handled.has(tm.id));
+    if (rest.length > 0) out.push(...calculateStats(rest, matches.filter(m => !taCategories.some(c => isMatchInCategory(m, c.id, t))), t.format, t.categories || [], t.pointsSystem));
+    return out;
+};
+
 // Knockout matches are labelled inconsistently in real data: newer ones carry stage 'KNOCKOUT',
 // older/manual ones have a blank stage and only a roundName like "Round of 16 - 3" or "Quarterfinal 2".
 export const isKnockoutMatch = (m: any): boolean => {
@@ -2426,9 +2536,17 @@ export const isKnockoutMatch = (m: any): boolean => {
     return /FINAL|QUARTER|SEMI|ROUND OF|PLAYOFF|KNOCKOUT|\b1\/[248]\b/.test(name);
 };
 
-export const calculateStats = (teams: Team[], matches: Match[], format: TournamentFormat, categories?: any[], pointsSystemId?: string): Team[] => {
+export const calculateStats = (teams: Team[], matches: Match[], format: TournamentFormat, categories?: any[], pointsSystemId?: string, teamAmericanoConfig?: TeamAmericanoConfig): Team[] => {
     if (!teams) return [];
     const pointsSystem = getPointsSystem(pointsSystemId);
+
+    if (isTeamAmericanoFormat(format)) {
+        // Own ranking rules (points, then the admin's tiebreaker order); the
+        // returned order is final, so only the ranking points are added here.
+        const ranked = computeTeamAmericanoStandings(teams, matches || [], teamAmericanoConfig) as Team[];
+        ranked.forEach(t => (t.fipPpfPoints = rankingPointsFor(t, pointsSystem)));
+        return ranked;
+    }
     // Whole-draw round sizes so generically named knockout rounds can still be
     // identified (e.g. a 16-match round is R32).
     const knockoutRoundSizes = buildKnockoutRoundSizes(matches || [], isKnockoutMatch);
@@ -2704,19 +2822,7 @@ export const calculateStats = (teams: Team[], matches: Match[], format: Tourname
             t.pointDifferential = t.gd;
         }
 
-        let fipPts = 0;
-        if (pointsSystem.id === 'matchup') {
-            // Original Matchup team ranking points, unchanged.
-            if (t.knockoutStage === 'CHAMPION') fipPts = 1000;
-            else if (t.knockoutStage === 'RUNNER_UP') fipPts = 600;
-            else if (t.knockoutStage === 'SEMI_FINALIST') fipPts = 300;
-            else if (t.knockoutStage === 'QUARTER_FINALIST') fipPts = 150;
-            else fipPts = 50;
-            fipPts += (t.wins || 0) * 50;
-        } else {
-            fipPts = placementPoints(pointsSystem, t.knockoutStage) + (t.wins || 0) * pointsSystem.perWin;
-        }
-        t.fipPpfPoints = fipPts;
+        t.fipPpfPoints = rankingPointsFor(t, pointsSystem);
     });
 
     // Sort by official Padel standings rules: Knockout Weight (Finals Winner #1) > FIP/PPF Points > Standings Points > Wins > Sets Diff > Games/Point Diff > Games Won > Name
@@ -2812,7 +2918,7 @@ export const generateSchedule = async (tId: string, knockoutConfig?: any[], auto
                 .map(d => ({ id: d.id, ...d.data() } as Match))
                 .filter(m => (m.status === MatchStatus.COMPLETED || String(m.status).toUpperCase() === 'FINISHED') && (!autoConfig?.categoryId || m.categoryId === autoConfig.categoryId));
 
-            const initialStandings = calculateStats(teamsForStandings, preservedMatches, tData.format, tData.categories || [], tData.pointsSystem);
+            const initialStandings = calculateStatsForTournament(tData, teamsForStandings, preservedMatches, autoConfig?.categoryId);
             initialStandings.forEach(team => {
                 const sRef = doc(standingsCol, team.id);
                 batch.set(sRef, cleanData(team));
@@ -2900,6 +3006,216 @@ export const appendNewMexicanoRound = async (tId: string) => {
     await batch.commit();
 };
 
+// ==================================================================
+// TEAM AMERICANO ADMIN ACTIONS
+// ==================================================================
+
+const loadTeamAmericanoContext = async (tId: string, categoryId?: string | null) => {
+    const tRef = doc(db, "tournaments", tId);
+    const snap = await getDoc(tRef);
+    if (!snap.exists()) throw new Error("Tournament not found.");
+    const tournament = { id: tId, ...snap.data() } as Tournament;
+    const matchesSnap = await getDocs(collection(db, "tournaments", tId, "matches"));
+    const allMatches = matchesSnap.docs.map(d => ({ id: d.id, ...d.data() } as Match));
+    const matches = allMatches.filter(m => isMatchInCategory(m, categoryId || null, tournament));
+    const teams = (tournament.teams || []).filter(t => isTeamInCategory(t, categoryId || null, tournament, allMatches));
+    const cfg = getTeamAmericanoConfig(tournament, categoryId);
+    const category = categoryId ? tournament.categories?.find(c => c.id === categoryId) : undefined;
+    const courts = (category?.courts?.length ? category.courts : tournament.courts) || [];
+    return { tRef, tournament, matches, teams, cfg, courts };
+};
+
+const writeMatchDoc = (batch: ReturnType<typeof writeBatch>, tId: string, m: Match) => {
+    batch.set(doc(db, "tournaments", tId, "matches", m.id), cleanData(m));
+    batch.set(doc(db, "matches", m.id), cleanData({ ...m, tournamentId: tId }));
+};
+
+const deleteMatchDoc = (batch: ReturnType<typeof writeBatch>, tId: string, mId: string) => {
+    batch.delete(doc(db, "tournaments", tId, "matches", mId));
+    batch.delete(doc(db, "matches", mId));
+};
+
+const newTeamAmericanoMatch = (tournament: Tournament, categoryId: string | null | undefined, team1: Team | undefined, team2: Team | undefined, round: number, roundName: string, stage: 'GROUP' | 'KNOCKOUT'): Match => ({
+    id: `m_ta_${genId()}${genId()}`,
+    tournamentId: tournament.id,
+    categoryId: categoryId || undefined,
+    team1Id: team1?.id || '',
+    team2Id: team2?.id || '',
+    team1Name: team1?.name || 'TBD',
+    team2Name: team2?.name || 'TBD',
+    team1PlayerNames: team1 ? [team1.player1?.name, team1.player2?.name].filter(Boolean).join(' & ') : '',
+    team2PlayerNames: team2 ? [team2.player1?.name, team2.player2?.name].filter(Boolean).join(' & ') : '',
+    status: MatchStatus.SCHEDULED,
+    score: { p1Points: '0', p2Points: '0', p1Games: 0, p2Games: 0, p1Sets: 0, p2Sets: 0, p1SetScores: [], p2SetScores: [], currentSet: 1, isTiebreak: false, history: [] },
+    round,
+    roundName,
+    stage,
+    scheduledTime: new Date().toISOString(),
+    actualCourtId: null,
+    courtOverrideBy: null,
+    courtOverrideAt: null,
+    conflictAcknowledged: null,
+});
+
+/**
+ * After a withdrawal/disqualification (or any change to the field), rebuilds
+ * every round that hasn't started yet. Rounds already under way are kept;
+ * their unplayed matches against a team that left are removed.
+ */
+export const regenerateTeamAmericanoRemainingRounds = async (tId: string, categoryId?: string | null) => {
+    const { tournament, matches, teams, cfg, courts } = await loadTeamAmericanoContext(tId, categoryId);
+    const roundMatches = matches.filter(m => !isFinalsMatch(m));
+    if (roundMatches.length === 0) throw new Error("Generate the schedule first.");
+
+    const overview = getRoundOverview(teams, roundMatches);
+    const keptRounds = overview.filter(r => r.started);
+    const openRounds = overview.filter(r => !r.started);
+    if (openRounds.length === 0) throw new Error("Every round has already started, so there's nothing left to regenerate.");
+
+    const active = teams.filter(t => t.status === 'ACCEPTED' && isTeamActive(t));
+    if (active.length < 2) throw new Error("At least 2 active teams are needed.");
+    const activeIds = new Set(active.map(t => t.id));
+
+    const batch = writeBatch(db);
+    // Unplayed matches in kept rounds that involve a team that's no longer active.
+    keptRounds.forEach(r => r.matches.forEach(m => {
+        if (!isMatchStarted(m) && (!activeIds.has(m.team1Id || '') || !activeIds.has(m.team2Id || ''))) deleteMatchDoc(batch, tId, m.id);
+    }));
+    openRounds.forEach(r => r.matches.forEach(m => deleteMatchDoc(batch, tId, m.id)));
+
+    const playedPairs = keptRounds.flatMap(r => r.matches)
+        .filter(m => isMatchStarted(m) && m.team1Id && m.team2Id)
+        .map(m => [m.team1Id!, m.team2Id!] as [string, string]);
+    const byeCounts: Record<string, number> = {};
+    keptRounds.forEach(r => r.byeTeamIds.forEach(id => (byeCounts[id] = (byeCounts[id] || 0) + 1)));
+
+    const plans = planRemainingRounds(active.map(t => t.id), playedPairs, byeCounts, openRounds.map(r => r.round));
+    const fallbackStart = tournament.startDate ? new Date(tournament.startDate) : new Date();
+    plans.forEach(plan => {
+        const old = openRounds.find(r => r.round === plan.round);
+        const oldStart = old?.matches.map(m => m.scheduledTime).filter(Boolean).sort()[0];
+        const roundStart = oldStart ? new Date(oldStart) : teamAmericanoRoundStart(fallbackStart, plan.round, plans, courts, cfg);
+        layoutRound(plan, courts, cfg, roundStart).forEach(slot => {
+            const m = newTeamAmericanoMatch(tournament, categoryId, active.find(t => t.id === slot.team1Id), active.find(t => t.id === slot.team2Id), slot.round, `Round ${slot.round}`, 'GROUP');
+            writeMatchDoc(batch, tId, withTeamAmericanoSlot(m, slot, cfg));
+        });
+    });
+    await batch.commit();
+    await checkAndHealTournamentStats(tournament, [], categoryId, true);
+};
+
+/**
+ * Swaps two teams' places within a round that hasn't started. If one of them
+ * was sitting out (bye), the other one sits out instead.
+ */
+export const swapTeamAmericanoTeams = async (tId: string, round: number, teamAId: string, teamBId: string, categoryId?: string | null) => {
+    if (teamAId === teamBId) return;
+    const { tournament, matches, teams } = await loadTeamAmericanoContext(tId, categoryId);
+    const roundMatches = matches.filter(m => !isFinalsMatch(m) && (Number(m.round) || 1) === round);
+    if (roundMatches.some(isMatchStarted)) throw new Error(`Round ${round} has already started, so teams can't be swapped.`);
+
+    const teamA = teams.find(t => t.id === teamAId);
+    const teamB = teams.find(t => t.id === teamBId);
+    if (!teamA || !teamB) throw new Error("Team not found.");
+
+    const swapId = (id?: string) => (id === teamAId ? teamBId : id === teamBId ? teamAId : id);
+    const batch = writeBatch(db);
+    roundMatches.forEach(m => {
+        if (m.team1Id !== teamAId && m.team1Id !== teamBId && m.team2Id !== teamAId && m.team2Id !== teamBId) return;
+        const t1 = teams.find(t => t.id === swapId(m.team1Id));
+        const t2 = teams.find(t => t.id === swapId(m.team2Id));
+        const updates = {
+            team1Id: t1?.id || '',
+            team2Id: t2?.id || '',
+            team1Name: t1?.name || 'TBD',
+            team2Name: t2?.name || 'TBD',
+            team1PlayerNames: t1 ? [t1.player1?.name, t1.player2?.name].filter(Boolean).join(' & ') : '',
+            team2PlayerNames: t2 ? [t2.player1?.name, t2.player2?.name].filter(Boolean).join(' & ') : '',
+        };
+        batch.set(doc(db, "tournaments", tId, "matches", m.id), cleanData(updates), { merge: true });
+        batch.set(doc(db, "matches", m.id), cleanData({ ...updates, tournamentId: tId, id: m.id }), { merge: true });
+    });
+    await batch.commit();
+};
+
+/** Creates the optional playoff (top 2 final, or top 4 semis + final) from the final Americano standings. */
+export const generateTeamAmericanoFinals = async (tId: string, categoryId?: string | null) => {
+    const { tournament, matches, teams, cfg, courts } = await loadTeamAmericanoContext(tId, categoryId);
+    if (cfg.finals === 'none') throw new Error("Finals are turned off for this tournament.");
+    const roundMatches = matches.filter(m => !isFinalsMatch(m));
+    if (roundMatches.length === 0 || !roundMatches.every(isMatchFinished)) throw new Error("Finish every Americano round before creating the finals.");
+    const existingFinals = matches.filter(isFinalsMatch);
+    if (existingFinals.some(isMatchStarted)) throw new Error("The finals have already started.");
+
+    const standings = calculateStatsForTournament(tournament, teams, roundMatches, categoryId)
+        .filter(t => t.status === 'ACCEPTED' && isTeamActive(t));
+    const lastRound = Math.max(...roundMatches.map(m => Number(m.round) || 1));
+    const plan = buildFinalsPlan(standings.map(t => t.id), cfg.finals, lastRound);
+    if (plan.length === 0) throw new Error(`Not enough teams for ${cfg.finals === 'top4' ? 'semifinals' : 'a final'}.`);
+
+    const lastTime = roundMatches.map(m => m.scheduledTime).filter(Boolean).sort().pop();
+    const slotMs = (cfg.roundDuration + cfg.breakMinutes) * 60000;
+    const base = Math.max(Date.now(), lastTime ? new Date(lastTime).getTime() + slotMs : 0);
+    const courtList = courts.length > 0 ? courts : ['Court 1'];
+
+    const batch = writeBatch(db);
+    existingFinals.forEach(m => deleteMatchDoc(batch, tId, m.id));
+    const created: Record<string, Match> = {};
+    plan.forEach((slot, i) => {
+        const m = newTeamAmericanoMatch(tournament, categoryId, teams.find(t => t.id === slot.team1Id), teams.find(t => t.id === slot.team2Id), slot.round, slot.roundName, 'KNOCKOUT');
+        const court = courtList[slot.key === 'SF2' ? 1 % courtList.length : 0];
+        const time = new Date(base + (slot.key === 'F' && cfg.finals === 'top4' ? slotMs : 0)).toISOString();
+        created[slot.key] = withTeamAmericanoSlot(m, { court, scheduledTime: time }, cfg);
+    });
+    if (created.SF1 && created.SF2 && created.F) {
+        created.SF1.nextMatchId = created.F.id;
+        created.SF2.nextMatchId = created.F.id;
+        created.F.team1Dependency = { sourceType: 'MATCH_WINNER', sourceId: created.SF1.id };
+        created.F.team2Dependency = { sourceType: 'MATCH_WINNER', sourceId: created.SF2.id };
+    }
+    Object.values(created).forEach(m => writeMatchDoc(batch, tId, m));
+    await batch.commit();
+};
+
+/** Emails every player their court, time and opponent for a round, or tells them they have a bye. */
+export const sendTeamAmericanoRoundAlerts = async (tId: string, round: number, categoryId?: string | null) => {
+    const { tournament, matches, teams } = await loadTeamAmericanoContext(tId, categoryId);
+    const overview = getRoundOverview(teams, matches.filter(m => !isFinalsMatch(m))).find(r => r.round === round);
+    if (!overview) throw new Error(`Round ${round} isn't on the schedule.`);
+
+    const fmtTime = (iso?: string | null) => iso ? new Date(iso).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : 'TBD';
+    const mails: { to: string; subject: string; html: string }[] = [];
+    const notify = (team: Team | undefined, subject: string, body: string) => {
+        [team?.player1, team?.player2].forEach(p => {
+            if (!p?.email || p.email === 'none@none') return;
+            mails.push({
+                to: p.email,
+                subject,
+                html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;"><h2>${tournament.name}</h2><p>Hi ${p.name},</p>${body}<p style="color:#888;font-size:12px;">Team Americano · Match Up</p></div>`,
+            });
+        });
+    };
+
+    overview.matches.forEach(m => {
+        const court = String(m.court || '').replace(/"/g, '') || 'TBD';
+        [[m.team1Id, m.team2Name], [m.team2Id, m.team1Name]].forEach(([teamId, opponent]) => {
+            const team = teams.find(t => t.id === teamId);
+            notify(team, `Round ${round}: ${court} vs ${opponent}`, `<p>Round <strong>${round}</strong> is about to start. Your team <strong>${team?.name}</strong> plays <strong>${opponent}</strong> on <strong>${court}</strong> at <strong>${fmtTime(m.scheduledTime)}</strong>.</p>`);
+        });
+    });
+    overview.byeTeamIds.forEach(id => {
+        const team = teams.find(t => t.id === id);
+        notify(team, `Round ${round}: you have a bye`, `<p>Your team <strong>${team?.name}</strong> sits out round <strong>${round}</strong>. The bye still earns standings points, so you won't fall behind.</p>`);
+    });
+
+    const mailCollection = collection(db, 'mail');
+    await Promise.all(mails.map(m => addDoc(mailCollection, {
+        to: m.to,
+        message: { subject: `${tournament.name} · ${m.subject}`, from: "Match Up Tournaments <info@matchup.com.pk>", html: m.html },
+    })));
+    return mails.length;
+};
+
 export const updateMatchDetails = async (tId: any, mId: any, updates: any, ...args: any[]) => {
     if (updates.status === MatchStatus.COMPLETED && updates.winnerTeamId && db) {
         (async () => {
@@ -2933,7 +3249,7 @@ export const updateMatchDetails = async (tId: any, mId: any, updates: any, ...ar
                         const tSnapStats = await transaction.get(tRefStats);
                         if (tSnapStats.exists()) {
                             const t = tSnapStats.data() as Tournament;
-                            const updatedTeams = calculateStats(t.teams, updatedMatches, t.format, t.categories || [], t.pointsSystem);
+                            const updatedTeams = calculateStatsForTournament(t, t.teams, updatedMatches);
                             transaction.update(tRefStats, cleanData({ teams: updatedTeams }));
                             const standingsCol = collection(db, "tournaments", tId, "standings");
                             updatedTeams.forEach(tea => { 
@@ -3063,7 +3379,7 @@ export const updateMatchScore = async (tId: string, mId: string, newScore: Score
                 const winnerName = winnerId === match.team1Id ? match.team1Name : (winnerId === match.team2Id ? match.team2Name : "TBD");
                 updatedMatches = advanceBracket(updatedMatches, match, winnerId, winnerName || "TBD");
             }
-            const updatedTeams = calculateStats(t.teams, updatedMatches, t.format, t.categories || [], t.pointsSystem);
+            const updatedTeams = calculateStatsForTournament(t, t.teams, updatedMatches);
             t.matches = updatedMatches;
             t.teams = updatedTeams;
             notifyMock();
@@ -3178,13 +3494,13 @@ export const recalculateMatchResult = async (tId: string, mId: string, sets: any
         const p1Sets = sets.filter(s => s.team1 > s.team2).length;
         const p2Sets = sets.filter(s => s.team2 > s.team1).length;
         
+        const existingSnap = await getDoc(mRef);
+        const existing: any = existingSnap.exists() ? existingSnap.data() : {};
         let winnerId = '';
         if (p1Sets > p2Sets) {
-            const snap = await getDoc(mRef);
-            winnerId = snap.exists() ? snap.data().team1Id : '';
+            winnerId = existing.team1Id || '';
         } else if (p2Sets > p1Sets) {
-            const snap = await getDoc(mRef);
-            winnerId = snap.exists() ? snap.data().team2Id : '';
+            winnerId = existing.team2Id || '';
         }
 
         const p1Games = p1SetScores.reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0);
@@ -3202,8 +3518,10 @@ export const recalculateMatchResult = async (tId: string, mId: string, sets: any
             currentSet: sets.length,
             isTiebreak: false,
             history: [],
-            
-        };
+            // Keep the Americano scoring rule so the match still reads as a points match.
+            ...(existing.score?.americanoMode !== undefined ? { americanoMode: existing.score.americanoMode } : {}),
+            ...(existing.score?.americanoTargetPoints !== undefined ? { americanoTargetPoints: existing.score.americanoTargetPoints } : {}),
+        } as ScoreState;
 
         const updatePayload = cleanData({ 
             score: newScore, 
@@ -3254,7 +3572,7 @@ export const recalculateMatchResult = async (tId: string, mId: string, sets: any
                     const tSnapStats = await transaction.get(tRefStats);
                     if (tSnapStats.exists()) {
                         const tData = tSnapStats.data() as Tournament;
-                        const updatedTeams = calculateStats(tData.teams, updatedMatches, tData.format, tData.categories || [], tData.pointsSystem);
+                        const updatedTeams = calculateStatsForTournament(tData, tData.teams, updatedMatches);
                         transaction.update(tRefStats, cleanData({ teams: updatedTeams }));
                         
                         const standingsCol = collection(db, "tournaments", tId, "standings");

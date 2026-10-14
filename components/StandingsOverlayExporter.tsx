@@ -50,6 +50,8 @@ export const StandingsOverlayExporter: React.FC<StandingsOverlayExporterProps> =
 
     const sortTeams = (teamList: Team[]) => {
         return [...teamList].sort((a: any, b: any) => {
+            // Team Americano standings arrive already ranked (tiebreakers applied).
+            if (a.standingRank > 0 && b.standingRank > 0) return a.standingRank - b.standingRank;
             const ptsA = a.points || 0;
             const ptsB = b.points || 0;
             if (ptsB !== ptsA) return ptsB - ptsA;

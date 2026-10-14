@@ -4,7 +4,29 @@ export enum TournamentFormat {
   ROUND_ROBIN = 'ROUND_ROBIN',
   GROUP_TO_KNOCKOUT = 'GROUP_TO_KNOCKOUT',
   AMERICANO = 'AMERICANO',
-  MEXICANO = 'MEXICANO'
+  MEXICANO = 'MEXICANO',
+  TEAM_AMERICANO = 'TEAM_AMERICANO' // Fixed pairs, rotating opponents, ranked by points scored
+}
+
+// Team Americano (see lib/teamAmericano.ts). Missing fields fall back to
+// TEAM_AMERICANO_DEFAULTS, so older/partial configs stay valid.
+export type TeamAmericanoScoringMode = 'points_total' | 'first_to' | 'timed';
+export type TeamAmericanoTiebreaker = 'wins' | 'pointDiff' | 'headToHead' | 'fewestByes';
+export type TeamAmericanoByeScoring = 'average' | 'fixed' | 'zero';
+
+export interface TeamAmericanoConfig {
+  minTeams?: number;
+  rounds?: number; // unset = suggested (full round-robin)
+  scoringMode?: TeamAmericanoScoringMode;
+  targetPoints?: number; // points_total: combined score that ends a match; first_to: score a team must reach
+  roundDuration?: number; // minutes per match
+  breakMinutes?: number; // minutes between waves/rounds
+  byeScoring?: TeamAmericanoByeScoring;
+  byePoints?: number; // used when byeScoring === 'fixed'
+  tiebreakers?: TeamAmericanoTiebreaker[];
+  showPlayerStandings?: boolean;
+  finals?: 'none' | 'top2' | 'top4';
+  withdrawalRule?: 'keep' | 'void'; // played matches of a withdrawn/disqualified team
 }
 
 export enum RoundRobinType {
@@ -37,6 +59,7 @@ export enum SponsorTier {
 }
 
 export type BroadcastTheme = 'matchup' | 'fip' | 'light' | 'pinktober';
+export type NameDisplayMode = 'players' | 'team';
 
 export interface Sponsor {
   id: string;
@@ -107,7 +130,7 @@ export interface Team {
   name: string;
   player1: Player;
   player2: Player;
-  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN' | 'REPLACED' | string;
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN' | 'DISQUALIFIED' | 'REPLACED' | string;
   registeredAt: string;
   groupId?: string; 
   categoryId?: string; // Track which category this team belongs to
@@ -133,6 +156,11 @@ export interface Team {
   knockoutStage?: 'CHAMPION' | 'RUNNER_UP' | 'SEMI_FINALIST' | 'QUARTER_FINALIST' | '' | string;
   knockoutWeight?: number;
   fipPpfPoints?: number;
+  // Team Americano
+  byes?: number;
+  byePoints?: number;
+  standingRank?: number;
+  tieUnresolved?: boolean; // still level after every tiebreaker: admin decides / playoff
 }
 
 export interface MatchEvent {
@@ -319,6 +347,7 @@ export interface TournamentCategory {
   pointsForWin?: number;
   pointsForDraw?: number;
   pointsForLoss?: number;
+  teamAmericano?: TeamAmericanoConfig;
 }
 
 export interface Tournament {
@@ -356,6 +385,9 @@ export interface Tournament {
   sponsors?: Sponsor[]; 
   showNationFlags?: boolean; // Ask each player's country and show flags on broadcast
   broadcastTheme?: BroadcastTheme;
+  // What the broadcast screen and OBS overlay show for each side. Unset keeps
+  // the original behaviour: player names on broadcast, team name on OBS.
+  nameDisplay?: NameDisplayMode;
   pointsSystem?: string; // PointsSystemId from lib/pointsSystems; unset = Matchup Standard
   bannerUrl?: string;
   status: 'DRAFT' | 'ACTIVE' | 'COMPLETED' | 'RETIRED';
@@ -363,6 +395,7 @@ export interface Tournament {
   createdAt: string;
   slotDuration?: number;
   bufferTime?: number;
+  teamAmericano?: TeamAmericanoConfig;
 }
 
 export interface GlobalState {

@@ -18,6 +18,8 @@ import { TeamDetailsOverlay } from './TeamDetailsOverlay';
 import { TournamentBannerCard } from './TournamentBannerCard';
 import { motion, AnimatePresence } from 'motion/react';
 import { TournamentDetail } from './TournamentDetail';
+import { TeamAmericanoStandings } from './TeamAmericanoStandings';
+import { getActiveFormat, isTeamAmericanoFormat } from '../lib/teamAmericano';
 
 const getMatchTimestamp = (m: any): number => {
   const time = m.scheduledTime || m.scheduledAt;
@@ -1430,6 +1432,10 @@ export const StandingsTable = ({ tournamentId, categoryId, initialTeams, onTeamS
     const groupKeys = Object.keys(groups).sort();
     const isAmericano = tournament?.format === 'AMERICANO' || tournament?.format === 'MEXICANO';
 
+    if (tournament && isTeamAmericanoFormat(getActiveFormat(tournament, categoryId))) {
+        return <TeamAmericanoStandings tournament={tournament} categoryId={categoryId} matches={matches} onTeamSelect={onTeamSelect} />;
+    }
+
     return (
         <div className="space-y-8 w-full max-w-full">
             {groupKeys.map(gId => (
@@ -2276,8 +2282,13 @@ const BroadcastMatchCard = ({ match: initialMatch, tournament, theme }: { match:
     const doneSets = Math.min(p1SetScores.length, p2SetScores.length);
     const setInProgress = !finished && !score._isSetCompleted;
 
+    // Americano-style matches are one running points total: no set columns,
+    // the total sits in the score box (and stays there once the match ends).
+    const isPointsMatch = score.americanoMode !== undefined || score.americanoTargetPoints !== undefined;
+    const pointsTotal = (side: 1 | 2) => String((side === 1 ? score.p1Games : score.p2Games) ?? 0);
+
     // S1-S3: finished sets, then the set in progress, then dashes.
-    const setCells = (side: 1 | 2) => [0, 1, 2].map(i => {
+    const setCells = (side: 1 | 2) => isPointsMatch ? [0, 1, 2].map(() => ({ value: '-', state: 'empty' })) : [0, 1, 2].map(i => {
         if (i < doneSets) {
             const mine = side === 1 ? p1SetScores[i] : p2SetScores[i];
             const theirs = side === 1 ? p2SetScores[i] : p1SetScores[i];
@@ -2299,7 +2310,9 @@ const BroadcastMatchCard = ({ match: initialMatch, tournament, theme }: { match:
     const servingSlot = finished ? null : ({ p1: [1, 0], p2: [1, 1], p3: [2, 0], p4: [2, 1] } as Record<string, number[]>)[server] || null;
 
     const showFlags = !!tournament.showNationFlags;
-    const playersOf = (t: any) => [t?.player1, t?.player2]
+    // nameDisplay 'team' shows the team name instead of the two players.
+    const playersOf = (t: any) => tournament.nameDisplay === 'team' && t?.name ? [] : [t?.player1, t?.player2]
+        .filter(p => p?.name && String(p.name).toUpperCase() !== 'N/A')
         .map(p => ({ name: formatBroadcastPlayerName(p?.name), country: showFlags ? p?.country : undefined }))
         .filter(p => p.name);
     const teamLabel = (t: any, fallback?: string) => formatCleanName(t?.name || fallback).toUpperCase() || 'TBA';
@@ -2337,7 +2350,7 @@ const BroadcastMatchCard = ({ match: initialMatch, tournament, theme }: { match:
                     players={playersOf(t1)}
                     fallback={teamLabel(t1, match.team1Name)}
                     sets={setCells(1)}
-                    points={finished ? '' : points(score.p1Points)}
+                    points={isPointsMatch ? pointsTotal(1) : finished ? '' : points(score.p1Points)}
                     servingIdx={servingSlot && servingSlot[0] === 1 ? servingSlot[1] : null}
                     isWinner={finished && !!match.winnerTeamId && match.winnerTeamId === match.team1Id}
                 />
@@ -2347,7 +2360,7 @@ const BroadcastMatchCard = ({ match: initialMatch, tournament, theme }: { match:
                     players={playersOf(t2)}
                     fallback={teamLabel(t2, match.team2Name)}
                     sets={setCells(2)}
-                    points={finished ? '' : points(score.p2Points)}
+                    points={isPointsMatch ? pointsTotal(2) : finished ? '' : points(score.p2Points)}
                     servingIdx={servingSlot && servingSlot[0] === 2 ? servingSlot[1] : null}
                     isWinner={finished && !!match.winnerTeamId && match.winnerTeamId === match.team2Id}
                 />

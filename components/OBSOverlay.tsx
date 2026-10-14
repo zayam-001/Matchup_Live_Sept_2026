@@ -4,6 +4,7 @@ import styles from "./obs.module.css";
 import { Match, MatchStatus } from "../types";
 import { useMatchResult } from "../hooks/useMatchResult";
 import { useTournamentDoc } from "../hooks/useTournamentDoc";
+import { surnamePair, teamPlayerNames } from "../lib/nameDisplay";
 
 /**
  * OBS Broadcast Stream Overlay
@@ -19,6 +20,13 @@ function getTeamDisplayName(
   fallbackLabel: string = "TEAM"
 ): string {
   const tData = tournament?.teams?.find((t: any) => String(t.id) === String(teamId));
+  // Organiser chose player names: show both partners' surnames.
+  if (tournament?.nameDisplay === 'players') {
+    const players = teamPlayerNames(tData || teamObj);
+    if (players.length > 0) return surnamePair(players);
+    const fromMatch = String(playerNames || '').split(/\s*(?:&|\/)\s*/).filter(Boolean);
+    if (fromMatch.length > 0) return surnamePair(fromMatch);
+  }
   if (tData?.name && tData.name.trim()) {
     return tData.name.trim();
   }

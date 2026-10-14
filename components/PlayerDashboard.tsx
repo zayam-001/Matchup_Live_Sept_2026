@@ -12,6 +12,8 @@ import { ScorecardTemplate } from './ScorecardTemplate';
 import { toPng } from 'html-to-image';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { useAuth } from '../hooks/useAuth';
+import { TeamAmericanoPlayerCard } from './TeamAmericanoPlayerCard';
+import { getActiveFormat, isTeamAmericanoFormat } from '../lib/teamAmericano';
 
 const performanceData = [
   { month: 'Jan', matches: 2, wins: 1, winRate: 50 },
@@ -357,7 +359,7 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
         if (!myTeam || !t.matches) return [];
         return t.matches
             .filter(m => (m.team1Id === myTeam.id || m.team2Id === myTeam.id) && (m.status === 'COMPLETED' || String(m.status).toUpperCase() === 'FINISHED'))
-            .map(m => ({ ...m, tournamentId: t.id, tournamentName: t.name, myTeamId: myTeam.id, allTeams: t.teams }));
+            .map(m => ({ ...m, tournamentId: t.id, tournamentName: t.name, myTeamId: myTeam.id, allTeams: t.teams, isTeamAmericano: isTeamAmericanoFormat(getActiveFormat(t, myTeam.categoryId)) }));
     });
 
     const calculatedStats = React.useMemo(() => {
@@ -737,6 +739,25 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
                                 ))}
                             </div>
                         )}
+
+                        {/* Team Americano: my team, next match & court, byes */}
+                        {(() => {
+                            const taEntries = activeTournaments.flatMap(t => {
+                                const myTeam = t.teams?.find(team => (team?.player1?.email === player?.email || team?.player2?.email === player?.email) && team.status === 'ACCEPTED');
+                                return myTeam && isTeamAmericanoFormat(getActiveFormat(t, myTeam.categoryId)) ? [{ t, myTeam }] : [];
+                            });
+                            if (taEntries.length === 0) return null;
+                            return (
+                                <div className="space-y-4">
+                                    <h2 className="text-2xl font-black text-white tracking-tight italic uppercase flex items-center gap-2">
+                                        <Users className="text-brand" size={24} /> My Team
+                                    </h2>
+                                    {taEntries.map(({ t, myTeam }) => (
+                                        <TeamAmericanoPlayerCard key={`${t.id}_${myTeam.id}`} tournament={t} team={myTeam} playerEmail={player?.email} onOpen={() => onNavigate('live')} />
+                                    ))}
+                                </div>
+                            );
+                        })()}
 
                         {/* Active Matches Section */}
                         <div className="space-y-6">
@@ -1145,6 +1166,12 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
                                                         <span className="flex items-center gap-1"><Calendar size={12}/> {m.scheduledTime ? new Date(m.scheduledTime).toLocaleDateString() : 'Recent'}</span>
                                                         <span className="w-1 h-1 rounded-full bg-white/20 mx-1" />
                                                         {m.tournamentName}
+                                                        {m.isTeamAmericano && (
+                                                            <>
+                                                                <span className="w-1 h-1 rounded-full bg-white/20 mx-1" />
+                                                                <span className="text-brand">Team Americano</span>
+                                                            </>
+                                                        )}
                                                         {(m.stage?.toLowerCase().includes('final') || m.stage?.toLowerCase().includes('quarter') || m.stage?.toLowerCase().includes('semi')) && (
                                                             <>
                                                                 <span className="w-1 h-1 rounded-full bg-white/20 mx-1" />
