@@ -34,6 +34,14 @@ export const NavigationMenu: React.FC<NavigationMenuProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Keep the page underneath from scrolling while the menu covers it.
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, [isOpen]);
+
   const handleNavClick = (id: string) => {
     setIsOpen(false);
     setTimeout(() => {
@@ -48,26 +56,22 @@ export const NavigationMenu: React.FC<NavigationMenuProps> = ({
     }, 200);
   };
 
-  const menuVariants: any = {
-    closed: {
-      opacity: 0,
-      clipPath: "circle(0px at calc(100% - 40px) 40px)",
-      transition: {
-        type: "spring" as const,
-        stiffness: 400,
-        damping: 40
-      }
-    },
-    open: {
-      opacity: 1,
-      clipPath: "circle(200% at calc(100% - 40px) 40px)",
-      transition: {
-        type: "spring" as const,
-        stiffness: 20,
-        restDelta: 2,
-        duration: 0.5
-      }
-    }
+  // Opacity/transform only: these run on the compositor. The old version
+  // animated clip-path with an under-damped spring over a full-screen
+  // backdrop-blur, which re-blurred the live page behind it every frame and
+  // flickered (and kept flickering while live scores updated underneath).
+  const EASE_OUT = [0.22, 1, 0.36, 1] as const;
+  const overlayVariants = {
+    closed: { opacity: 0, transition: { duration: 0.2, ease: EASE_OUT } },
+    open: { opacity: 1, transition: { duration: 0.25, ease: EASE_OUT } },
+  };
+  const listVariants = {
+    closed: {},
+    open: { transition: { delayChildren: 0.05, staggerChildren: 0.05 } },
+  };
+  const itemVariants = {
+    closed: { opacity: 0, y: 16 },
+    open: { opacity: 1, y: 0, transition: { duration: 0.35, ease: EASE_OUT } },
   };
 
   const getMenuItems = () => {
@@ -143,25 +147,28 @@ export const NavigationMenu: React.FC<NavigationMenuProps> = ({
             initial="closed"
             animate="open"
             exit="closed"
-            variants={menuVariants}
-            className="fixed inset-0 bg-[#050818]/97 backdrop-blur-xl z-[9998] flex flex-col pointer-events-auto overflow-y-auto"
+            variants={overlayVariants}
+            className="fixed inset-0 bg-[#050818] z-[9998] flex flex-col pointer-events-auto overflow-y-auto overscroll-contain"
+            style={{ willChange: 'opacity' }}
+            role="dialog"
+            aria-modal="true"
           >
-            {/* Brand-consistent glow accent, matching the hero/final-cta treatment elsewhere on the site */}
-            <div className="pointer-events-none absolute top-[-20%] right-[-10%] w-[60vw] h-[60vw] max-w-[700px] max-h-[700px] rounded-full bg-[#E65C31]/10 blur-[120px]" />
+            {/* Brand glow: a static gradient instead of a 120px blur filter (cheap to paint, no repaint flicker) */}
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{ background: 'radial-gradient(circle at 85% 0%, rgba(230,92,49,0.14), transparent 45%)' }}
+            />
 
             <div className="relative z-10 flex items-center justify-between px-6 sm:px-10 pt-8">
               <MatchupLogo className="h-7 sm:h-8 w-auto opacity-90" />
             </div>
 
-            <ul className="relative z-10 flex flex-col w-full px-6 sm:px-10 py-14 flex-1 justify-center max-w-3xl mx-auto">
+            <motion.ul variants={listVariants} className="relative z-10 flex flex-col w-full px-6 sm:px-10 py-14 flex-1 justify-center max-w-3xl mx-auto">
               {menuItems.map((item, i) => (
-                <li
+                <motion.li
                   key={item.id}
-                  className={cn(
-                    "transition-all duration-500 transform border-t border-white/10 first:border-t-0",
-                    isOpen ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"
-                  )}
-                  style={{ transitionDelay: `${i * 80}ms` }}
+                  variants={itemVariants}
+                  className="border-t border-white/10 first:border-t-0"
                 >
                   <button
                     onClick={item.onClick}
@@ -189,9 +196,9 @@ export const NavigationMenu: React.FC<NavigationMenuProps> = ({
                       {item.icon}
                     </span>
                   </button>
-                </li>
+                </motion.li>
               ))}
-            </ul>
+            </motion.ul>
           </motion.div>
         )}
       </AnimatePresence>
