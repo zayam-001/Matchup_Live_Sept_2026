@@ -946,34 +946,29 @@ const RefereeCategoryView = ({
                     team1Name={startingMatch.team1Name}
                     team2Name={startingMatch.team2Name}
                     onClose={() => setStartingMatch(null)}
-                    onStart={async (courtId, courtName, conflictAcknowledged) => {
+                    onStart={(courtId, courtName, conflictAcknowledged) => {
                         const mToStart = startingMatch.match;
-                        // FIX (client feedback: failures only showed up in the
-                        // console): the modal used to close immediately,
-                        // before the write even started, so a failed start
-                        // looked identical to a successful one - the referee
-                        // had no idea the match never actually went live.
-                        // Now it stays open until the write settles; storage.ts
-                        // shows a toast on failure so this isn't silent either
-                        // way.
-                        try {
-                            await startMatch(selectedTournament.id, mToStart.id, courtId, courtName, null, conflictAcknowledged);
-                            const updatedMatch = {
-                                ...mToStart,
-                                status: MatchStatus.IN_PROGRESS,
-                                courtId: courtId || mToStart.scheduledCourtId || 'TBD',
-                                courtName: courtName || 'TBD',
-                                court: courtName || 'TBD',
-                                actualCourtId: courtId,
-                                conflictAcknowledged: conflictAcknowledged || null,
-                                obsEnabled: true
-                            };
-                            setSelectedMatch(updatedMatch);
-                        } catch (err) {
+                        // Open the scoring screen straight away (Firestore applies the
+                        // write locally at once; waiting for the server round-trip on
+                        // venue Wi-Fi made referees tap Start 4-5 times). If the write
+                        // ultimately fails, storage shows a toast and we drop back to
+                        // the match list so the referee knows it never went live.
+                        const updatedMatch = {
+                            ...mToStart,
+                            status: MatchStatus.IN_PROGRESS,
+                            courtId: courtId || mToStart.scheduledCourtId || 'TBD',
+                            courtName: courtName || 'TBD',
+                            court: courtName || 'TBD',
+                            actualCourtId: courtId,
+                            conflictAcknowledged: conflictAcknowledged || null,
+                            obsEnabled: true
+                        };
+                        setSelectedMatch(updatedMatch);
+                        setStartingMatch(null);
+                        startMatch(selectedTournament.id, mToStart.id, courtId, courtName, null, conflictAcknowledged).catch(err => {
                             console.error("Failed to start match", err);
-                        } finally {
-                            setStartingMatch(null);
-                        }
+                            setSelectedMatch(null);
+                        });
                     }}
                 />
             )}

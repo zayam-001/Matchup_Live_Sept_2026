@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Match, Tournament, MatchStatus } from '../types';
 import { getCourtsByVenueIds } from '../services/storage';
-import { MapPin, Copy, Check } from 'lucide-react';
+import { MapPin, Copy, Check, Loader2 } from 'lucide-react';
 
 interface StartMatchModalProps {
     tournament: Tournament;
@@ -12,25 +12,62 @@ interface StartMatchModalProps {
     onStart: (courtId: string | null, courtName: string | null, conflictAcknowledged?: boolean | null) => void;
 }
 
+// Courts rarely change during an event: keep them for the session so the list is
+// instant after the first load (and doesn't reload every time a score updates).
+const courtCache = new Map<string, any[]>();
+const courtRequests = new Map<string, Promise<any[]>>();
+const loadCourts = (venueIds: string[]) => {
+    const key = venueIds.slice().sort().join('|');
+    if (!courtRequests.has(key)) {
+        courtRequests.set(key, getCourtsByVenueIds(venueIds)
+            .then(res => {
+                const sorted = [...res].sort((a: any, b: any) => String(a.courtName || '').localeCompare(String(b.courtName || ''), undefined, { numeric: true }));
+                courtCache.set(key, sorted);
+                return sorted;
+            })
+            .catch(err => { courtRequests.delete(key); throw err; }));
+    }
+    return courtRequests.get(key)!;
+};
+
 export function RefereeStartMatchModal({ tournament, match, team1Name, team2Name, onClose, onStart }: StartMatchModalProps) {
     const [step, setStep] = useState<1 | 2>(1);
-    const [courts, setCourts] = useState<any[]>([]);
-    const [loadingCourts, setLoadingCourts] = useState(false);
+    const venueIds = useMemo(
+        () => (tournament.venueIds?.length ? tournament.venueIds : [tournament.venueId]).filter(Boolean) as string[],
+        // Only the venue list matters - not every live update of the tournament.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [(tournament.venueIds || []).join('|'), tournament.venueId]
+    );
+    const venueKey = venueIds.slice().sort().join('|');
+    const [courts, setCourts] = useState<any[]>(() => courtCache.get(venueKey) || []);
+    const [loadingCourts, setLoadingCourts] = useState(() => !courtCache.has(venueKey) && venueIds.length > 0);
     const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
+    const [starting, setStarting] = useState(false);
     const [copied, setCopied] = useState(false);
     const [conflictMatch, setConflictMatch] = useState<Match | null>(null);
     const [showConflictConfirm, setShowConflictConfirm] = useState(false);
 
+    // Load courts as soon as the modal opens (while the referee reads step 1),
+    // once per venue list.
     useEffect(() => {
-        if (step === 2) {
-            setLoadingCourts(true);
-            const venueIds = tournament.venueIds?.length ? tournament.venueIds : [tournament.venueId];
-            getCourtsByVenueIds(venueIds).then(res => {
-                setCourts(res);
-                setLoadingCourts(false);
-            }).catch(() => setLoadingCourts(false));
-        }
-    }, [step, tournament]);
+        if (!venueIds.length) { setLoadingCourts(false); return; }
+        let alive = true;
+        if (courtCache.has(venueKey)) { setCourts(courtCache.get(venueKey)!); setLoadingCourts(false); }
+        loadCourts(venueIds)
+            .then(res => { if (alive) setCourts(res); })
+            .catch(err => console.error('Failed to load courts', err))
+            .finally(() => { if (alive) setLoadingCourts(false); });
+        return () => { alive = false; };
+    }, [venueKey]);
+
+    // Pre-select the court this match was scheduled on (or the only court).
+    useEffect(() => {
+        if (selectedCourtId || !courts.length) return;
+        const scheduledId = (match as any).scheduledCourtId || match.courtId;
+        const scheduled = courts.find(c => c.id === scheduledId || (match.court && c.courtName === match.court));
+        if (scheduled) setSelectedCourtId(scheduled.id);
+        else if (courts.length === 1) setSelectedCourtId(courts[0].id);
+    }, [courts]);
 
     const handleCopyObsUrl = () => {
         const url = `https://matchup.com.pk/#obs/${tournament.id}/${match.id}`;
@@ -40,6 +77,7 @@ export function RefereeStartMatchModal({ tournament, match, team1Name, team2Name
     };
 
     const handleConfirmStart = (bypassConflict = false) => {
+        if (starting) return; // ignore repeat taps
         const c = courts.find(c => c.id === selectedCourtId);
         if (!c) return;
 
@@ -78,6 +116,8 @@ export function RefereeStartMatchModal({ tournament, match, team1Name, team2Name
             }
         }
 
+        setStarting(true);
+        setShowConflictConfirm(false);
         onStart(selectedCourtId, c.courtName, bypassConflict);
     };
 
@@ -196,15 +236,15 @@ export function RefereeStartMatchModal({ tournament, match, team1Name, team2Name
                                 &larr; Back
                             </button>
                             <button 
-                                disabled={!selectedCourtId}
+                                disabled={!selectedCourtId || starting}
                                 onClick={() => handleConfirmStart(false)}
-                                className={`flex-1 py-3 rounded-xl font-bold transition-colors ${
+                                className={`flex-1 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 ${
                                     selectedCourtId 
-                                        ? 'bg-brand hover:bg-brand-light text-content-inverse shadow-lg shadow-brand/20' 
+                                        ? 'bg-brand hover:bg-brand-light text-content-inverse shadow-lg shadow-brand/20 disabled:opacity-70' 
                                         : 'bg-surface-ground text-content-muted cursor-not-allowed'
                                 }`}
                             >
-                                Start Match
+                                {starting ? <><Loader2 size={18} className="animate-spin" /> Starting…</> : 'Start Match'}
                             </button>
                         </div>
                     </div>

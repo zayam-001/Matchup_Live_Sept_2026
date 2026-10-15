@@ -108,7 +108,22 @@ export const DownstreamActiveModal = ({ nextMatchId, onCancel }: any) => {
     );
 };
 
-export const ScoreCorrectionModal = ({ match, tournamentId, onCancel, onComplete }: any) => {
+const isMatchCompleted = (m: any) => ['COMPLETED', 'FINISHED'].includes(String(m?.status || '').toUpperCase());
+const POINTS_FORMATS = ['AMERICANO', 'MEXICANO', 'TEAM_AMERICANO'];
+const isPointsFormatFor = (tournament: Tournament, m: any) => {
+    const cat = m?.categoryId ? tournament.categories?.find(c => c.id === m.categoryId) : null;
+    return POINTS_FORMATS.includes(String(cat?.format || tournament.format));
+};
+// Both teams known, so a result can be entered (Americano rounds may carry player ids instead).
+const canEnterResult = (m: any) => !!((m?.team1Id && m?.team2Id) || (m?.team1PlayerIds?.length && m?.team2PlayerIds?.length));
+
+/**
+ * Enter or correct a match's final score from the admin portal. For a match
+ * that was never live-scored this completes it (status, winner, bracket,
+ * standings); for a completed match it corrects the result.
+ */
+export const ScoreCorrectionModal = ({ match, tournamentId, onCancel, onComplete, pointsMatch }: any) => {
+    const isCompleting = !isMatchCompleted(match);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [sets, setSets] = useState<{team1: number, team2: number}[]>(
@@ -116,15 +131,23 @@ export const ScoreCorrectionModal = ({ match, tournamentId, onCancel, onComplete
     );
 
     // Americano-style matches are one running points total, not sets.
-    const isPointsMatch = match.score?.americanoMode !== undefined || match.score?.americanoTargetPoints !== undefined;
+    const isPointsMatch = !!pointsMatch || match.score?.americanoMode !== undefined || match.score?.americanoTargetPoints !== undefined;
     const team1SetsWon = isPointsMatch ? (sets[0]?.team1 || 0) : sets.filter(s => s.team1 > s.team2).length;
     const team2SetsWon = isPointsMatch ? (sets[0]?.team2 || 0) : sets.filter(s => s.team2 > s.team1).length;
 
     const handleSave = async () => {
+        if (sets.every(s => !s.team1 && !s.team2)) {
+            setError(isPointsMatch ? 'Enter the points each side scored.' : 'Enter the games for at least one set.');
+            return;
+        }
+        if (!isPointsMatch && team1SetsWon === team2SetsWon) {
+            setError('The score has no winner yet - add the deciding set.');
+            return;
+        }
         try {
             setSubmitting(true);
             setError(null);
-            await recalculateMatchResult(tournamentId, match.id, sets, auth.currentUser?.uid || 'admin', auth.currentUser?.email || 'Admin');
+            await recalculateMatchResult(tournamentId, match.id, sets, auth.currentUser?.uid || 'admin', auth.currentUser?.email || 'Admin', { complete: isCompleting, pointsMatch: isPointsMatch });
             onComplete && onComplete();
         } catch (err: any) {
             console.error("Score correction error", err);
@@ -146,7 +169,7 @@ export const ScoreCorrectionModal = ({ match, tournamentId, onCancel, onComplete
         return (
             <div className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center p-4 z-[9999] backdrop-blur-md">
                 <div className="w-16 h-16 border-4 border-brand/20 border-t-brand rounded-full animate-spin mb-6"></div>
-                <h2 className="text-2xl font-black text-white tracking-widest uppercase shadow-sm">Updating Match Data</h2>
+                <h2 className="text-2xl font-black text-white tracking-widest uppercase shadow-sm">{isCompleting ? 'Completing Match' : 'Updating Match Data'}</h2>
                 <p className="text-content-muted mt-2">Recalculating standings and bracket paths...</p>
             </div>
         );
@@ -156,8 +179,8 @@ export const ScoreCorrectionModal = ({ match, tournamentId, onCancel, onComplete
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[9999] backdrop-blur-sm">
             <Card variant="panel" className="max-w-[500px] w-full border-brand/30 shadow-[0_0_50px_rgba(77,120,255,0.15)] overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="p-5 border-b border-white/5 shrink-0">
-                    <h3 className="text-xl font-bold flex items-center gap-2 text-white"><Edit3 className="text-brand"/> Edit Match Score</h3>
-                    <div className="text-xs text-content-muted mt-1 uppercase tracking-widest">{match.court || 'Court TBD'} &bull; Completed</div>
+                    <h3 className="text-xl font-bold flex items-center gap-2 text-white">{isCompleting ? <Check className="text-brand"/> : <Edit3 className="text-brand"/>} {isCompleting ? 'Enter Final Score' : 'Edit Match Score'}</h3>
+                    <div className="text-xs text-content-muted mt-1 uppercase tracking-widest">{match.court || 'Court TBD'} &bull; {isCompleting ? (String(match.status).toUpperCase() === 'IN_PROGRESS' || String(match.status).toUpperCase() === 'LIVE' ? 'Live' : 'Not played on live scoring') : 'Completed'}</div>
                 </div>
                 
                 <div className="p-5 overflow-y-auto flex-1">
@@ -211,7 +234,7 @@ export const ScoreCorrectionModal = ({ match, tournamentId, onCancel, onComplete
 
                     <div className="bg-[#E65C31]/10 border border-[#E65C31]/30 p-3 rounded-lg flex items-start gap-3">
                         <AlertTriangle className="text-[#E65C31] shrink-0 w-5 h-5"/>
-                        <p className="text-xs text-[#E65C31] font-medium leading-relaxed">This will recalculate standings and all match records for both teams instantly.</p>
+                        <p className="text-xs text-[#E65C31] font-medium leading-relaxed">{isCompleting ? 'This marks the match as completed, moves the winner on in the bracket and updates standings instantly.' : 'This will recalculate standings and all match records for both teams instantly.'}</p>
                     </div>
 
                     {error && <div className="mt-4 text-center text-accent-error text-sm font-bold">{error}</div>}
@@ -219,7 +242,7 @@ export const ScoreCorrectionModal = ({ match, tournamentId, onCancel, onComplete
                 
                 <div className="p-4 border-t border-white/5 flex gap-3 shrink-0">
                     <button onClick={onCancel} className="flex-1 py-3 rounded-xl font-bold bg-white/5 hover:bg-white/10 text-white transition-colors">Cancel</button>
-                    <button onClick={handleSave} className="flex-1 py-3 flex justify-center items-center rounded-xl font-bold bg-brand hover:bg-brand-light text-white transition-all shadow-lg shadow-brand/20">Save Changes</button>
+                    <button onClick={handleSave} className="flex-1 py-3 flex justify-center items-center gap-2 rounded-xl font-bold bg-brand hover:bg-brand-light text-white transition-all shadow-lg shadow-brand/20">{isCompleting ? <><Check size={18}/> Complete Match</> : 'Save Changes'}</button>
                 </div>
             </Card>
         </div>
@@ -4236,6 +4259,7 @@ const AutoMatchSuggestions = ({ tournament, matches, categoryId }: { tournament:
 const ScheduleTab = ({ tournament, categoryId }: { tournament: Tournament; categoryId: string | null }) => {
     const { matches: globalMatches } = useTournamentMatches(tournament.id);
     const [editingMatch, setEditingMatch] = useState<Match | null>(null);
+    const [scoringMatch, setScoringMatch] = useState<Match | null>(null);
     const [isSavingMatch, setIsSavingMatch] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [showGenerateConfirm, setShowGenerateConfirm] = useState(false);
@@ -4574,6 +4598,11 @@ const ScheduleTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                                     <div className="flex items-center justify-between w-full md:w-auto gap-4 text-sm text-content-secondary">
                                         <div className="flex items-center gap-2 flex-1 md:flex-initial justify-center md:justify-start"><Calendar size={14}/> {new Date(m.scheduledTime).toLocaleString([], { year: '2-digit', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                                         <Badge variant="neutral" className="font-mono">{m.court}</Badge>
+                                        {canEnterResult(m) && (
+                                            <button onClick={(e) => { e.stopPropagation(); setScoringMatch(m); }} className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap ${isMatchCompleted(m) ? 'bg-surface-ground text-content-muted hover:text-white hover:bg-surface-elevated' : 'bg-brand/15 text-brand hover:bg-brand hover:text-white'}`} title={isMatchCompleted(m) ? 'Edit final score' : 'Enter final score & complete'}>
+                                                {isMatchCompleted(m) ? <><Edit3 size={14}/> Score</> : <><Check size={14}/> Result</>}
+                                            </button>
+                                        )}
                                         <button onClick={(e) => { e.stopPropagation(); setEditingMatch(m); }} className="p-2 bg-surface-ground rounded-lg text-content-muted hover:text-white hover:bg-surface-elevated transition-all"><Edit3 size={16}/></button>
                                     </div>
                                 </Card>
@@ -4619,7 +4648,12 @@ const ScheduleTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                                             <div className="flex items-center justify-between w-full md:w-auto gap-4 text-sm text-content-secondary">
                                                 <div className="flex items-center gap-2 flex-1 md:flex-initial justify-center md:justify-start"><Calendar size={14}/> {new Date(m.scheduledTime).toLocaleString([], { year: '2-digit', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                                                 <Badge variant="neutral" className="font-mono">{m.court}</Badge>
-                                                <button onClick={(e) => { e.stopPropagation(); setEditingMatch(m); }} className="p-2 bg-surface-ground rounded-lg text-content-muted hover:text-white hover:bg-surface-elevated transition-all"><Edit3 size={16}/></button>
+                                                {canEnterResult(m) && (
+                                            <button onClick={(e) => { e.stopPropagation(); setScoringMatch(m); }} className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap ${isMatchCompleted(m) ? 'bg-surface-ground text-content-muted hover:text-white hover:bg-surface-elevated' : 'bg-brand/15 text-brand hover:bg-brand hover:text-white'}`} title={isMatchCompleted(m) ? 'Edit final score' : 'Enter final score & complete'}>
+                                                {isMatchCompleted(m) ? <><Edit3 size={14}/> Score</> : <><Check size={14}/> Result</>}
+                                            </button>
+                                        )}
+                                        <button onClick={(e) => { e.stopPropagation(); setEditingMatch(m); }} className="p-2 bg-surface-ground rounded-lg text-content-muted hover:text-white hover:bg-surface-elevated transition-all"><Edit3 size={16}/></button>
                                             </div>
                                         </Card>
                                     );
@@ -4644,9 +4678,16 @@ const ScheduleTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                     description="Update match details, schedule, and court."
                     size="sm"
                     footer={
-                        <button onClick={handleSaveEdit} disabled={isSavingMatch} className="w-full bg-brand text-content-inverse py-3 rounded-lg font-bold hover:bg-brand-light transition-colors shadow-lg shadow-brand/20 disabled:opacity-50 flex items-center justify-center">
-                            {isSavingMatch ? <Loader2 size={20} className="animate-spin" /> : "Save Details"}
-                        </button>
+                        <div className="flex flex-col gap-2 w-full">
+                            {canEnterResult(editingMatch) && (
+                                <button onClick={() => { setScoringMatch(editingMatch); setEditingMatch(null); }} className="w-full bg-white/10 hover:bg-white/20 font-bold py-3 rounded-lg flex items-center justify-center gap-2 border border-[#E65C31]/50 border-dashed text-[#E65C31] transition-colors">
+                                    {isMatchCompleted(editingMatch) ? <><Edit3 size={16}/> Correct Final Score</> : <><Check size={16}/> Enter Final Score &amp; Complete</>}
+                                </button>
+                            )}
+                            <button onClick={handleSaveEdit} disabled={isSavingMatch} className="w-full bg-brand text-content-inverse py-3 rounded-lg font-bold hover:bg-brand-light transition-colors shadow-lg shadow-brand/20 disabled:opacity-50 flex items-center justify-center">
+                                {isSavingMatch ? <Loader2 size={20} className="animate-spin" /> : "Save Details"}
+                            </button>
+                        </div>
                     }
                 >
                     <div className="space-y-4">
@@ -4860,6 +4901,15 @@ const ScheduleTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                         )}
                     </div>
                 </Sheet>
+            )}
+            {scoringMatch && (
+                <ScoreCorrectionModal
+                    match={scoringMatch}
+                    tournamentId={tournament.id}
+                    pointsMatch={isPointsFormatFor(tournament, scoringMatch)}
+                    onCancel={() => setScoringMatch(null)}
+                    onComplete={() => setScoringMatch(null)}
+                />
             )}
         </div>
     )
@@ -5192,6 +5242,7 @@ const KnockoutTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                 <ScoreCorrectionModal 
                     match={correctingScoreMatch}
                     tournamentId={tournament.id}
+                    pointsMatch={isPointsFormatFor(tournament, correctingScoreMatch)}
                     onCancel={() => setCorrectingScoreMatch(null)}
                     onComplete={() => setCorrectingScoreMatch(null)}
                 />
@@ -5207,9 +5258,9 @@ const KnockoutTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                     size="sm"
                     footer={
                         <div className="flex flex-col gap-2 w-full">
-                            {editingMatch.status === 'COMPLETED' && (
+                            {canEnterResult(editingMatch) && (
                                 <button onClick={() => { setCorrectingScoreMatch(editingMatch); setEditingMatch(null); }} className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 border border-[#E65C31]/50 border-dashed text-[#E65C31] transition-colors shadow-[0_0_15px_rgba(230,92,49,0.1)] hover:shadow-[0_0_25px_rgba(230,92,49,0.2)]">
-                                    <Edit3 size={16}/> Correct Final Score
+                                    {isMatchCompleted(editingMatch) ? <><Edit3 size={16}/> Correct Final Score</> : <><Check size={16}/> Enter Final Score &amp; Complete</>}
                                 </button>
                             )}
                             <button onClick={handleSaveEdit} disabled={isSavingMatch} className="w-full bg-brand text-content-inverse py-3 rounded-lg font-bold hover:bg-brand-light transition-colors shadow-lg shadow-brand/20 disabled:opacity-50 flex items-center justify-center">
@@ -5711,7 +5762,7 @@ const AddMatchPanel = ({ tournament, categoryId, onClose }: { tournament: Tourna
 };
 
 const AdminScoreEditor = ({ tournament, match, onClose }: { tournament: Tournament; match: Match; onClose: () => void }) => {
-    return <ScoreCorrectionModal match={match} tournamentId={tournament.id} onCancel={onClose} onComplete={onClose} />;
+    return <ScoreCorrectionModal match={match} tournamentId={tournament.id} pointsMatch={isPointsFormatFor(tournament, match)} onCancel={onClose} onComplete={onClose} />;
 };
 
 const ExpandableSection = ({ title, matches, defaultExpanded = false, tournament, onEdit }: { title: string, matches: Match[], defaultExpanded?: boolean, tournament: Tournament, onEdit: (match: Match) => void }) => {

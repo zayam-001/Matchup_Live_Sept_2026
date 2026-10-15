@@ -3484,7 +3484,12 @@ export const deleteKnockoutMatchCascade = async (tId: any, mId: any, ...args: an
     }
 };
 
-export const recalculateMatchResult = async (tId: string, mId: string, sets: any[], adminId: string, adminEmail: string) => {
+/**
+ * Saves a final score entered by an organiser. Used both to correct a completed
+ * match and (with opts.complete) to finish a match that was never live-scored:
+ * marks it completed, advances the bracket and recalculates standings.
+ */
+export const recalculateMatchResult = async (tId: string, mId: string, sets: any[], adminId: string, adminEmail: string, opts?: { complete?: boolean; pointsMatch?: boolean }) => {
     if (db) {
         const mRef = doc(db, "tournaments", tId, "matches", mId);
         const globalMatchRef = doc(db, "matches", mId);
@@ -3496,6 +3501,7 @@ export const recalculateMatchResult = async (tId: string, mId: string, sets: any
         
         const existingSnap = await getDoc(mRef);
         const existing: any = existingSnap.exists() ? existingSnap.data() : {};
+        const wasCompleted = String(existing.status || '').toUpperCase() === 'COMPLETED' || String(existing.status || '').toUpperCase() === 'FINISHED';
         let winnerId = '';
         if (p1Sets > p2Sets) {
             winnerId = existing.team1Id || '';
@@ -3521,13 +3527,21 @@ export const recalculateMatchResult = async (tId: string, mId: string, sets: any
             // Keep the Americano scoring rule so the match still reads as a points match.
             ...(existing.score?.americanoMode !== undefined ? { americanoMode: existing.score.americanoMode } : {}),
             ...(existing.score?.americanoTargetPoints !== undefined ? { americanoTargetPoints: existing.score.americanoTargetPoints } : {}),
+            // A points match entered by hand (never live-scored) still needs to read as one.
+            ...(opts?.pointsMatch && existing.score?.americanoMode === undefined && existing.score?.americanoTargetPoints === undefined ? { americanoMode: 'fixed_total' } : {}),
         } as ScoreState;
 
         const updatePayload = cleanData({ 
             score: newScore, 
             winnerTeamId: winnerId || null,
             lastModifiedBy: adminEmail,
-            status: MatchStatus.COMPLETED
+            status: MatchStatus.COMPLETED,
+            // First completion from the admin portal (no live scoring).
+            ...(opts?.complete && !wasCompleted ? {
+                resolutionType: 'MANUAL_ENTRY',
+                completedManuallyBy: adminEmail,
+                completedAt: new Date().toISOString(),
+            } : {}),
         });
 
         await updateDoc(mRef, updatePayload);
@@ -3535,6 +3549,16 @@ export const recalculateMatchResult = async (tId: string, mId: string, sets: any
             await updateDoc(globalMatchRef, updatePayload);
         } catch (e) {
             // might not exist globally
+        }
+
+        if (opts?.complete && !wasCompleted) {
+            // Same side effects as a referee finishing the match.
+            updateDoc(doc(db, "tournaments", tId), { completedMatchCount: increment(1) }).catch(e => console.warn("completedMatchCount update failed", e));
+            getDoc(doc(db, "tournaments", tId)).then(tSnap => {
+                if (tSnap.exists()) {
+                    syncPlayerMatchToHistory({ ...existing, id: mId, ...updatePayload } as Match, tSnap.data() as Tournament).catch(console.error);
+                }
+            }).catch(console.error);
         }
 
         // Trigger stats recalculation and bracket advancement
