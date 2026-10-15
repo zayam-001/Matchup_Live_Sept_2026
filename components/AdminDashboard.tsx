@@ -34,7 +34,7 @@ import { Tv } from 'lucide-react';
 import { Logo } from './ui/Logo';
 
 import { collection, doc, getDoc, query, where, getDocs } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, updateProfile } from 'firebase/auth';
 import { db, auth } from '../services/storage';
 
 import { deleteKnockoutMatchCascade, recalculateMatchResult, getAllRegisteredPlayers, mergePlayerProfiles } from '../services/storage';
@@ -288,9 +288,11 @@ const AdminShell: React.FC<{
     crumbs: string[];
     topActions?: React.ReactNode;
     userEmail?: string;
+    userName?: string;
+    onProfile?: () => void;
     children: React.ReactNode;
-}> = ({ collapsed, onToggle, mobileOpen, setMobileOpen, sections, footer, crumbs, topActions, userEmail, children }) => {
-    const nameParts = (userEmail || 'A').split('@')[0].split(/[\s._\-+0-9]+/).filter(Boolean);
+}> = ({ collapsed, onToggle, mobileOpen, setMobileOpen, sections, footer, crumbs, topActions, userEmail, userName, onProfile, children }) => {
+    const nameParts = (userName?.trim() || (userEmail || 'A').split('@')[0]).split(/[\s._\-+0-9]+/).filter(Boolean);
     const initials = (nameParts.length > 1 ? nameParts[0][0] + nameParts[1][0] : (nameParts[0] || 'A').slice(0, 2)).toUpperCase();
     const today = new Date().toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
     const renderItem = (it: ShellItem) => (
@@ -338,10 +340,76 @@ const AdminShell: React.FC<{
                     <div className="admx-top__right">
                         <span className="admx-date"><Calendar size={14} /> {today}</span>
                         {topActions}
-                        <span className="admx-avatar" title={userEmail}>{initials}</span>
+                        <button type="button" className="admx-avatar" title={`${userName || ''} ${userEmail ? `(${userEmail})` : ''} · Profile`.trim()} onClick={onProfile}>{initials}</button>
                     </div>
                 </header>
                 <div className="admx-content">{children}</div>
+            </div>
+        </div>
+    );
+};
+
+const ProfileModal: React.FC<{ email: string; initialName: string; onClose: () => void; onSaved: (name: string) => void; onLogout?: () => void }> = ({ email, initialName, onClose, onSaved, onLogout }) => {
+    const [name, setName] = useState(initialName);
+    const [saving, setSaving] = useState(false);
+    const [msg, setMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+    const save = async () => {
+        const clean = name.trim().replace(/\s+/g, ' ');
+        if (!clean) { setMsg({ tone: 'err', text: 'Enter a name.' }); return; }
+        if (!auth.currentUser) return;
+        setSaving(true); setMsg(null);
+        try {
+            await updateProfile(auth.currentUser, { displayName: clean });
+            onSaved(clean);
+            setMsg({ tone: 'ok', text: 'Name updated.' });
+        } catch (e: any) {
+            setMsg({ tone: 'err', text: e?.message || "Couldn't save. Try again." });
+        } finally { setSaving(false); }
+    };
+    const resetPassword = async () => {
+        try {
+            const { sendPasswordResetEmail } = await import('firebase/auth');
+            await sendPasswordResetEmail(auth, email);
+            setMsg({ tone: 'ok', text: `Password reset link sent to ${email}.` });
+        } catch (e: any) { setMsg({ tone: 'err', text: e?.message || "Couldn't send the email." }); }
+    };
+    return (
+        <div className="adm-modal admx-profile" onClick={onClose}>
+            <div className="adm-modal__sheet admx-profile__sheet" onClick={e => e.stopPropagation()}>
+                <div className="adm-modal__head">
+                    <div>
+                        <h2>Profile &amp; account</h2>
+                        <p className="adm-sub">How your name appears across the organizer portal.</p>
+                    </div>
+                    <button onClick={onClose} className="adm-icon-btn" aria-label="Close"><X size={18} /></button>
+                </div>
+                <div className="adm-modal__body admx-profile__body">
+                    <div>
+                        <label className="adm-label" htmlFor="admx-profile-name">Display name</label>
+                        <input id="admx-profile-name" className="adm-input" value={name} maxLength={60} placeholder="e.g. Taha Nadeem" autoFocus
+                            onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') save(); }} />
+                        <p className="admx-profile__hint">Shown in "Welcome back" and on your avatar.</p>
+                    </div>
+                    <div>
+                        <span className="adm-label">Email</span>
+                        <div className="admx-profile__static">{email}</div>
+                    </div>
+                    <div className="admx-profile__row">
+                        <div>
+                            <span className="adm-label">Password</span>
+                            <p className="admx-profile__hint">We'll email you a secure link to set a new one.</p>
+                        </div>
+                        <button type="button" className="adm-btn adm-btn--ghost" onClick={resetPassword}><Lock size={15} /> Send reset link</button>
+                    </div>
+                    {msg && <div className={`admx-profile__msg is-${msg.tone}`}>{msg.text}</div>}
+                    <div className="admx-profile__actions">
+                        {onLogout && <button type="button" className="adm-btn adm-btn--ghost admx-profile__logout" onClick={onLogout}><LogOut size={15} /> Log out</button>}
+                        <button type="button" className="adm-btn adm-btn--ghost" onClick={onClose}>Close</button>
+                        <button type="button" className="adm-btn adm-btn--primary" onClick={save} disabled={saving || name.trim() === initialName}>
+                            {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Save name
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -766,6 +834,9 @@ const getTournamentCredits = (t: any) => {
       try { return localStorage.getItem('adm_nav_collapsed') === '1'; } catch { return false; }
   });
   const [navMobileOpen, setNavMobileOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  // Shown name; updated right away after the organiser edits it.
+  const [profileName, setProfileName] = useState<string | null>(null);
   const toggleNav = () => setNavCollapsed(v => {
       try { localStorage.setItem('adm_nav_collapsed', v ? '0' : '1'); } catch { /* private mode */ }
       return !v;
@@ -802,8 +873,10 @@ const getTournamentCredits = (t: any) => {
   const activeCount = myTournaments.filter(t => lifecycleOf(t) === 'Ongoing').length;
   const upcomingCount = myTournaments.filter(t => lifecycleOf(t) === 'Upcoming').length;
   // "taha.nadeem@…" → "Taha"; a real display name wins when set.
+  const displayName = (profileName ?? currentUser?.displayName ?? '').trim();
   const firstName = (() => {
-      const raw = currentUser?.displayName?.trim() || (currentUser?.email || '').split('@')[0];
+      if (displayName) return displayName;
+      const raw = (currentUser?.email || '').split('@')[0];
       const word = raw.split(/[\s._\-+0-9]+/).find(Boolean) || 'Organizer';
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
   })();
@@ -834,18 +907,23 @@ const getTournamentCredits = (t: any) => {
   const statusRows = (['Ongoing', 'Upcoming', 'Completed', 'Draft', 'Retired'] as const).map(f => ({ label: f, count: myTournaments.filter(t => lifecycleOf(t) === f).length }));
   const recentTournaments = [...myTournaments].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).slice(0, 5);
 
+
+  const profileModal = profileOpen ? (
+      <ProfileModal
+          email={currentUser?.email || ''}
+          initialName={displayName}
+          onClose={() => setProfileOpen(false)}
+          onSaved={(name) => setProfileName(name)}
+          onLogout={onLogout}
+      />
+  ) : null;
+
   const footerNav: ShellItem[] = [
       { key: 'spectator', label: 'Spectator view', icon: <ExternalLink size={18} />, onClick: () => window.open('#live', '_blank') },
       { key: 'sync', label: 'Sync data', icon: <RefreshCcw size={18} />, onClick: async () => {
           try { alert('Starting sync...'); await syncAllDataToGlobal(); alert('Sync complete!'); } catch (e: any) { alert('Sync failed: ' + e.message); }
       } },
-      { key: 'password', label: 'Change password', icon: <Lock size={18} />, onClick: async () => {
-          try {
-              const { sendPasswordResetEmail } = await import('firebase/auth');
-              await sendPasswordResetEmail(auth, auth.currentUser?.email || '');
-              alert('Password reset email sent. Please check your inbox to change your password.');
-          } catch (e: any) { alert('Error: ' + e.message); }
-      } },
+      { key: 'profile', label: 'Profile & account', icon: <Settings size={18} />, onClick: () => setProfileOpen(true) },
       ...(onLogout ? [{ key: 'logout', label: 'Log out', icon: <LogOut size={18} />, onClick: onLogout, tone: 'danger' as const }] : []),
   ];
   const homeSections: ShellSection[] = [
@@ -874,6 +952,8 @@ const getTournamentCredits = (t: any) => {
               footer={footerNav}
               crumbs={['Organizer', 'Tournaments', editingId ? `Edit · ${editingName || 'Tournament'}` : 'New tournament']}
               userEmail={currentUser?.email}
+              userName={displayName}
+              onProfile={() => setProfileOpen(true)}
               topActions={<button onClick={closeWizard} className="adm-btn adm-btn--ghost admx-top__cta"><X size={16} /> Discard</button>}
           >
               <div className="adm admx-module">
@@ -899,6 +979,7 @@ const getTournamentCredits = (t: any) => {
                       />
                   </div>
               </div>
+          {profileModal}
           </AdminShell>
       );
   }
@@ -914,6 +995,8 @@ const getTournamentCredits = (t: any) => {
               footer={footerNav}
               crumbs={['Organizer', mainTab === 'merges' ? 'Merge profiles' : 'Dashboard']}
               userEmail={currentUser?.email}
+              userName={displayName}
+              onProfile={() => setProfileOpen(true)}
               topActions={<button onClick={() => setIsCreating(true)} className="adm-btn adm-btn--primary admx-top__cta"><Plus size={16} /> New tournament</button>}
           >
           <div className="adm" id="adm-top">
@@ -1251,6 +1334,7 @@ const getTournamentCredits = (t: any) => {
               />
           )}
           </div>
+          {profileModal}
           </AdminShell>
       )
   }
@@ -1282,12 +1366,14 @@ const getTournamentCredits = (t: any) => {
           mobileOpen={navMobileOpen}
           setMobileOpen={setNavMobileOpen}
           sections={[
-              ...homeSections,
-              { title: 'This tournament', items: workspaceNav },
+              { items: [{ key: 'back', label: 'All tournaments', icon: <ChevronLeft size={18} />, onClick: () => { closeWizard(); setSelectedTournamentId(null); setMainTab('tournaments'); } }] },
+              { title: activeTournament.name, items: workspaceNav },
           ]}
-          footer={footerNav}
+          footer={[]}
           crumbs={['Organizer', 'Tournaments', activeTournament.name]}
           userEmail={currentUser?.email}
+          userName={displayName}
+          onProfile={() => setProfileOpen(true)}
           topActions={<button onClick={(e) => handleEditTournament(e as any, activeTournament)} className="adm-btn adm-btn--ghost admx-top__cta"><Edit3 size={16} /> Edit</button>}
       >
       <div className="adm">
@@ -1376,7 +1462,8 @@ const getTournamentCredits = (t: any) => {
           <DeleteConfirmationModal target={deleteTarget} onCancel={() => setDeleteTarget(null)} onConfirm={confirmDelete} />
           <RetireConfirmationModal target={retireTarget} onCancel={() => setRetireTarget(null)} onConfirm={confirmRetire} />
       </div>
-      </AdminShell>
+      {profileModal}
+          </AdminShell>
   );
 };
 
@@ -4448,10 +4535,14 @@ const ScheduleTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                             Next Round
                         </button>
                     )}
+                    {/* Team Americano builds its rounds from its own panel below; the generic
+                        scheduler has no Team Americano branch and would wipe its unplayed rounds. */}
+                    {!isTeamAmericanoFormat(getActiveFormat(tournament, categoryId)) && (
                     <button onClick={handleGenerateClick} disabled={generating} className="bg-brand hover:bg-brand-light disabled:opacity-50 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-lg shadow-brand/20">
                         {generating ? <Loader2 size={16} className="animate-spin"/> : <RefreshCcw size={16}/>} 
                         {generating ? 'Generating...' : 'Auto-Schedule'}
                     </button>
+                    )}
                 </div>
             </div>
             

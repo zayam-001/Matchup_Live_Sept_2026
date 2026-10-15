@@ -23,7 +23,7 @@
   position: relative;
 }
 .adm::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(ellipse 60% 40% at 90% 0%, rgba(77, 120, 255, .12), transparent 70%), radial-gradient(ellipse 50% 40% at 0% 100%, rgba(77, 120, 255, .06), transparent 70%); }
-.adm > * { animation: adm-rise .6s var(--a-ease) both; }
+.adm > * { animation: adm-rise .6s var(--a-ease) backwards; }
 .adm > :nth-child(2) { animation-delay: .05s; } .adm > :nth-child(3) { animation-delay: .1s; } .adm > :nth-child(4) { animation-delay: .15s; } .adm > :nth-child(5) { animation-delay: .2s; }
 @keyframes adm-rise { from { opacity: 0; transform: translateY(16px); } }
 .adm h1, .adm h2, .adm h3 { text-transform: none; letter-spacing: -.02em; }
@@ -93,7 +93,7 @@
 
 /* ── Tournament cards ── */
 .adm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
-.adm-tcard { display: flex; flex-direction: column; border-radius: 20px; border: 1px solid var(--a-line); background: var(--a-panel); overflow: hidden; cursor: pointer; transition: transform .4s var(--a-ease), border-color .3s ease, box-shadow .4s ease; animation: adm-rise .6s var(--a-ease) both; animation-delay: calc(var(--i) * 40ms); }
+.adm-tcard { display: flex; flex-direction: column; border-radius: 20px; border: 1px solid var(--a-line); background: var(--a-panel); overflow: hidden; cursor: pointer; transition: transform .4s var(--a-ease), border-color .3s ease, box-shadow .4s ease; animation: adm-rise .6s var(--a-ease) backwards; animation-delay: calc(var(--i) * 40ms); }
 .adm-tcard:hover { transform: translateY(-4px); border-color: rgba(77, 120, 255, .45); box-shadow: 0 24px 60px rgba(0, 0, 0, .4), 0 0 0 1px rgba(77, 120, 255, .15); }
 .adm-tcard:focus-visible { outline: 2px solid var(--a-brand); outline-offset: 2px; }
 .adm-tcard__media { position: relative; height: 140px; overflow: hidden; background: #0f1015; }
@@ -432,3 +432,23 @@ button.admx-chip-ic:hover { color: #fff; border-color: var(--a-line-2); }
 .admx-bar__col em { background: rgba(255, 255, 255, .1); color: #fff; }
 .admx-bar.is-peak .admx-bar__col em { background: #fff; color: #0b0b0d; }
 .admx-bar__col span { min-height: 10px; }
+
+/* Profile & account */
+.admx-avatar { border: 0; cursor: pointer; transition: box-shadow .2s ease, transform .2s ease; }
+.admx-avatar:hover { box-shadow: 0 0 0 4px rgba(77, 120, 255, .35); }
+.admx-profile { align-items: center; }
+.admx-profile__sheet { max-width: 520px; }
+.admx-profile__body { display: flex; flex-direction: column; gap: 20px; }
+.admx-profile__hint { margin-top: 6px; font-size: 12px; color: var(--a-faint); }
+.admx-profile__static { height: 46px; display: flex; align-items: center; padding: 0 14px; border-radius: 12px; border: 1px solid var(--a-line); background: rgba(255, 255, 255, .02); color: rgba(255, 255, 255, .7); font-size: 14px; }
+.admx-profile__row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 18px; border-top: 1px solid var(--a-line); }
+.admx-profile__msg { padding: 10px 14px; border-radius: 12px; font-size: 13px; font-weight: 600; }
+.admx-profile__msg.is-ok { background: rgba(52, 211, 153, .1); color: var(--a-ok); }
+.admx-profile__msg.is-err { background: rgba(255, 46, 68, .1); color: #FF8B97; }
+.admx-profile__actions { display: flex; justify-content: flex-end; gap: 8px; }
+.admx-profile__actions .adm-btn:disabled { opacity: .5; cursor: default; }
+.admx-nav__title { overflow: hidden; text-overflow: ellipsis; }
+.admx-profile__logout { margin-right: auto; color: #FF6B7B; }
+.admx-nav--foot:not(:has(.admx-nav__item)) { border-top: 0; }
+/* Popups (z 50) must cover the sidebar on desktop; the mobile drawer keeps its own layer. */
+@media (min-width: 1024px) { .admx-side { z-index: 45; } }

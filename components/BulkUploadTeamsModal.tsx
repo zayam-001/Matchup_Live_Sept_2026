@@ -319,7 +319,7 @@ export const BulkUploadTeamsModal: React.FC<BulkUploadTeamsModalProps> = ({
             <div className="bg-[#0f1115] w-full max-w-5xl rounded-2xl border border-white/10 shadow-2xl relative flex flex-col h-fit">
                 <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#15181e] rounded-t-2xl">
                     <div>
-                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                        <h2 className="!text-xl !font-bold !tracking-normal text-white flex items-center gap-2">
                             <UploadCloud size={22} className="text-[#4D78FF]" />
                             Bulk Upload {isAmericanoMode ? "Players" : "Teams"}
                         </h2>
