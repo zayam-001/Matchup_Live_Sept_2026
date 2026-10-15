@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BootSplash } from './components/BootSplash';
 import { Layout } from './components/ui/Layout';
 import { LiveScoreboard } from './components/LiveScoreboard';
 import { RegistrationForm } from './components/RegistrationForm';
@@ -64,6 +65,7 @@ const App: React.FC = () => {
       const urlParams = window.location.search; // keep the query params
 
       if (currentPath === '/signup') {
+         try { sessionStorage.setItem('mu_auth_intent', 'signup'); } catch { /* private mode */ }
          window.location.replace(`${window.location.origin}/#auth-player`);
          return;
       }
@@ -240,7 +242,7 @@ const App: React.FC = () => {
   };
 
   if (loading) {
-    return <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white">Loading...</div>;
+    return <BootSplash />;
   }
 
   if (activeTab === 'obs') {

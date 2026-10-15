@@ -1,0 +1,143 @@
+/* ==========================================================================
+   Spectator Mode: Match Up navy / orange theme.
+   1) Purpose-built pieces: tournament hero, stats, actions, tab dock.
+   2) A theme layer (.spx) that re-skins the existing spectator views
+      (live cards, schedule, results, standings, feed, tournament list): the
+      flat near-black surfaces become layered navy glass, borders soften, the
+      brand orange leads and cards lift on hover. Data and logic untouched.
+   ========================================================================== */
+
+.spx, .spx-root {
+  --spx-navy: #020D45;
+  --spx-navy-2: #071550;
+  --spx-card: rgba(12, 28, 104, .72);
+  --spx-card-2: rgba(8, 21, 86, .85);
+  --spx-line: rgba(255, 255, 255, .09);
+  --spx-orange: #E55C30;
+  --spx-peach: #FF8A5B;
+  --spx-cream: #F6EDDC;
+  --spx-muted: #AAB0CC;
+  --spx-ease: cubic-bezier(.16, 1, .3, 1);
+  --spx-grad: linear-gradient(135deg, #FF8452 0%, #E55C30 52%, #D24B22 100%);
+}
+
+/* Page canvas (applies to the whole spectator flow). */
+.spx-root {
+  background:
+    radial-gradient(ellipse 70% 40% at 85% 0%, rgba(229, 92, 48, .12), transparent 70%),
+    radial-gradient(ellipse 80% 50% at 10% 40%, rgba(40, 70, 190, .16), transparent 70%),
+    linear-gradient(180deg, #020D45 0%, #041358 40%, #020B3B 100%);
+  min-height: 100vh;
+}
+
+/* ── Tournament hero ──────────────────────────────────────────────────────── */
+.spx-hero { position: relative; max-width: 80rem; margin: 0 auto 28px; min-height: min(560px, 72vh); border-radius: 32px; overflow: hidden; isolation: isolate; border: 1px solid rgba(255, 255, 255, .1); box-shadow: 0 40px 100px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .08); display: flex; flex-direction: column; justify-content: flex-end; animation: spx-rise .9s var(--spx-ease) both; }
+.spx-hero__media { position: absolute; inset: -60px 0; z-index: -2; transform: translate3d(0, var(--spx-par, 0px), 0); will-change: transform; }
+.spx-hero__media img { width: 100%; height: 100%; object-fit: cover; animation: spx-zoom 18s ease-in-out infinite alternate; }
+.spx-hero__art { position: absolute; inset: 0; background: radial-gradient(circle at 75% 25%, rgba(229, 92, 48, .45), transparent 45%), radial-gradient(circle at 15% 80%, rgba(77, 110, 255, .35), transparent 50%), linear-gradient(140deg, #0E2276, #050f45); }
+.spx-hero__art-court { position: absolute; inset: 20% 10% 10% 30%; border: 2px solid rgba(246, 237, 220, .18); border-radius: 14px; transform: perspective(700px) rotateX(55deg) rotateZ(-14deg); background: linear-gradient(90deg, transparent 49.6%, rgba(229, 92, 48, .4) 49.6% 50.4%, transparent 50.4%); }
+.spx-hero__shade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(2, 8, 40, .55) 0%, rgba(2, 8, 40, .1) 30%, rgba(2, 8, 40, .55) 62%, rgba(2, 10, 50, .97) 100%), linear-gradient(90deg, rgba(2, 8, 40, .75), transparent 60%); }
+.spx-hero__inner { position: relative; padding: 0 clamp(20px, 4vw, 48px) 26px; max-width: 900px; }
+.spx-hero__inner > * { animation: spx-rise .9s var(--spx-ease) both; }
+.spx-hero__inner > :nth-child(2) { animation-delay: .08s; } .spx-hero__inner > :nth-child(3) { animation-delay: .16s; } .spx-hero__inner > :nth-child(4) { animation-delay: .24s; }
+.spx-hero__chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.spx-status, .spx-chip, .spx-org { display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #fff; background: rgba(2, 8, 40, .55); border: 1px solid rgba(255, 255, 255, .16); backdrop-filter: blur(10px); }
+.spx-status--live { background: rgba(229, 92, 48, .92); border-color: transparent; }
+.spx-status--done { color: #C0C8DF; }
+.spx-org { text-transform: none; letter-spacing: 0; font-size: 12px; padding: 5px 13px 5px 5px; }
+.spx-org img, .spx-org__mono { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; background: var(--spx-grad); color: var(--spx-navy); font-weight: 900; font-size: 12px; }
+.spx-dot { width: 7px; height: 7px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px #fff; animation: spx-pulse 1.6s infinite; }
+@keyframes spx-pulse { 50% { opacity: .35; transform: scale(.75); } }
+.spx .spx-hero__title { margin: 18px 0 12px; font-size: clamp(38px, 6vw, 84px); font-weight: 900; line-height: .92; letter-spacing: -.045em; text-transform: none; color: #fff; text-shadow: 0 6px 40px rgba(0, 0, 0, .45); }
+.spx-hero__meta { display: flex; flex-wrap: wrap; gap: 8px 22px; color: #DCE1F2; font-size: 13px; font-weight: 600; }
+.spx-hero__meta span { display: inline-flex; align-items: center; gap: 7px; }
+.spx-hero__meta svg { color: var(--spx-peach); }
+.spx-hero__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.spx-btn { position: relative; display: inline-flex; align-items: center; gap: 9px; height: 48px; padding: 0 20px; border-radius: 999px; font-size: 13px; font-weight: 800; letter-spacing: .02em; transition: transform .25s var(--spx-ease), box-shadow .3s ease, background .3s ease, border-color .3s ease; cursor: pointer; }
+.spx-btn:active { transform: scale(.97); }
+.spx-btn--primary { background: var(--spx-grad); color: #fff; box-shadow: 0 14px 36px rgba(229, 92, 48, .35), inset 0 1px 0 rgba(255, 255, 255, .3); border: 0; }
+.spx-btn--primary:hover { transform: translateY(-2px); box-shadow: 0 20px 46px rgba(229, 92, 48, .45); }
+.spx-btn--ghost { background: rgba(255, 255, 255, .08); color: #fff; border: 1px solid rgba(255, 255, 255, .2); backdrop-filter: blur(10px); }
+.spx-btn--ghost:hover { background: rgba(255, 255, 255, .14); border-color: rgba(229, 92, 48, .5); }
+.spx-btn--icon { width: 48px; padding: 0; justify-content: center; background: rgba(255, 255, 255, .08); color: #fff; border: 1px solid rgba(255, 255, 255, .2); }
+.spx-btn--icon:hover { background: rgba(255, 255, 255, .16); }
+.spx-copied { position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); white-space: nowrap; padding: 6px 10px; border-radius: 8px; background: #fff; color: #111; font-size: 11px; font-weight: 800; }
+.spx-stats { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid rgba(255, 255, 255, .1); background: rgba(2, 10, 50, .72); backdrop-filter: blur(14px); }
+.spx-stat { display: flex; flex-direction: column; gap: 3px; padding: 16px clamp(16px, 3vw, 30px); border-left: 1px solid rgba(255, 255, 255, .08); animation: spx-rise .8s var(--spx-ease) both; }
+.spx-stat:first-child { border-left: 0; }
+.spx-stat:nth-child(2) { animation-delay: .06s; } .spx-stat:nth-child(3) { animation-delay: .12s; } .spx-stat:nth-child(4) { animation-delay: .18s; }
+.spx-stat__icon { color: var(--spx-orange); margin-bottom: 4px; }
+.spx-stat strong { font-size: clamp(20px, 2.2vw, 28px); font-weight: 900; letter-spacing: -.03em; color: #fff; }
+.spx-stat strong em { font-style: normal; font-size: .6em; color: var(--spx-muted); margin-left: 2px; }
+.spx-stat small { font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--spx-muted); }
+.spx-stat--prize strong { color: #fff; }
+@keyframes spx-rise { from { opacity: 0; transform: translateY(24px); } }
+@keyframes spx-zoom { from { transform: scale(1.02); } to { transform: scale(1.1); } }
+
+/* ── Content panel + dock ─────────────────────────────────────────────────── */
+.spx-panel { border-radius: 28px; border: 1px solid var(--spx-line); background: linear-gradient(170deg, rgba(10, 26, 100, .55), rgba(4, 14, 66, .7)); backdrop-filter: blur(10px); box-shadow: 0 30px 80px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .06); overflow: hidden; animation: spx-rise .55s var(--spx-ease) both; }
+.spx-panel > div { min-height: 480px; }
+.spx-content-wrap { scroll-margin-top: 110px; }
+.spx-dock { background: rgba(4, 14, 66, .82); border: 1px solid rgba(255, 255, 255, .12); backdrop-filter: blur(18px) saturate(140%); box-shadow: 0 24px 60px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .08); }
+.spx-dock__pill { background: var(--spx-grad); box-shadow: 0 10px 26px rgba(229, 92, 48, .45); }
+.spx-dock button { position: relative; }
+.spx-dock__badge { position: absolute; top: 2px; right: 8px; min-width: 17px; height: 17px; padding: 0 5px; display: grid; place-items: center; border-radius: 999px; background: #fff; color: var(--spx-orange); font-size: 10px; font-weight: 900; box-shadow: 0 0 0 2px rgba(4, 14, 66, .9); }
+
+/* ── Theme layer over the existing spectator views ───────────────────────── */
+/* Flat near-black / grey surfaces → layered navy. */
+.spx-root [class*="bg-[#0A0A0A]"], .spx-root [class*="bg-[#0a0a0a]"], .spx-root [class*="bg-[#0d0d10]"],
+.spx-root [class*="bg-[#111111]"], .spx-root [class*="bg-[#111113]"], .spx-root [class*="bg-[#111114]"],
+.spx-root [class*="bg-[#050505]"] {
+  background-color: rgba(4, 16, 72, .78) !important;
+}
+.spx-root [class*="bg-[#18181b]"], .spx-root [class*="bg-[#1A1A1A]"], .spx-root [class*="bg-[#1a1a1a]"],
+.spx-root [class*="bg-[#1B1B1E]"], .spx-root [class*="bg-[#161616]"], .spx-root [class*="bg-surface-dark"],
+.spx-root [class*="bg-surface-panel"], .spx-root [class*="bg-surface-ground"], .spx-root [class*="bg-card-dark"] {
+  background-color: rgba(12, 30, 110, .62) !important;
+}
+.spx-root [class*="bg-gradient-to-"][class*="from-[#111113]"], .spx-root [class*="from-[#0A0A0A]"] { --tw-gradient-from: rgba(3, 12, 60, .96) var(--tw-gradient-from-position) !important; }
+.spx-root [class*="border-white/5"], .spx-root [class*="border-white/10"] { border-color: rgba(255, 255, 255, .09) !important; }
+/* Cards lift on hover with an orange edge. */
+.spx-root [class*="rounded-2xl"][class*="border"]:hover, .spx-root [class*="rounded-3xl"][class*="border"]:hover { border-color: rgba(229, 92, 48, .32) !important; }
+.spx-root [class*="rounded-2xl"][class*="border"], .spx-root [class*="rounded-3xl"][class*="border"] { transition: border-color .35s ease, transform .4s var(--spx-ease), box-shadow .4s ease; }
+/* Brand blue accents → Match Up orange (blue stays as the secondary in a few spots). */
+.spx-root [class*="text-[#4D78FF]"] { color: var(--spx-peach) !important; }
+.spx-root [class*="border-[#4D78FF]"] { border-color: rgba(229, 92, 48, .45) !important; }
+.spx-root [class*="from-[#4D78FF]"] { --tw-gradient-from: #FF8452 var(--tw-gradient-from-position) !important; }
+/* Table headers & rows. */
+.spx-root table thead { background: rgba(2, 10, 50, .7) !important; }
+.spx-root table tbody tr { transition: background .25s ease; }
+.spx-root table tbody tr:hover { background: rgba(229, 92, 48, .06) !important; }
+/* Headings: modern tracking. */
+.spx-root h1:not(.spx-hero__title), .spx-root h2, .spx-root h3 { letter-spacing: -.02em; }
+/* Gentle entrance for each list item / card. */
+.spx-root .spx-panel [class*="rounded-2xl"], .spx-root .spx-panel [class*="rounded-[16px]"] { animation: spx-rise .6s var(--spx-ease) both; }
+.spx-root .spx-panel [class*="grid"] > :nth-child(2) { animation-delay: .05s; }
+.spx-root .spx-panel [class*="grid"] > :nth-child(3) { animation-delay: .1s; }
+.spx-root .spx-panel [class*="grid"] > :nth-child(4) { animation-delay: .15s; }
+.spx-root .spx-panel [class*="grid"] > :nth-child(5) { animation-delay: .2s; }
+
+/* Sticky search / filter bar. */
+.spx-root .spx-bar { background: rgba(2, 13, 69, .82) !important; border-color: rgba(229, 92, 48, .16) !important; backdrop-filter: blur(20px) saturate(140%); }
+.spx-root .spx-bar input { background: rgba(255, 255, 255, .06) !important; border-color: rgba(255, 255, 255, .14) !important; }
+.spx-root .spx-bar input:focus { border-color: var(--spx-orange) !important; box-shadow: 0 0 0 4px rgba(229, 92, 48, .15) !important; }
+
+@media (max-width: 820px) {
+  .spx-hero { min-height: 520px; border-radius: 24px; }
+  .spx-stats { grid-template-columns: repeat(2, 1fr); }
+  .spx-stat:nth-child(3) { border-left: 0; }
+  .spx-stat:nth-child(n+3) { border-top: 1px solid rgba(255, 255, 255, .08); }
+  .spx-btn { height: 44px; padding: 0 16px; }
+  .spx-dock__badge { right: 2px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spx-root *, .spx-root *::before, .spx-root *::after { animation: none !important; }
+  .spx-hero__media { transform: none; }
+}
+
+/* Spectator list billboard (featured tournament). */
+.spx-billboard { isolation: isolate; border: 1px solid rgba(255, 255, 255, .1); box-shadow: 0 40px 100px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .08); background: #050f45; animation: spx-rise .9s var(--spx-ease) both; }
+.spx-billboard img { animation: spx-zoom 18s ease-in-out infinite alternate; }
+.spx-billboard .spx-hero__shade { z-index: 0; }
+.spx-billboard h1 { text-transform: none !important; letter-spacing: -.045em !important; font-size: clamp(40px, 6vw, 84px) !important; line-height: .92 !important; }
+.spx-billboard .spx-btn { text-transform: none; }

@@ -308,7 +308,7 @@ export default function OBSOverlay({
 
       {/* Primary Scoreboard Scorebug */}
       {activeOverlay === "scoreboard" && (
-        <div className={styles.obsCard} ref={cardRef}>
+        <div className={`${styles.obsCard} ${tournament?.broadcastTheme === 'sofcom' ? styles.themeSofcom : ''}`} ref={cardRef}>
           {/* Left Column: Team 1 & Team 2 Names + Server Indicator */}
           <div className={styles.obsLeftCol}>
             {/* Row 1: Team 1 */}

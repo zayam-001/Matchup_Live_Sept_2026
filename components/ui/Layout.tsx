@@ -218,7 +218,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
       />
       
       {/* Top Navigation - Minimal for Desktop/Mobile since we use Fullscreen Menu */}
-      {activeTab !== 'landing' && (
+      {/* The admin portal has its own sidebar + top bar. */}
+      {activeTab !== 'landing' && activeTab !== 'admin' && (
         <header className="fixed top-0 w-full h-16 md:h-24 flex items-center justify-between px-4 md:px-8 z-[10000] bg-transparent pointer-events-none border-none">
           <div className="flex items-center gap-4 pointer-events-auto">
             {/* Logo Area */}

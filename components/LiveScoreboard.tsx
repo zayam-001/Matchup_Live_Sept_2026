@@ -19,6 +19,7 @@ import { TournamentBannerCard } from './TournamentBannerCard';
 import { motion, AnimatePresence } from 'motion/react';
 import { TournamentDetail } from './TournamentDetail';
 import { TeamAmericanoStandings } from './TeamAmericanoStandings';
+import './spectator.css';
 import { getActiveFormat, isTeamAmericanoFormat } from '../lib/teamAmericano';
 
 const getMatchTimestamp = (m: any): number => {
@@ -233,9 +234,9 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
   }
   
   return (
-    <div className="relative min-h-screen">
+    <div className="spx-root relative min-h-screen">
       {/* Sticky Search & Filter Bar */}
-      <div className="sticky top-[72px] md:top-[88px] z-40 bg-[#0d0d10]/95 backdrop-blur-2xl border-b border-white/10 py-3.5 px-4 md:px-8 mb-4 shadow-xl transition-all">
+      <div className="spx-bar sticky top-[72px] md:top-[88px] z-40 bg-[#0d0d10]/95 backdrop-blur-2xl border-b border-white/10 py-3.5 px-4 md:px-8 mb-4 shadow-xl transition-all">
           <div className="max-w-7xl mx-auto space-y-2.5">
               <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
                   {/* Left Column: Context indicator or Back button */}
@@ -746,7 +747,7 @@ const TournamentList = ({ tournaments, onSelect, searchQuery = '', dateFilter = 
             {/* Cinematic Billboard (Hero Section) */}
             {activeCategoryTab === 'all' && !searchQuery && featuredTournament && (
                 <div 
-                    className="relative w-full h-[60vh] md:h-[75vh] flex items-end justify-start overflow-hidden rounded-3xl mb-16 border border-white/5 shadow-2xl bg-[#1B1B1E]"
+                    className="spx-billboard relative w-full h-[60vh] md:h-[72vh] flex items-end justify-start overflow-hidden rounded-[32px] mb-14"
                 >
                     {/* Background Banner */}
                     <div className="absolute inset-0">
@@ -758,14 +759,9 @@ const TournamentList = ({ tournaments, onSelect, searchQuery = '', dateFilter = 
                                 referrerPolicy="no-referrer"
                             />
                         ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-[#4D78FF]/20 via-[#111113] to-[#1B1B1E] flex items-center justify-center">
-                                <div className="absolute inset-0 opacity-5 bg-[linear-gradient(45deg,#fff_12.5%,transparent_12.5%,transparent_50%,#fff_50%,#fff_62.5%,transparent_62.5%,transparent_100%)] bg-[length:30px_30px]" />
-                            </div>
+                            <div className="spx-hero__art"><span className="spx-hero__art-court" /></div>
                         )}
-                        {/* Perfect cinematic dark overlays */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#111113] via-black/40 to-transparent" />
-                        <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/20 to-transparent" />
-                        <div className="absolute inset-0 bg-black/25" />
+                        <div className="spx-hero__shade" />
                     </div>
 
                     {/* Billboard Content */}
@@ -798,14 +794,14 @@ const TournamentList = ({ tournaments, onSelect, searchQuery = '', dateFilter = 
                         <div className="flex flex-wrap gap-3 pt-2">
                             <button 
                                 onClick={() => onSelect(featuredTournament.id)}
-                                className="bg-white text-black font-black uppercase tracking-widest text-[10px] md:text-xs px-8 py-3.5 rounded-xl hover:bg-[#4D78FF] hover:text-white transition-all shadow-xl hover:shadow-[#4D78FF]/20 cursor-pointer flex items-center gap-2 border-none"
+                                className="spx-btn spx-btn--primary"
                             >
                                 <Play size={14} fill="currentColor" />
                                 <span>Watch Live Arena</span>
                             </button>
                             <a 
                                 href={`#register/${featuredTournament.slug || featuredTournament.id}`}
-                                className="bg-white/10 hover:bg-white/15 text-white border border-white/10 font-black uppercase tracking-widest text-[10px] md:text-xs px-8 py-3.5 rounded-xl transition-all shadow-lg flex items-center gap-2"
+                                className="spx-btn spx-btn--ghost"
                             >
                                 <Info size={14} />
                                 <span>Tournament Details</span>
@@ -1644,7 +1640,7 @@ const FIP_COLS = 'minmax(0,1fr) repeat(3, 8.5cqw) 17cqw';
 
 interface BroadcastPalette {
     pageBg: string;
-    decor: false | 'fip' | 'ribbon'; // background decoration set
+    decor: false | 'fip' | 'ribbon' | 'sofcom'; // background decoration set
     pageText: string;
     pageMuted: string;
     chipBg: string;
@@ -1793,6 +1789,47 @@ const BROADCAST_THEMES: Record<BroadcastTheme, BroadcastPalette> = {
         stripBorder: 'transparent',
         tickerLabelBg: '#d6336c',
         tickerText: '#4a0d35',
+    },
+    // Sofcom (The Harmony Games): black stage lit by orange flame swooshes
+    // built around #E85624, white cards with orange headers, lime serve dot
+    // like the tennis ball in the event artwork.
+    sofcom: {
+        pageBg: [
+            'radial-gradient(ellipse 45% 32% at 100% 38%, rgba(255,122,40,0.55) 0%, rgba(232,86,36,0.22) 45%, transparent 75%)',
+            'radial-gradient(ellipse 40% 30% at 0% 64%, rgba(255,122,40,0.50) 0%, rgba(232,86,36,0.20) 45%, transparent 75%)',
+            'radial-gradient(ellipse 70% 45% at 50% 115%, rgba(232,86,36,0.18), transparent 70%)',
+            'linear-gradient(180deg, #050505 0%, #0b0705 55%, #120804 100%)',
+        ].join(', '),
+        decor: 'sofcom',
+        pageText: '#ffffff',
+        pageMuted: 'rgba(255,255,255,0.68)',
+        chipBg: 'rgba(232,86,36,0.12)',
+        chipBorder: 'rgba(232,86,36,0.45)',
+        cardBorder: '1px solid rgba(232,86,36,0.35)',
+        cardShadow: '0 1.6cqh 4.5cqh rgba(0,0,0,0.6), 0 0 3cqh rgba(232,86,36,0.18)',
+        cardTopAccent: 'linear-gradient(90deg, #FF8A3D 0%, #E85624 45%, #B83A12 100%)',
+        titleAccent: 'linear-gradient(90deg, transparent, #FF8A3D 25%, #E85624 75%, transparent)',
+        headBg: 'linear-gradient(90deg, #E85624 0%, #F26B35 100%)',
+        headText: 'rgba(255,255,255,0.92)',
+        bodyBg: '#ffffff',
+        divider: 'rgba(232,86,36,0.18)',
+        nameText: '#111111',
+        setText: '#1a1a1a',
+        setCurrent: '#E85624',
+        scoreBg: 'linear-gradient(180deg, #F26B35 0%, #E85624 55%, #C4441A 100%)',
+        scoreText: '#ffffff',
+        serveDot: '#C6E03A',
+        footBg: '#111111',
+        footText: 'rgba(255,255,255,0.82)',
+        statusBg: 'rgba(255,255,255,0.08)',
+        roundBg: '#E85624',
+        roundText: '#ffffff',
+        flashBg: 'rgba(10,6,4,0.92)',
+        flashText: '#ffffff',
+        stripBg: '#ffffff',
+        stripBorder: 'rgba(232,86,36,0.4)',
+        tickerLabelBg: '#E85624',
+        tickerText: '#111111',
     },
     // Light: for bright venues and daytime screens.
     light: {
@@ -2015,6 +2052,46 @@ const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClos
                     >
                         <path d="M60 18 C 34 18, 26 52, 44 82 L 92 186" />
                         <path d="M60 18 C 86 18, 94 52, 76 82 L 28 186" />
+                    </svg>
+                </>
+            )}
+
+            {theme.decor === 'sofcom' && (
+                <>
+                    {/* Sofcom decoration, purely visual and static: two glowing
+                        orange swooshes sweeping across the stage (the flame bands
+                        in the event artwork) and a faint dot grid. */}
+                    <div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                            backgroundImage: 'radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1.2px)',
+                            backgroundSize: '3.2vh 3.2vh',
+                            maskImage: 'radial-gradient(ellipse 80% 70% at 50% 50%, black 30%, transparent 85%)',
+                            WebkitMaskImage: 'radial-gradient(ellipse 80% 70% at 50% 50%, black 30%, transparent 85%)',
+                        }}
+                    />
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 1600 900" preserveAspectRatio="none" aria-hidden="true">
+                        <defs>
+                            <linearGradient id="sofcomSwooshA" x1="0" x2="1" y1="0" y2="0">
+                                <stop offset="0" stopColor="#E85624" stopOpacity="0" />
+                                <stop offset="0.35" stopColor="#FF8A3D" stopOpacity="0.9" />
+                                <stop offset="0.7" stopColor="#E85624" stopOpacity="0.55" />
+                                <stop offset="1" stopColor="#E85624" stopOpacity="0" />
+                            </linearGradient>
+                            <linearGradient id="sofcomSwooshB" x1="1" x2="0" y1="0" y2="0">
+                                <stop offset="0" stopColor="#E85624" stopOpacity="0" />
+                                <stop offset="0.3" stopColor="#FF9A4D" stopOpacity="0.85" />
+                                <stop offset="0.75" stopColor="#E85624" stopOpacity="0.4" />
+                                <stop offset="1" stopColor="#E85624" stopOpacity="0" />
+                            </linearGradient>
+                            <filter id="sofcomGlow" x="-10%" y="-50%" width="120%" height="200%">
+                                <feGaussianBlur stdDeviation="18" />
+                            </filter>
+                        </defs>
+                        <path d="M-60 560 C 260 420, 420 700, 760 560" fill="none" stroke="url(#sofcomSwooshA)" strokeWidth="70" strokeLinecap="round" filter="url(#sofcomGlow)" opacity="0.55" />
+                        <path d="M-60 560 C 260 420, 420 700, 760 560" fill="none" stroke="url(#sofcomSwooshA)" strokeWidth="10" strokeLinecap="round" opacity="0.5" />
+                        <path d="M1660 300 C 1340 220, 1180 470, 860 330" fill="none" stroke="url(#sofcomSwooshB)" strokeWidth="80" strokeLinecap="round" filter="url(#sofcomGlow)" opacity="0.55" />
+                        <path d="M1660 300 C 1340 220, 1180 470, 860 330" fill="none" stroke="url(#sofcomSwooshB)" strokeWidth="12" strokeLinecap="round" opacity="0.5" />
                     </svg>
                 </>
             )}

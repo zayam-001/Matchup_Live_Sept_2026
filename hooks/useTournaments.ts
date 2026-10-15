@@ -11,6 +11,14 @@ export interface UpcomingTournament {
   endDate?: string | null;
   venue: string;
   status: string;
+  // Presentation fields for the homepage tournament banners.
+  bannerUrl?: string | null;
+  organizer?: string | null;
+  organizerLogo?: string | null;
+  prizeMoney?: number;
+  currency?: string;
+  teamCount?: number;
+  maxTeams?: number;
 }
 
 export const useTournaments = () => {
@@ -44,7 +52,15 @@ export const useTournaments = () => {
           date: data.startDate || data.registrationDeadline || data.createdAt || new Date().toISOString(),
           endDate: data.endDate || null,
           venue: data.venue || data.city || 'TBD',
-          status: data.status || 'DRAFT'
+          status: data.status || 'DRAFT',
+          bannerUrl: data.bannerUrl || (data.categories || []).find((c: any) => c?.bannerUrl)?.bannerUrl || null,
+          organizer: data.organizer || null,
+          organizerLogo: data.organizerLogo || null,
+          prizeMoney: Number(data.prizeMoney) || (data.categories || []).reduce((sum: number, c: any) => sum + (Number(c?.prizeMoney) || 0), 0),
+          currency: data.currency || 'PKR',
+          teamCount: (data.teams || []).filter((t: any) => t?.status === 'ACCEPTED').length,
+          // Multi-category events cap teams per category; the top-level field is just one category's.
+          maxTeams: (data.categories || []).reduce((sum: number, c: any) => sum + (Number(c?.maxTeams) || 0), 0) || Number(data.maxTeams) || 0,
         };
       });
 

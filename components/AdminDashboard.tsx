@@ -25,11 +25,13 @@ import { StandingsOverlayExporter } from './StandingsOverlayExporter';
 import { SponsorLogoCropper } from './SponsorLogoCropper';
 import { POINTS_SYSTEM_LIST, getPointsSystem, STAGE_ORDER, STAGE_LABELS } from '../lib/pointsSystems';
 import { formatLabel, getActiveFormat, isTeamAmericanoFormat, summarizeTeamAmericano } from '../lib/teamAmericano';
+import './admin.css';
 import { TeamAmericanoSetup } from './TeamAmericanoSetup';
 import { NAME_DISPLAY_OPTIONS } from '../lib/nameDisplay';
 import { TeamAmericanoPanel } from './TeamAmericanoPanel';
 import { TeamAmericanoStandings } from './TeamAmericanoStandings';
 import { Tv } from 'lucide-react';
+import { Logo } from './ui/Logo';
 
 import { collection, doc, getDoc, query, where, getDocs } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -249,6 +251,79 @@ const getAllTournamentCourts = (tournament: Tournament): string[] => {
     return Array.from(allCourts);
 };
 
+// ── Portal shell: collapsible sidebar + top bar (UI only) ────────────────────
+type ShellItem = { key: string; label: string; icon: React.ReactNode; active?: boolean; badge?: number; onClick: () => void; tone?: 'danger' };
+type ShellSection = { title?: string; items: ShellItem[] };
+
+const AdminShell: React.FC<{
+    collapsed: boolean;
+    onToggle: () => void;
+    mobileOpen: boolean;
+    setMobileOpen: (v: boolean) => void;
+    sections: ShellSection[];
+    footer: ShellItem[];
+    crumbs: string[];
+    topActions?: React.ReactNode;
+    userEmail?: string;
+    children: React.ReactNode;
+}> = ({ collapsed, onToggle, mobileOpen, setMobileOpen, sections, footer, crumbs, topActions, userEmail, children }) => {
+    const nameParts = (userEmail || 'A').split('@')[0].split(/[\s._\-+0-9]+/).filter(Boolean);
+    const initials = (nameParts.length > 1 ? nameParts[0][0] + nameParts[1][0] : (nameParts[0] || 'A').slice(0, 2)).toUpperCase();
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+    const renderItem = (it: ShellItem) => (
+        <button key={it.key} type="button" onClick={() => { it.onClick(); setMobileOpen(false); }} className={`admx-nav__item ${it.active ? 'is-on' : ''} ${it.tone === 'danger' ? 'is-danger' : ''}`} title={collapsed ? it.label : undefined} aria-current={it.active ? 'page' : undefined}>
+            <span className="admx-nav__icon">{it.icon}</span>
+            <span className="admx-nav__label">{it.label}</span>
+            {!!it.badge && <span className="admx-nav__badge">{it.badge}</span>}
+        </button>
+    );
+    return (
+        <div className={`admx ${collapsed ? 'is-collapsed' : ''} ${mobileOpen ? 'is-mobile-open' : ''}`}>
+            <div className="admx-scrim" onClick={() => setMobileOpen(false)} aria-hidden="true" />
+            <aside className="admx-side" aria-label="Admin navigation">
+                <div className="admx-brand">
+                    <span className="admx-brand__logo"><Logo size={40} /></span>
+                    <span className="admx-brand__name">Match Up<small>Organizer</small></span>
+                </div>
+                <nav className="admx-nav">
+                    {sections.map((sec, i) => (
+                        <div key={i} className="admx-nav__section">
+                            {sec.title && <span className="admx-nav__title">{sec.title}</span>}
+                            {sec.items.map(renderItem)}
+                        </div>
+                    ))}
+                </nav>
+                <div className="admx-nav admx-nav--foot">
+                    {footer.map(renderItem)}
+                    <button type="button" className="admx-collapse" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+                        <ChevronLeft size={16} className="admx-collapse__icon" />
+                        <span className="admx-nav__label">Collapse</span>
+                    </button>
+                </div>
+            </aside>
+            <div className="admx-main">
+                <header className="admx-top">
+                    <button type="button" className="admx-burger" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><List size={18} /></button>
+                    <div className="admx-crumbs">
+                        {crumbs.map((c, i) => (
+                            <React.Fragment key={i}>
+                                {i > 0 && <ChevronRight size={13} />}
+                                <span className={i === crumbs.length - 1 ? 'is-here' : ''}>{c}</span>
+                            </React.Fragment>
+                        ))}
+                    </div>
+                    <div className="admx-top__right">
+                        <span className="admx-date"><Calendar size={14} /> {today}</span>
+                        {topActions}
+                        <span className="admx-avatar" title={userEmail}>{initials}</span>
+                    </div>
+                </header>
+                <div className="admx-content">{children}</div>
+            </div>
+        </div>
+    );
+};
+
 export const AdminDashboard: React.FC<{ initialAuthenticated?: boolean, onLogout?: () => void }> = ({ initialAuthenticated, onLogout }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(initialAuthenticated || false);
   const [currentUser, setCurrentUser] = useState<any>(auth?.currentUser || null);
@@ -379,6 +454,12 @@ export const AdminDashboard: React.FC<{ initialAuthenticated?: boolean, onLogout
       setIsCreating(false);
       setEditingId(null);
   };
+
+  // The create/edit module is a full page: start it (and the page after it) at the top.
+  useEffect(() => {
+      document.getElementById('main-scroll-container')?.scrollTo({ top: 0 });
+      window.scrollTo({ top: 0 });
+  }, [isCreating]);
 
   // Sync auth state reactively
   useEffect(() => {
@@ -657,146 +738,245 @@ const getTournamentCredits = (t: any) => {
       }
   }, []);
 
+  // Sidebar: collapsed state remembered per browser; drawer on mobile.
+  const [navCollapsed, setNavCollapsed] = useState<boolean>(() => {
+      try { return localStorage.getItem('adm_nav_collapsed') === '1'; } catch { return false; }
+  });
+  const [navMobileOpen, setNavMobileOpen] = useState(false);
+  const toggleNav = () => setNavCollapsed(v => {
+      try { localStorage.setItem('adm_nav_collapsed', v ? '0' : '1'); } catch { /* private mode */ }
+      return !v;
+  });
+  const scrollToId = (id: string) => setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+
+  // Tournaments this organiser may manage, and the status filter on top (same rules as before, written once).
+  const isMine = (t: Tournament) => t.organizerId === currentUser?.uid ||
+      (t.organizerEmail && t.organizerEmail.toLowerCase() === currentUser?.email?.toLowerCase()) ||
+      (t.adminTag && t.adminTag.toLowerCase() === currentUser?.email?.toLowerCase()) ||
+      (currentUser?.email?.toLowerCase() === 'eventletics.business@gmail.com' && (t.organizerId === 'e3r8tmcuksen0mkeiroktnuzl1a2' || t.organizerId === 'E3r8tMCukSeN0mKEiRokTNuzL1a2' || t.organizerId === 'l7Uwo7VDdVhzVz4mtEhEpg9XcTP2'));
+  // Where a tournament is in its life, from its saved status + dates. Same rules
+  // as the spectator page, so both always agree (status is only DRAFT / ACTIVE /
+  // COMPLETED / RETIRED in the database; "upcoming" and "ongoing" come from dates).
+  const lifecycleOf = (t: Tournament): 'Ongoing' | 'Upcoming' | 'Completed' | 'Draft' | 'Retired' => {
+      const s = String(t.status || 'DRAFT').toUpperCase();
+      if (s === 'RETIRED' || s.includes('ARCHIV')) return 'Retired';
+      if (s === 'DRAFT') return 'Draft';
+      if (s === 'COMPLETED') return 'Completed';
+      const now = Date.now();
+      const start = t.startDate ? new Date(t.startDate).getTime() : NaN;
+      const end = t.endDate ? new Date(t.endDate).getTime() : NaN;
+      if (!isNaN(end) && end < now) return 'Completed';
+      if (!isNaN(start) && start > now) return 'Upcoming';
+      return 'Ongoing';
+  };
+  const matchesStatusFilter = (t: Tournament, filter: string) => filter === 'All' || lifecycleOf(t) === filter;
+  const myTournaments = (tournaments || []).filter(t => !!isMine(t));
+  const visibleTournaments = myTournaments.filter(t => matchesStatusFilter(t, tournamentStatusFilter));
+  const creditsLeft = dashboardCredits?.matchCreditsRemaining ?? null;
+  const creditsTotal = dashboardCredits ? (dashboardCredits.matchCreditsRemaining || 0) + (dashboardCredits.matchCreditsUsed || 0) : 0;
+  const creditsPct = creditsTotal ? Math.round(((creditsLeft || 0) / creditsTotal) * 100) : 0;
+  const totalTeams = myTournaments.reduce((n, t) => n + (t.teams || []).filter(x => x.status === 'ACCEPTED').length, 0);
+  const activeCount = myTournaments.filter(t => lifecycleOf(t) === 'Ongoing').length;
+  const upcomingCount = myTournaments.filter(t => lifecycleOf(t) === 'Upcoming').length;
+  // "taha.nadeem@…" → "Taha"; a real display name wins when set.
+  const firstName = (() => {
+      const raw = currentUser?.displayName?.trim() || (currentUser?.email || '').split('@')[0];
+      const word = raw.split(/[\s._\-+0-9]+/).find(Boolean) || 'Organizer';
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  })();
+
+  // Dashboard charts (from the organiser's own tournaments).
+  // Tournaments running in each month (a 3-day event spanning two months counts in both).
+  // Window: 4 months back, this month, next month. Drafts and retired events are left out.
+  const monthBuckets = (() => {
+      const now = new Date();
+      const live = myTournaments.filter(t => !['Draft', 'Retired'].includes(lifecycleOf(t)));
+      return Array.from({ length: 6 }, (_, k) => {
+          const mStart = new Date(now.getFullYear(), now.getMonth() - 4 + k, 1);
+          const mEnd = new Date(now.getFullYear(), now.getMonth() - 3 + k, 1);
+          const inMonth = live.filter(t => {
+              const s0 = new Date(t.startDate || t.createdAt || 0).getTime();
+              const e0 = t.endDate ? new Date(t.endDate).getTime() : s0;
+              return !isNaN(s0) && s0 < mEnd.getTime() && Math.max(e0, s0) >= mStart.getTime();
+          });
+          return {
+              label: mStart.toLocaleDateString('en-US', { month: 'short' }),
+              count: inMonth.length,
+              current: k === 4,
+              upcoming: inMonth.filter(t => lifecycleOf(t) === 'Upcoming').length,
+          };
+      });
+  })();
+  const monthMax = Math.max(1, ...monthBuckets.map(m => m.count));
+  const statusRows = (['Ongoing', 'Upcoming', 'Completed', 'Draft', 'Retired'] as const).map(f => ({ label: f, count: myTournaments.filter(t => lifecycleOf(t) === f).length }));
+  const recentTournaments = [...myTournaments].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).slice(0, 5);
+
+  const footerNav: ShellItem[] = [
+      { key: 'spectator', label: 'Spectator view', icon: <ExternalLink size={18} />, onClick: () => window.open('#live', '_blank') },
+      { key: 'sync', label: 'Sync data', icon: <RefreshCcw size={18} />, onClick: async () => {
+          try { alert('Starting sync...'); await syncAllDataToGlobal(); alert('Sync complete!'); } catch (e: any) { alert('Sync failed: ' + e.message); }
+      } },
+      { key: 'password', label: 'Change password', icon: <Lock size={18} />, onClick: async () => {
+          try {
+              const { sendPasswordResetEmail } = await import('firebase/auth');
+              await sendPasswordResetEmail(auth, auth.currentUser?.email || '');
+              alert('Password reset email sent. Please check your inbox to change your password.');
+          } catch (e: any) { alert('Error: ' + e.message); }
+      } },
+      ...(onLogout ? [{ key: 'logout', label: 'Log out', icon: <LogOut size={18} />, onClick: onLogout, tone: 'danger' as const }] : []),
+  ];
+  const homeSections: ShellSection[] = [
+      { title: 'Workspace', items: [
+          { key: 'dash', label: 'Dashboard', icon: <Grid size={18} />, active: !isCreating && !selectedTournamentId && mainTab !== 'merges', onClick: () => { closeWizard(); setSelectedTournamentId(null); setMainTab('tournaments'); scrollToId('adm-top'); } },
+          { key: 'all', label: 'All tournaments', icon: <Trophy size={18} />, onClick: () => { closeWizard(); setSelectedTournamentId(null); setMainTab('tournaments'); scrollToId('adm-tournaments'); } },
+          { key: 'merges', label: 'Merge profiles', icon: <Users size={18} />, active: !isCreating && !selectedTournamentId && mainTab === 'merges', badge: mergeAlertCount || undefined, onClick: () => { closeWizard(); setSelectedTournamentId(null); setMainTab('merges'); } },
+      ] },
+      { title: 'Create', items: [
+          { key: 'new', label: 'New tournament', icon: <Plus size={18} />, active: isCreating && !editingId, onClick: () => { setEditingId(null); setIsCreating(true); } },
+          { key: 'clone', label: 'Clone tournament', icon: <Copy size={18} />, onClick: () => setIsCloning(true) },
+      ] },
+  ];
+
+  // ── Create / edit tournament: a full module inside the portal (not a popup) ──
+  if (isCreating) {
+      const editingName = editingId ? (activeTournament?.id === editingId ? activeTournament?.name : tournaments.find(t => t.id === editingId)?.name) : null;
+      const backLabel = selectedTournamentId ? 'Back to tournament' : 'Back to dashboard';
+      return (
+          <AdminShell
+              collapsed={navCollapsed}
+              onToggle={toggleNav}
+              mobileOpen={navMobileOpen}
+              setMobileOpen={setNavMobileOpen}
+              sections={homeSections}
+              footer={footerNav}
+              crumbs={['Organizer', 'Tournaments', editingId ? `Edit · ${editingName || 'Tournament'}` : 'New tournament']}
+              userEmail={currentUser?.email}
+              topActions={<button onClick={closeWizard} className="adm-btn adm-btn--ghost admx-top__cta"><X size={16} /> Discard</button>}
+          >
+              <div className="adm admx-module">
+                  <div className="admx-module__head">
+                      <button type="button" className="admx-module__back" onClick={closeWizard}><ChevronLeft size={16} /> {backLabel}</button>
+                      <div className="admx-module__title">
+                          <span className="admx-module__icon">{editingId ? <Edit3 size={22} /> : <Trophy size={22} />}</span>
+                          <div>
+                              <h1 className="adm-title">{editingId ? <>Edit <span>{editingName || 'tournament'}</span></> : <>Create a <span>tournament</span></>}</h1>
+                              <p className="adm-sub">{editingId ? 'Update tournament details and settings. Changes apply when you save on the last step.' : 'Four steps from idea to live: details, format, pricing and branding.'}</p>
+                          </div>
+                      </div>
+                  </div>
+                  <div className="admx-module__card">
+                      <CreateTournamentWizardWrapper
+                          initialData={editingId ? activeTournament : null}
+                          tournamentId={editingId}
+                          onCancel={closeWizard}
+                          onCreate={(id: string) => {
+                              closeWizard();
+                              setSelectedTournamentId(id);
+                          }}
+                      />
+                  </div>
+              </div>
+          </AdminShell>
+      );
+  }
+
   if (!selectedTournamentId) {
       return (
-          <div className="pb-20 pt-28 md:pt-36 space-y-6 px-4 md:px-8">
-              <div className="flex justify-between items-center">
+          <AdminShell
+              collapsed={navCollapsed}
+              onToggle={toggleNav}
+              mobileOpen={navMobileOpen}
+              setMobileOpen={setNavMobileOpen}
+              sections={homeSections}
+              footer={footerNav}
+              crumbs={['Organizer', mainTab === 'merges' ? 'Merge profiles' : 'Dashboard']}
+              userEmail={currentUser?.email}
+              topActions={<button onClick={() => setIsCreating(true)} className="adm-btn adm-btn--primary admx-top__cta"><Plus size={16} /> New tournament</button>}
+          >
+          <div className="adm" id="adm-top">
+              <div className="adm-head">
                   <div>
-                    <h1 className="mb-0">Admin Dashboard</h1>
-                    <p className="text-content-secondary text-sm mt-1">Manage your events and venues</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                        onClick={async () => {
-                            try {
-                                alert('Starting sync...');
-                                await syncAllDataToGlobal();
-                                alert('Sync complete!');
-                            } catch (e: any) {
-                                alert('Sync failed: ' + e.message);
-                            }
-                        }}
-                        className="bg-[#4D78FF] hover:bg-[#3d60cc] text-white px-3 py-2.5 rounded-xl font-bold text-xs transition-colors shadow-lg"
-                    >
-                        Sync Global Data
-                    </button>
-                    <button 
-                        onClick={async () => {
-                            try {
-                                const { sendPasswordResetEmail } = await import('firebase/auth');
-                                await sendPasswordResetEmail(auth, auth.currentUser?.email || '');
-                                alert('Password reset email sent. Please check your inbox to change your password.');
-                            } catch(e:any) {
-                                alert('Error: ' + e.message);
-                            }
-                        }} 
-                        className="bg-surface-elevated hover:bg-white/10 text-white px-3 py-2.5 rounded-xl font-bold text-xs transition-all border border-white/5"
-                    >
-                        Change Password
-                    </button>
-                    {onLogout && (
-                        <button onClick={onLogout} className="bg-surface-elevated hover:bg-red-500/20 text-red-500 px-3 py-2.5 rounded-xl font-bold text-xs transition-all border border-red-500/10"><LogOut size={16} /></button>
-                    )}
+                      <h1 className="adm-title">Welcome back, <span>{firstName}</span></h1>
+                      <p className="adm-sub">Here's what's happening across your events.</p>
                   </div>
               </div>
-              <div className="flex flex-col lg:flex-row gap-6 mb-8 mt-4">
-                  {/* The "Match Pass" Card */}
-                  <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand/20 via-surface-panel to-surface-ground border border-brand/20 shadow-2xl p-6 sm:p-8 flex-1 isolate group">
-                      {/* Animated gradient background / glow */}
-                      <div className="absolute inset-0 bg-brand/5 opacity-50 group-hover:opacity-100 transition-opacity duration-700"></div>
-                      <div className="absolute -top-32 -right-32 w-64 h-64 bg-brand/20 blur-[100px] rounded-full group-hover:bg-brand/30 transition-colors duration-1000"></div>
-                      <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-brand/0 via-brand to-brand/0 opacity-30 group-hover:opacity-70 transition-opacity duration-700"></div>
-                      
-                      {/* Subtle Grid Pattern overlay */}
-                      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNSkiLz48L3N2Zz4=')] opacity-50"></div>
 
-                      <div className="relative z-10 flex flex-col h-full justify-between gap-8">
-                          <div className="flex justify-between items-start">
-                              <div className="flex items-center gap-3">
-                                  <div className="p-3 bg-brand/10 border border-brand/20 rounded-xl text-brand shadow-[0_0_15px_rgba(var(--brand),0.2)]">
-                                      <Activity size={28} className="animate-pulse" />
+              {mainTab !== 'merges' && (
+              <div className="admx-bento">
+                  {/* Match Pass */}
+                  <div className="admx-card admx-pass">
+                      <div className="admx-card__head"><div><h4>Match Pass</h4><p>Organizer credits</p></div><span className="admx-chip-ic"><Database size={15} /></span></div>
+                      <div className="admx-passcard">
+                          <div className="admx-passcard__top"><strong>MATCH UP</strong><span>ELITE ORGANIZER</span></div>
+                          <span className="admx-passcard__label">Credits available</span>
+                          <div className="admx-passcard__value">{creditsLeft ?? '…'}<small> / {dashboardCredits ? creditsTotal : '…'}</small></div>
+                          <div className="admx-passcard__bar"><i style={{ width: `${creditsPct}%` }} /></div>
+                          <div className="admx-passcard__foot"><span>{creditsPct}% remaining</span><span>Top up · soon</span></div>
+                      </div>
+                  </div>
+
+                  {/* Small KPIs */}
+                  <div className="admx-card admx-kpi">
+                      <span className="admx-kpi__label">Ongoing now</span>
+                      <div className="admx-kpi__row"><strong>{activeCount}</strong><span className="admx-pill">{upcomingCount} upcoming</span></div>
+                  </div>
+                  <div className="admx-card admx-kpi">
+                      <span className="admx-kpi__label">Confirmed teams</span>
+                      <div className="admx-kpi__row"><strong>{totalTeams}</strong><span className="admx-pill">{myTournaments.length} events</span></div>
+                  </div>
+
+                  {/* Chart */}
+                  <div className="admx-card admx-chart">
+                      <div className="admx-card__head"><div><h4>Tournaments by month</h4><p>Events running each month, incl. scheduled</p></div><span className="admx-chip-ic"><Calendar size={15} /></span></div>
+                      <div className="admx-bars">
+                          {monthBuckets.map((m, i) => (
+                              <div key={m.label} className={`admx-bar ${m.current ? 'is-peak' : ''}`} title={`${m.count} running${m.upcoming ? ` · ${m.upcoming} upcoming` : ''}`}>
+                                  <div className="admx-bar__col">
+                                      {m.count > 0 && <span style={{ height: `${(m.count / monthMax) * 100}%`, '--i': i } as React.CSSProperties}><em>{m.count}</em></span>}
                                   </div>
-                                  <div>
-                                      <h3 className="text-white font-black text-xl tracking-wider uppercase drop-shadow-md">Match Pass</h3>
-                                      <p className="text-xs text-brand font-bold tracking-widest font-mono mt-0.5">ELITE ORGANIZER</p>
-                                  </div>
+                                  <small>{m.current ? 'This month' : m.label}</small>
                               </div>
-                              <div className="text-right">
-                                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-content-muted tracking-widest uppercase mb-1 justify-end">
-                                      <Database size={12} />
-                                      Available Points
-                                  </div>
-                                  <div className="text-5xl font-mono font-black text-white tracking-tighter drop-shadow-[0_0_10px_rgba(255,255,255,0.2)] group-hover:text-brand-light transition-colors duration-500">
-                                      {dashboardCredits ? dashboardCredits.matchCreditsRemaining : '...'}
-                                  </div>
-                              </div>
-                          </div>
-                          
-                          <div className="flex items-end justify-between border-t border-white/10 pt-5">
-                              <div className="flex flex-col gap-1.5">
-                                  <span className="text-[10px] text-content-muted font-bold tracking-widest uppercase">Total Allotted Balance</span>
-                                  <span className="text-content-secondary font-mono text-sm tracking-wide">
-                                      {dashboardCredits ? ((dashboardCredits.matchCreditsRemaining || 0) + (dashboardCredits.matchCreditsUsed || 0)) : '...'} PTS
-                                  </span>
-                              </div>
-                              
-                              <button className="text-xs font-bold bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-xl flex items-center gap-2 transition-all border border-white/10 group-hover:border-brand/30 shadow-sm active:scale-95">
-                                  <ArrowUpRight size={16} className="text-brand" /> Top up (Coming soon)
+                          ))}
+                      </div>
+                  </div>
+
+                  {/* Status breakdown */}
+                  <div className="admx-card admx-status">
+                      <div className="admx-card__head"><div><h4>Status</h4><p>All your tournaments</p></div></div>
+                      <div className="admx-status__total"><strong>{myTournaments.length}</strong><span>total</span></div>
+                      <div className="admx-status__rows">
+                          {statusRows.map(r => (
+                              <button key={r.label} type="button" className="admx-status__row" onClick={() => { setTournamentStatusFilter(r.label); scrollToId('adm-tournaments'); }}>
+                                  <span className={`admx-dot admx-dot--${r.label.toLowerCase()}`} />
+                                  <span className="admx-status__name">{r.label}</span>
+                                  <span className="admx-status__track"><i className={`admx-dot--${r.label.toLowerCase()}`} style={{ width: `${myTournaments.length ? (r.count / myTournaments.length) * 100 : 0}%` }} /></span>
+                                  <b>{r.count}</b>
                               </button>
-                          </div>
+                          ))}
                       </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex flex-col sm:flex-row lg:flex-col gap-3 sm:gap-4 justify-center">
-                      <button onClick={() => setIsCreating(true)} className="flex-1 lg:flex-none lg:w-64 bg-brand hover:bg-brand-light text-content-inverse px-4 py-3 sm:px-6 sm:py-5 rounded-xl sm:rounded-2xl font-bold flex items-center justify-center gap-3 sm:gap-4 transition-all shadow-[0_0_20px_rgba(var(--brand),0.3)] hover:scale-[1.02] active:scale-[0.98]">
-                          <Plus className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
-                          <div className="flex flex-col items-start text-left">
-                              <span className="leading-tight text-base sm:text-lg">Add Tournament</span>
-                              <span className="text-[9px] sm:text-[11px] font-medium opacity-80 uppercase tracking-widest mt-0.5">Start from scratch</span>
-                          </div>
-                      </button>
-                      <button onClick={() => setIsCloning(true)} className="flex-1 lg:flex-none lg:w-64 bg-surface-elevated hover:bg-white/10 text-white px-4 py-3 sm:px-6 sm:py-5 rounded-xl sm:rounded-2xl font-bold flex items-center justify-center gap-3 sm:gap-4 transition-all border border-white/10 hover:border-white/20 hover:scale-[1.02] active:scale-[0.98]">
-                          <Copy className="w-5 h-5 sm:w-6 sm:h-6 shrink-0 text-content-muted" />
-                          <div className="flex flex-col items-start text-left">
-                              <span className="leading-tight text-base sm:text-lg">Clone Tournament</span>
-                              <span className="text-[9px] sm:text-[11px] text-content-muted font-medium uppercase tracking-widest mt-0.5">Duplicate format & teams</span>
-                          </div>
-                      </button>
+                  {/* Recent tournaments */}
+                  <div className="admx-card admx-recent">
+                      <div className="admx-card__head"><div><h4>Recent tournaments</h4><p>Latest created</p></div><button className="admx-chip-ic" onClick={() => scrollToId('adm-tournaments')} title="See all"><ArrowUpRight size={15} /></button></div>
+                      <div className="admx-table">
+                          <div className="admx-table__row admx-table__row--head"><span>Name</span><span>Start</span><span>Format</span><span>Teams</span><span>Status</span></div>
+                          {recentTournaments.map(t => (
+                              <button key={t.id} type="button" className="admx-table__row" onClick={() => setSelectedTournamentId(t.id)}>
+                                  <span className="admx-table__name">{t.bannerUrl ? <img src={t.bannerUrl} alt="" /> : <i>{t.name.slice(0, 1).toUpperCase()}</i>}<b>{t.name}</b></span>
+                                  <span>{(t as any).startDate ? new Date((t as any).startDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</span>
+                                  <span>{formatLabel(t.format)}</span>
+                                  <span>{(t.teams || []).filter(x => x.status === 'ACCEPTED').length}</span>
+                                  <span><span className={`admx-status-pill admx-status-pill--${lifecycleOf(t).toLowerCase()}`}>{lifecycleOf(t)}</span></span>
+                              </button>
+                          ))}
+                          {recentTournaments.length === 0 && <div className="admx-table__empty">No tournaments yet.</div>}
+                      </div>
                   </div>
               </div>
-
-              {mergeAlertCount > 0 && mainTab !== 'merges' && (
-                  <div className="bg-[#E65C31]/10 border border-amber-500/20 rounded-2xl p-4 mb-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                          <div className="bg-[#E65C31]/20 p-2 rounded-xl text-[#E65C31] shrink-0">
-                              <AlertTriangle size={20} />
-                          </div>
-                          <div>
-                              <h4 className="text-white font-bold text-sm">Potential Player Profile Merges</h4>
-                              <p className="text-content-secondary text-xs mt-0.5">Found {mergeAlertCount} manually onboarded players whose profiles can be merged with registered platform accounts.</p>
-                          </div>
-                      </div>
-                      <button 
-                          onClick={() => setMainTab('merges')}
-                          className="bg-[#E65C31] hover:bg-[#E65C31] text-black px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shrink-0"
-                      >
-                          Review & Merge
-                      </button>
-                  </div>
               )}
-              
-              <div className="flex bg-surface-panel p-1 rounded-xl mb-6 gap-2">
-                 <button onClick={() => { setMainTab('tournaments');  }} className={`flex-1 flex justify-center py-2 text-sm font-bold rounded-lg transition-all ${mainTab === 'tournaments' ? 'bg-brand text-content-inverse' : 'text-content-muted hover:text-white'}`}>Tournaments</button>
-                 <button onClick={() => { setMainTab('merges'); setSelectedTournamentId(null);  }} className={`flex-1 flex justify-center py-2 text-sm font-bold rounded-lg transition-all relative ${mainTab === 'merges' ? 'bg-brand text-content-inverse' : 'text-content-muted hover:text-white'}`}>
-                     Merge Profiles
-                     {mergeAlertCount > 0 && (
-                         <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse">
-                             {mergeAlertCount}
-                         </span>
-                     )}
-                 </button>
-              </div>
+
+              {mainTab !== 'merges' && <div className="admx-section-head" id="adm-tournaments"><h3>All tournaments</h3><span>{myTournaments.length} total</span></div>}
 
               {mainTab === 'merges' ? (
                   <div className="space-y-6">
@@ -981,87 +1161,56 @@ const getTournamentCredits = (t: any) => {
                       )}
                   </div>
               ) : (
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-center gap-2 flex-wrap pb-2">
-                    {['All', 'Active', 'Upcoming', 'Completed', 'Draft', 'Archived'].map(filter => (
-                        <button 
-                          key={filter}
-                          onClick={() => setTournamentStatusFilter(filter)}
-                          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${tournamentStatusFilter === filter ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'bg-white/5 text-content-muted hover:text-white hover:bg-white/10'}`}
-                        >
-                          {filter}
-                        </button>
-                    ))}
+                <div className="flex flex-col gap-5">
+                  <div className="adm-filters">
+                    {['All', 'Ongoing', 'Upcoming', 'Completed', 'Draft', 'Retired'].map(filter => {
+                        const count = myTournaments.filter(t => matchesStatusFilter(t, filter)).length;
+                        return (
+                            <button
+                              key={filter}
+                              onClick={() => setTournamentStatusFilter(filter)}
+                              className={`adm-chip ${tournamentStatusFilter === filter ? 'is-on' : ''}`}
+                            >
+                              {filter}<span>{count}</span>
+                            </button>
+                        );
+                    })}
                   </div>
-                <div className="grid gap-4">
-                  {(!tournaments ? [] : tournaments.filter(t => {
-                      const allowedRole = t.organizerId === currentUser?.uid || 
-                                          (t.organizerEmail && t.organizerEmail.toLowerCase() === currentUser?.email?.toLowerCase()) || 
-                                          (t.adminTag && t.adminTag.toLowerCase() === currentUser?.email?.toLowerCase()) ||
-                                          (currentUser?.email?.toLowerCase() === 'eventletics.business@gmail.com' && (t.organizerId === 'e3r8tmcuksen0mkeiroktnuzl1a2' || t.organizerId === 'E3r8tMCukSeN0mKEiRokTNuzL1a2' || t.organizerId === 'l7Uwo7VDdVhzVz4mtEhEpg9XcTP2'));
-                      if (!allowedRole) return false;
-                      if (tournamentStatusFilter === 'All') return true;
-                      const normStatus = (t.status || 'draft').toLowerCase();
-                      if (tournamentStatusFilter === 'Active') return ['active', 'in_progress', 'live'].includes(normStatus);
-                      if (tournamentStatusFilter === 'Upcoming') return normStatus.includes('upcoming') || normStatus === 'scheduled';
-                      if (tournamentStatusFilter === 'Completed') return normStatus.includes('completed');
-                      if (tournamentStatusFilter === 'Draft') return normStatus.includes('draft');
-                      if (tournamentStatusFilter === 'Archived') return normStatus.includes('archived');
-                      return true;
-                  })).map(t => (
-                      <Card key={t.id} variant="panel" className="p-0 overflow-hidden group hover:border-brand/50 transition-all cursor-pointer" onClick={() => setSelectedTournamentId(t.id)}>
-                          {t.bannerUrl && (
-                              <div className="w-full h-32 overflow-hidden relative border-b border-white/5">
-                                  <img src={t.bannerUrl} alt="Tournament Banner" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                              </div>
-                          )}
-                          <div className="p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                              <div className="flex-1 w-full min-w-0">
-                                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
-                                      <h3 className="text-lg sm:text-xl font-bold text-white group-hover:text-brand transition-colors truncate">{t.name}</h3>
-                                      <TournamentLiveBadge tournamentId={t.id} defaultStatus={t.status} />
-                                  </div>
-                                  <div className="text-content-secondary text-xs sm:text-sm flex flex-wrap items-center gap-2 sm:gap-3">
-                                      <Badge variant="neutral" className="font-mono text-[10px] sm:text-xs shrink-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap">{t.format.replace(/_/g, ' ')}</Badge>
-                                      <span className="flex items-center gap-1 shrink-0"><Users size={14} className="w-3.5 h-3.5"/> {(t.teams || []).length} Teams</span>
-                                      <span className="flex items-center gap-1 min-w-0"><MapPin size={14} className="w-3.5 h-3.5 shrink-0"/> <span className="truncate max-w-[150px] sm:max-w-none">{t.venue || 'TBD'} &bull; {t.city || 'Karachi'}</span></span>
-                                  </div>
-                              </div>
-                              <div className="flex w-full sm:w-auto items-center justify-end gap-2 mt-2 sm:mt-0 pt-3 sm:pt-0 border-t border-white/5 sm:border-0">
-                                   <button onClick={(e) => handleEditTournament(e, t)} className="p-2 text-content-muted hover:text-white transition-colors bg-surface-ground rounded-lg"><Edit3 size={18}/></button>
-                                   {(t.teams || []).filter(x => x.status === 'ACCEPTED').length < 2 ? (
-                                      <button onClick={(e) => handleDeleteTournament(e, t)} className="p-2 text-content-muted hover:text-accent-live transition-colors bg-surface-ground rounded-lg"><Trash2 size={18}/></button>
-                                   ) : (t.status !== 'RETIRED' && (
-                                       <button onClick={(e) => handleRetireTournament(e, t)} className="p-2 text-content-muted hover:text-orange-500 transition-colors bg-surface-ground rounded-lg" title="Retire Tournament"><Archive size={18}/></button>
-                                   ))}
-                                   <button onClick={() => setSelectedTournamentId(t.id)} className="p-2 bg-brand text-content-inverse rounded-lg"><ChevronRight size={18}/></button>
+                  <div className="adm-grid">
+                  {visibleTournaments.map((t, i) => (
+                      <div key={t.id} className="adm-tcard" style={{ '--i': i } as React.CSSProperties} onClick={() => setSelectedTournamentId(t.id)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') setSelectedTournamentId(t.id); }}>
+                          <div className="adm-tcard__media">
+                              {t.bannerUrl ? <img src={t.bannerUrl} alt="" loading="lazy" /> : <div className="adm-tcard__art"><span>{t.name.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()}</span></div>}
+                              <div className="adm-tcard__badge"><TournamentLiveBadge tournamentId={t.id} defaultStatus={t.status} /></div>
+                          </div>
+                          <div className="adm-tcard__body">
+                              <h3>{t.name}</h3>
+                              <div className="adm-tcard__meta">
+                                  <span className="adm-tag">{formatLabel(t.format)}</span>
+                                  <span><Users size={13} /> {(t.teams || []).length} teams</span>
+                                  <span className="adm-tcard__venue"><MapPin size={13} /> {t.venue || 'TBD'} · {t.city || 'Karachi'}</span>
                               </div>
                           </div>
-                      </Card>
+                          <div className="adm-tcard__foot" onClick={(e) => e.stopPropagation()}>
+                              <button onClick={(e) => handleEditTournament(e, t)} className="adm-mini" title="Edit"><Edit3 size={15}/></button>
+                              {(t.teams || []).filter(x => x.status === 'ACCEPTED').length < 2 ? (
+                                 <button onClick={(e) => handleDeleteTournament(e, t)} className="adm-mini adm-mini--danger" title="Delete"><Trash2 size={15}/></button>
+                              ) : (t.status !== 'RETIRED' && (
+                                 <button onClick={(e) => handleRetireTournament(e, t)} className="adm-mini adm-mini--warn" title="Retire Tournament"><Archive size={15}/></button>
+                              ))}
+                              <button onClick={() => setSelectedTournamentId(t.id)} className="adm-open">Manage <ChevronRight size={15}/></button>
+                          </div>
+                      </div>
                   ))}
-                  {(!tournaments ? [] : tournaments.filter(t => {
-                      const allowedRole = t.organizerId === currentUser?.uid || 
-                                          (t.organizerEmail && t.organizerEmail.toLowerCase() === currentUser?.email?.toLowerCase()) || 
-                                          (t.adminTag && t.adminTag.toLowerCase() === currentUser?.email?.toLowerCase()) ||
-                                          (currentUser?.email?.toLowerCase() === 'eventletics.business@gmail.com' && (t.organizerId === 'e3r8tmcuksen0mkeiroktnuzl1a2' || t.organizerId === 'E3r8tMCukSeN0mKEiRokTNuzL1a2' || t.organizerId === 'l7Uwo7VDdVhzVz4mtEhEpg9XcTP2'));
-                      if (!allowedRole) return false;
-                      if (tournamentStatusFilter === 'All') return true;
-                      const normStatus = (t.status || 'draft').toLowerCase();
-                      if (tournamentStatusFilter === 'Active') return ['active', 'in_progress', 'live'].includes(normStatus);
-                      if (tournamentStatusFilter === 'Upcoming') return normStatus.includes('upcoming') || normStatus === 'scheduled';
-                      if (tournamentStatusFilter === 'Completed') return normStatus.includes('completed');
-                      if (tournamentStatusFilter === 'Draft') return normStatus.includes('draft');
-                      if (tournamentStatusFilter === 'Archived') return normStatus.includes('archived');
-                      return true;
-                  })).length === 0 && (
-                      <div className="text-center py-20 border-2 border-dashed border-white/10 rounded-3xl">
-                          <Trophy size={48} className="mx-auto text-content-muted mb-4 opacity-50" />
-                          <h3 className="text-xl font-bold text-white mb-2">No Tournaments Yet</h3>
-                          <p className="text-content-secondary mb-6">Create your first tournament to get started.</p>
-                          <button onClick={() => setIsCreating(true)} className="bg-surface-elevated hover:bg-surface-card text-white px-6 py-3 rounded-xl font-bold transition-all">Create Tournament</button>
+                  </div>
+                  {visibleTournaments.length === 0 && (
+                      <div className="adm-empty">
+                          <Trophy size={44} />
+                          <h3>{myTournaments.length ? 'Nothing in this filter' : 'No tournaments yet'}</h3>
+                          <p>{myTournaments.length ? 'Try another status filter.' : 'Create your first tournament to get started.'}</p>
+                          {!myTournaments.length && <button onClick={() => setIsCreating(true)} className="adm-btn adm-btn--primary"><Plus size={16} /> Create tournament</button>}
                       </div>
                   )}
-                </div>
                 </div>
               )}
               <DeleteConfirmationModal target={deleteTarget} onCancel={() => setDeleteTarget(null)} onConfirm={confirmDelete} />
@@ -1078,70 +1227,83 @@ const getTournamentCredits = (t: any) => {
                   }}
               />
           )}
-              
-              {/* Tournament Wizard Modal */}
-              {isCreating && (
-                  <div className="fixed inset-0 z-50 flex justify-center pt-10 sm:pt-20 bg-black/80 backdrop-blur-sm overflow-y-auto pb-20">
-                     <div className="bg-[#0f1115] w-full max-w-4xl rounded-2xl border border-white/10 shadow-2xl relative">
-                        <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#15181e] rounded-t-2xl">
-                            <div>
-                                <h2 className="text-xl font-bold text-white">{editingId ? "Edit Tournament" : "Create Tournament"}</h2>
-                                <p className="text-sm text-content-secondary mt-1">{editingId ? "Update tournament details and settings." : "Set up a new tournament."}</p>
-                            </div>
-                            <button onClick={closeWizard} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl text-white transition-colors duration-200">
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div className="p-8">
-                            <CreateTournamentWizardWrapper 
-                                initialData={editingId ? activeTournament : null} 
-                                tournamentId={editingId} 
-                                onCancel={closeWizard} 
-                                onCreate={(id: string) => {
-                                    closeWizard();
-                                    setSelectedTournamentId(id);
-                                }} 
-                            />
-                        </div>
-                     </div>
-                  </div>
-              )}
           </div>
+          </AdminShell>
       )
   }
+
+  const workspaceHasGroups = (() => {
+      if (!activeTournament) return false;
+      const cat = activeTournament.isMultiCategory && selectedCategoryId ? activeTournament.categories?.find(c => c.id === selectedCategoryId) : null;
+      const fmt = cat?.format || activeTournament.format;
+      const rr = cat?.rrType || activeTournament.rrType;
+      return (fmt === TournamentFormat.ROUND_ROBIN && (rr === RoundRobinType.GROUP_SINGLE || rr === RoundRobinType.GROUP_DOUBLE)) || fmt === TournamentFormat.GROUP_TO_KNOCKOUT;
+  })();
+  const workspaceNav: ShellItem[] = [
+      { key: 'OVERVIEW', label: 'Overview', icon: <Activity size={18} />, active: view === 'OVERVIEW', onClick: () => setView('OVERVIEW') },
+      { key: 'TEAMS', label: 'Teams', icon: <Users size={18} />, active: view === 'TEAMS', onClick: () => setView('TEAMS') },
+      ...(workspaceHasGroups ? [{ key: 'GROUPS', label: 'Groups', icon: <Grid size={18} />, active: view === 'GROUPS', onClick: () => setView('GROUPS') }] : []),
+      { key: 'SCHEDULE', label: 'Schedule', icon: <Calendar size={18} />, active: view === 'SCHEDULE', onClick: () => setView('SCHEDULE') },
+      { key: 'STANDINGS', label: 'Standings', icon: <List size={18} />, active: view === 'STANDINGS', onClick: () => setView('STANDINGS') },
+      { key: 'KNOCKOUT', label: 'Knockouts', icon: <Trophy size={18} />, active: view === 'KNOCKOUT', onClick: () => setView('KNOCKOUT') },
+      { key: 'RESULTS', label: 'Results', icon: <Check size={18} />, active: view === 'RESULTS', onClick: () => setView('RESULTS') },
+      { key: 'LEADERBOARD', label: 'Leaderboard', icon: <Medal size={18} />, active: view === 'LEADERBOARD', onClick: () => setView('LEADERBOARD') },
+  ];
 
   if (!activeTournament) return <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-brand" size={32} /></div>;
 
   return (
-      <div className="pb-20 pt-28 md:pt-36 space-y-6 px-4 md:px-8">
+      <AdminShell
+          collapsed={navCollapsed}
+          onToggle={toggleNav}
+          mobileOpen={navMobileOpen}
+          setMobileOpen={setNavMobileOpen}
+          sections={[
+              ...homeSections,
+              { title: 'This tournament', items: workspaceNav },
+          ]}
+          footer={footerNav}
+          crumbs={['Organizer', 'Tournaments', activeTournament.name]}
+          userEmail={currentUser?.email}
+          topActions={<button onClick={(e) => handleEditTournament(e as any, activeTournament)} className="adm-btn adm-btn--ghost admx-top__cta"><Edit3 size={16} /> Edit</button>}
+      >
+      <div className="adm">
           {/* Context Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-start sm:items-center gap-4">
-                  <button onClick={() => setSelectedTournamentId(null)} className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-surface-panel border border-white/10 text-content-secondary hover:text-white hover:border-brand transition-all"><ChevronLeft size={20}/></button>
-                  <div className="min-w-0">
-                    <h1 className="text-xl sm:text-2xl md:text-3xl mb-0 truncate">{activeTournament.name}</h1>
-                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-content-muted mt-1">
-                        <span className="text-brand shrink-0">{formatLabel(activeTournament.format)}</span>
-                        <span className="shrink-0">•</span>
-                        <span className="truncate max-w-[200px] sm:max-w-none min-w-0 break-words">{activeTournament.venue} &bull; {activeTournament.city || 'Karachi'}</span>
-                    </div>
+          {(() => {
+              const accepted = (activeTournament.teams || []).filter(x => x.status === 'ACCEPTED').length;
+              const pending = (activeTournament.teams || []).filter(x => x.status === 'PENDING').length;
+              return (
+                  <div className="adm-ws">
+                      {activeTournament.bannerUrl && <img className="adm-ws__bg" src={activeTournament.bannerUrl} alt="" />}
+                      <div className="adm-ws__shade" aria-hidden="true" />
+                      <div className="adm-ws__row">
+                          <button onClick={() => setSelectedTournamentId(null)} className="adm-back" title="All tournaments"><ChevronLeft size={18}/></button>
+                          <div className="adm-ws__id">
+                              <div className="adm-ws__crumbs"><span>Tournaments</span><ChevronRight size={12} /><span className="is-here">{formatLabel(activeTournament.format)}</span></div>
+                              <h1 className="adm-ws__title">{activeTournament.name}</h1>
+                              <div className="adm-ws__meta"><MapPin size={13} /> {activeTournament.venue} · {activeTournament.city || 'Karachi'}</div>
+                          </div>
+                          <div className="adm-ws__actions">
+                              <button onClick={(e) => handleEditTournament(e, activeTournament)} className="adm-btn adm-btn--ghost"><Edit3 size={16}/> Edit</button>
+                              {(activeTournament.teams || []).filter(x => x.status === 'ACCEPTED').length < 2 ? (
+                                   <button onClick={(e) => handleDeleteTournament(e, activeTournament)} className="adm-mini adm-mini--danger" title="Delete"><Trash2 size={16}/></button>
+                              ) : (activeTournament.status !== 'RETIRED' && (
+                                   <button onClick={(e) => handleRetireTournament(e, activeTournament)} className="adm-mini adm-mini--warn" title="Retire Tournament"><Archive size={16}/></button>
+                              ))}
+                          </div>
+                      </div>
+                      <div className="adm-ws__stats">
+                          <div><strong>{accepted}</strong><span>Confirmed teams</span></div>
+                          <div><strong>{pending}</strong><span>Pending requests</span></div>
+                          <div><strong>{activeTournament.maxTeams || '—'}</strong><span>Team cap</span></div>
+                          <div><strong>{(activeTournament.courts || []).length || '—'}</strong><span>Courts</span></div>
+                      </div>
                   </div>
-              </div>
-              <div className="flex items-center gap-4 self-end sm:self-auto shrink-0">
+              );
+          })()}
 
-                  <div className="flex gap-2">
-                      <button onClick={(e) => handleEditTournament(e, activeTournament)} className="p-2.5 bg-surface-panel border border-white/10 rounded-xl text-content-secondary hover:text-white hover:border-brand transition-all"><Edit3 size={18}/></button>
-                      {(activeTournament.teams || []).filter(x => x.status === 'ACCEPTED').length < 2 ? (
-                           <button onClick={(e) => handleDeleteTournament(e, activeTournament)} className="p-2.5 bg-surface-panel border border-white/10 rounded-xl text-accent-error hover:bg-accent-error/10 transition-all"><Trash2 size={18}/></button>
-                      ) : (activeTournament.status !== 'RETIRED' && (
-                           <button onClick={(e) => handleRetireTournament(e, activeTournament)} className="p-2.5 bg-surface-panel border border-white/10 rounded-xl text-orange-500 hover:bg-orange-500/10 transition-all" title="Retire Tournament"><Archive size={18}/></button>
-                      ))}
-                  </div>
-              </div>
-          </div>
-          
           {/* Tabs */}
-          <div className="flex flex-wrap sm:flex-nowrap gap-1.5 sm:gap-2 pb-2 w-full">
+          <div className="adm-tabs">
               <TabButton active={view === 'OVERVIEW'} onClick={() => setView('OVERVIEW')} label="Overview" icon={<Activity size={16}/>} />
               <TabButton active={view === 'TEAMS'} onClick={() => setView('TEAMS')} label="Team Management" icon={<Users size={16}/>} />
               {(() => {
@@ -1161,15 +1323,15 @@ const getTournamentCredits = (t: any) => {
           </div>
 
           {activeTournament.isMultiCategory && activeTournament.categories && activeTournament.categories.length > 0 && (
-              <div className="flex flex-col sm:flex-row items-start sm:items-center p-3 sm:p-4 bg-surface-panel border border-white/5 rounded-2xl w-full min-w-0 gap-3">
-                  <span className="text-[10px] text-content-muted font-bold uppercase tracking-widest flex-shrink-0">Category:</span>
+              <div className="adm-cats">
+                  <span className="adm-cats__label">Category</span>
                   <div className="flex-1 w-full min-w-0">
                       <div className="flex flex-wrap gap-2 w-full">
                           {activeTournament.categories.map(cat => (
                               <button 
                                 key={cat.id} 
                                 onClick={() => setSelectedCategoryId(cat.id)}
-                                className={`flex-1 sm:flex-none justify-center flex-shrink-0 px-3 sm:px-4 py-2 sm:py-2 rounded-xl text-[10px] sm:text-xs font-bold border transition-all ${selectedCategoryId === cat.id ? 'bg-brand border-brand text-content-inverse' : 'bg-surface-ground border-white/10 text-white hover:border-brand/50'}`}
+                                className={`adm-chip ${selectedCategoryId === cat.id ? 'is-on' : ''}`}
                               >
                                   {cat.name}
                               </button>
@@ -1190,35 +1352,8 @@ const getTournamentCredits = (t: any) => {
           
           <DeleteConfirmationModal target={deleteTarget} onCancel={() => setDeleteTarget(null)} onConfirm={confirmDelete} />
           <RetireConfirmationModal target={retireTarget} onCancel={() => setRetireTarget(null)} onConfirm={confirmRetire} />
-
-          {/* Tournament Wizard Modal */}
-          {isCreating && (
-              <div className="fixed inset-0 z-50 flex justify-center pt-10 sm:pt-20 bg-black/80 backdrop-blur-sm overflow-y-auto pb-20">
-                 <div className="bg-[#0f1115] w-full max-w-4xl rounded-2xl border border-white/10 shadow-2xl relative">
-                    <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#15181e] rounded-t-2xl">
-                        <div>
-                            <h2 className="text-xl font-bold text-white">{editingId ? "Edit Tournament" : "Create Tournament"}</h2>
-                            <p className="text-sm text-content-secondary mt-1">{editingId ? "Update tournament details and settings." : "Set up a new tournament."}</p>
-                        </div>
-                        <button onClick={closeWizard} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl text-white transition-colors duration-200">
-                            <X size={20} />
-                        </button>
-                    </div>
-                    <div className="p-8">
-                        <CreateTournamentWizardWrapper 
-                            initialData={editingId ? activeTournament : null} 
-                            tournamentId={editingId} 
-                            onCancel={closeWizard} 
-                            onCreate={(id: string) => {
-                                closeWizard();
-                                setSelectedTournamentId(id);
-                            }} 
-                        />
-                    </div>
-                 </div>
-              </div>
-          )}
       </div>
+      </AdminShell>
   );
 };
 
@@ -1315,8 +1450,8 @@ function DeleteConfirmationModal({ target, onCancel, onConfirm }: any) {
 };
 
 const TabButton = ({ active, onClick, label, icon }: any) => (
-    <button onClick={onClick} className={`flex-1 sm:flex-none justify-center px-2 sm:px-4 py-2 sm:py-2.5 rounded-lg flex items-center gap-1.5 sm:gap-2 whitespace-nowrap text-[10px] sm:text-xs font-bold transition-all ${active ? 'bg-brand text-content-inverse' : 'bg-surface-panel text-content-muted border border-white/10 hover:text-white hover:bg-surface-elevated'}`}>
-        {React.cloneElement(icon, { className: 'w-3 h-3 sm:w-4 sm:h-4 shrink-0' })} 
+    <button onClick={onClick} className={`adm-tab ${active ? 'is-on' : ''}`} aria-current={active ? 'page' : undefined}>
+        {React.cloneElement(icon, { className: 'w-4 h-4 shrink-0' })}
         <span className="hidden sm:inline">{label}</span>
         <span className="sm:hidden">{label.split(' ')[0]}</span>
     </button>
@@ -1642,13 +1777,13 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
     return (
         <div className="space-y-6">
             {/* Step Indicator */}
-            <div className="flex items-center gap-3 mb-8">
+            <div className="adm-stepper" style={{ '--progress': (step - 1) / 3 } as React.CSSProperties}>
+                <span className="adm-stepper__track" aria-hidden="true"><i /></span>
                 {[1, 2, 3, 4].map((s) => (
-                    <div key={s} className="flex-1 flex flex-col gap-2">
-                        <div className={`h-1.5 rounded-full transition-all duration-500 ${step >= s ? 'bg-brand shadow-[0_0_8px_rgba(230,126,80,0.4)]' : 'bg-white/10'}`} />
-                        <span className={`text-[10px] font-bold uppercase tracking-widest text-center ${step === s ? 'text-brand' : 'text-content-muted'}`}>
-                            {s === 1 ? 'General' : s === 2 ? 'Format' : s === 3 ? 'Pricing' : 'Assets'}
-                        </span>
+                    <div key={s} className={`adm-step ${step === s ? 'is-on' : step > s ? 'is-done' : ''}`}>
+                        <span className="adm-step__dot">{step > s ? <Check size={14} /> : s}</span>
+                        <span className="adm-step__label">{s === 1 ? 'General' : s === 2 ? 'Format' : s === 3 ? 'Pricing' : 'Assets'}</span>
+                        <span className="adm-step__hint">{s === 1 ? 'Name, venue & dates' : s === 2 ? 'Format & categories' : s === 3 ? 'Teams, fees & courts' : 'Branding & display'}</span>
                     </div>
                 ))}
             </div>
@@ -2434,13 +2569,14 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
                             </label>
 
                             <div>
-                                <span className="block text-xs text-content-muted mb-2">Broadcast screen theme</span>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                <span className="block text-xs text-content-muted mb-2">Broadcast screen theme <span className="opacity-70">(Sofcom also restyles the OBS scorebug)</span></span>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                                     {([
                                         { id: 'matchup', label: 'Matchup', hint: 'Dark · default', bg: '#0d0d0f', card: '#16161a', accent: '#4D78FF', text: '#ffffff' },
                                         { id: 'fip', label: 'FIP Navy', hint: 'Federation broadcast', bg: 'linear-gradient(155deg,#17253F,#002C5C 50%,#003b78)', card: '#ffffff', accent: '#002C5C', text: '#002C5C' },
                                         { id: 'light', label: 'Light', hint: 'Bright venues', bg: '#eef1f7', card: '#ffffff', accent: '#4D78FF', text: '#0f172a' },
                                         { id: 'pinktober', label: 'Pink Ribbon', hint: 'Pinktober events', bg: 'linear-gradient(150deg,#3a0a2a,#6b1048 50%,#9c1857)', card: '#ffffff', accent: '#e83e8c', text: '#4a0d35' },
+                                        { id: 'sofcom', label: 'Sofcom', hint: 'Orange gradient · OBS too', bg: 'radial-gradient(ellipse 60% 40% at 100% 35%, rgba(255,122,40,0.7), transparent 75%), radial-gradient(ellipse 60% 40% at 0% 70%, rgba(255,122,40,0.6), transparent 75%), #070504', card: '#ffffff', accent: '#E85624', text: '#111111' },
                                     ] as const).map(opt => {
                                         const active = (data.broadcastTheme || 'matchup') === opt.id;
                                         return (
@@ -2553,7 +2689,7 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
 function Input({ label, value, onChange, type="text", icon, className }: any) {
     return (
         <div>
-        <label className="block text-content-secondary text-sm mb-1 font-medium">{label}</label>
+        <label className="adm-label">{label}</label>
         <div className="relative">
             {icon && (
                 <div className="absolute left-3 top-0 bottom-0 flex items-center justify-center text-content-muted pointer-events-none min-w-[20px]">
@@ -2562,7 +2698,7 @@ function Input({ label, value, onChange, type="text", icon, className }: any) {
             )}
             <input 
                 type={type} 
-                className={`w-full bg-surface-ground border border-white/10 rounded-xl p-3 text-white focus:border-brand outline-none transition-all focus:ring-1 focus:ring-brand ${icon ? 'pl-10' : ''} ${className || ''}`} 
+                className={`adm-input ${icon ? 'pl-10' : ''} ${className || ''}`} 
                 value={value} 
                 onChange={e => onChange(e.target.value)} 
             />

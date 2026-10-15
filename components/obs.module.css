@@ -176,3 +176,46 @@
   line-height: 1;
   will-change: transform;
 }
+
+
+/* ── Sofcom theme (Tournament.broadcastTheme === 'sofcom') ──────────────────
+   Black-to-ember scorebug with an orange #E85624 accent rail, orange active
+   game box and points, lime serve ball like the event's tennis ball. */
+.themeSofcom {
+  background:
+    radial-gradient(ellipse 60% 120% at 100% 50%, rgba(232, 86, 36, 0.35), transparent 70%),
+    linear-gradient(90deg, #0b0b0b 0%, #160a05 60%, #2a1006 100%);
+  border-left: 6px solid #E85624;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.75), 0 0 24px rgba(232, 86, 36, 0.35);
+  border-radius: 4px;
+}
+
+.themeSofcom .obsDivider,
+.themeSofcom .scoreRowDivider,
+.themeSofcom .pointsDivider {
+  background: rgba(232, 86, 36, 0.45);
+}
+
+.themeSofcom .activeGameBox {
+  border-color: #E85624;
+  background: rgba(232, 86, 36, 0.12);
+}
+
+.themeSofcom .activeGameDivider {
+  background: rgba(232, 86, 36, 0.6);
+}
+
+.themeSofcom .pointsCol {
+  background: linear-gradient(180deg, #F26B35 0%, #E85624 55%, #C4441A 100%);
+  border-radius: 3px;
+  width: 42px;
+}
+
+.themeSofcom .pointsDivider {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.themeSofcom .servingBall {
+  background: radial-gradient(circle at 35% 35%, #F4FF9A 0%, #C6E03A 55%, #8FA91C 100%);
+  box-shadow: 0 0 6px rgba(198, 224, 58, 0.8), inset -1px -1px 2px rgba(0, 0, 0, 0.35);
+}

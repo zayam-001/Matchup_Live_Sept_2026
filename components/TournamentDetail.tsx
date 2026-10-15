@@ -9,8 +9,12 @@ import {
   MapPin, 
   Users, 
   Tv,
-  Timer
+  Timer,
+  Share2,
+  Play,
+  Layers
 } from 'lucide-react';
+import './spectator.css';
 import gsap from 'gsap';
 import { Tournament, Match, Team, MatchStatus, SponsorTier } from '../types';
 import { isMatchInCategory, isTeamInCategory } from '../services/storage';
@@ -170,126 +174,88 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
 
   const tabs = [
     { id: 'live', label: 'Live', icon: Activity },
-    { id: 'schedule', label: 'Sched', icon: Calendar },
-    { id: 'results', label: 'Scores', icon: Award },
-    { id: 'standings', label: 'Rank', icon: Trophy },
+    { id: 'schedule', label: 'Schedule', icon: Calendar },
+    { id: 'results', label: 'Results', icon: Award },
+    { id: 'standings', label: 'Standings', icon: Trophy },
     { id: 'timeline', label: 'Feed', icon: History }
   ];
 
+  // Hero facts.
+  const finishedCount = matchesToDisplay.filter((m: any) => m.status === MatchStatus.COMPLETED || String(m.status).toUpperCase() === 'COMPLETED' || String(m.status).toUpperCase() === 'FINISHED').length;
+  const now = Date.now();
+  const startTs = tournament.startDate ? new Date(tournament.startDate).getTime() : 0;
+  const endTs = tournament.endDate ? new Date(tournament.endDate).getTime() : 0;
+  const heroStatus = liveMatches.length > 0 ? 'live' : (tournament.status === 'COMPLETED' || (endTs && endTs < now)) ? 'done' : (startTs && startTs > now) ? 'soon' : 'on';
+  const prize = (selectedCategoryId ? (tournament.categories?.find(c => c.id === selectedCategoryId)?.prizeMoney || tournament.prizeMoney) : tournament.prizeMoney) || 0;
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
+  const share = async () => {
+    const url = window.location.href;
+    try {
+      if (navigator.share) await navigator.share({ title: tournament.name, url });
+      else { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1800); }
+    } catch { /* cancelled */ }
+  };
+  const watchLive = () => {
+    setActiveTab('live');
+    contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  // Slow parallax on the hero artwork.
+  const heroRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = heroRef.current;
+    if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const r = el.getBoundingClientRect();
+        el.style.setProperty('--spx-par', `${Math.max(-60, Math.min(60, -r.top * 0.18))}px`);
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => { window.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf); };
+  }, []);
+
   return (
-    <div className="pb-32 pt-28 max-w-[1400px] mx-auto w-full animate-in fade-in duration-500 px-4 md:px-8 relative">
+    <div className="spx pb-32 pt-24 max-w-[1400px] mx-auto w-full animate-in fade-in duration-500 px-4 md:px-8 relative">
       
-      {/* Top Controls Row. No back button here: the sticky bar above already
-          has "‹ Tournaments", which did exactly the same thing. */}
-      {onEnterBroadcastMode && (
-      <div className="max-w-7xl mx-auto px-4 pt-4 md:pt-6 pb-4 flex justify-end items-center relative z-10">
-          <button
-            onClick={onEnterBroadcastMode} 
-            className="bg-[#E65C31] text-white px-4 py-2 rounded-full font-black flex items-center gap-2 hover:bg-[#ff6d3f] transition-colors cursor-pointer border-none text-xs uppercase tracking-widest shadow-lg shadow-[#E65C31]/20 animate-pulse-subtle"
-          >
-            <Tv size={14} />
-            <span>Broadcast Mode</span>
-          </button>
-      </div>
-      )}
-
-      {/* Hero Header */}
-      <div className="max-w-7xl mx-auto mb-10 px-4 md:px-0">
-        <div className="relative w-full rounded-3xl overflow-hidden border border-white/5 bg-[#111111] shadow-2xl">
-          
-          {/* Banner Image / Gradient */}
-          <div className="absolute inset-0 w-full h-full overflow-hidden">
-            {tournament.bannerUrl ? (
-              <>
-                <img 
-                  src={tournament.bannerUrl} 
-                  alt="" 
-                  className="w-full h-full object-cover opacity-25 scale-105 filter blur-[2px]" 
-                  referrerPolicy="no-referrer"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/85 to-transparent" />
-                <div className="absolute inset-0 bg-gradient-to-r from-[#0A0A0A] via-transparent to-[#0A0A0A]" />
-              </>
-            ) : (
-              <div className="absolute inset-0 bg-gradient-to-br from-[#4D78FF]/10 via-[#0A0A0A] to-[#E65C31]/10 opacity-60">
-                <div className="absolute inset-0 opacity-5 bg-[linear-gradient(45deg,#fff_12.5%,transparent_12.5%,transparent_50%,#fff_50%,#fff_62.5%,transparent_62.5%,transparent_100%)] bg-[length:30px_30px]" />
-              </div>
-            )}
+      {/* ── Cinematic hero: the event's own artwork leads ── */}
+      <section ref={heroRef} className="spx-hero">
+        <div className="spx-hero__media" aria-hidden="true">
+          {tournament.bannerUrl
+            ? <img src={tournament.bannerUrl} alt="" referrerPolicy="no-referrer" />
+            : <div className="spx-hero__art"><span className="spx-hero__art-court" /></div>}
+        </div>
+        <div className="spx-hero__shade" aria-hidden="true" />
+        <div className="spx-hero__inner">
+          <div className="spx-hero__chips">
+            <span className={`spx-status spx-status--${heroStatus}`}>
+              {heroStatus === 'live' && <span className="spx-dot" />}
+              {heroStatus === 'live' ? `Live now · ${liveMatches.length} ${liveMatches.length === 1 ? 'match' : 'matches'}` : heroStatus === 'done' ? 'Tournament finished' : heroStatus === 'soon' ? `Starts ${formatFullTime(tournament.startDate)}` : 'Underway'}
+            </span>
           </div>
-
-          {/* Header Content Grid */}
-          <div className="relative z-10 px-6 py-10 md:p-12 flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
-            <div className="flex flex-col md:flex-row items-start gap-6 max-w-4xl">
-              
-              {/* Organizer Logo */}
-              <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-[#1A1A1A] border-2 border-white/10 flex items-center justify-center overflow-hidden shrink-0 shadow-xl relative">
-                {tournament.organizerLogo ? (
-                  <img 
-                    src={tournament.organizerLogo} 
-                    alt="" 
-                    className="w-full h-full object-cover" 
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <span className="font-black text-2xl text-white/50">{tournament.organizer?.substring(0, 2).toUpperCase() || 'MA'}</span>
-                )}
-              </div>
-
-              {/* Title & Stats */}
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="brand" className="bg-[#4D78FF]/15 text-[#4D78FF] border-[#4D78FF]/30">
-                    {tournament.sport || 'Padel'}
-                  </Badge>
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                    Organised by <span className="text-white font-black">{tournament.organizer || 'Matchup Admin'}</span>
-                  </span>
-                </div>
-
-                <h1 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tight leading-none">
-                  {tournament.name}
-                </h1>
-
-                <div className="flex flex-wrap items-center gap-y-2 gap-x-4 pt-1 text-xs text-gray-400">
-                  <div className="flex items-center gap-1.5 font-semibold text-gray-300">
-                    <MapPin size={13} className="text-[#4D78FF]" />
-                    <span className="uppercase tracking-wider text-[10px]">{tournament.venue || 'Global Arena'}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 font-semibold text-gray-300">
-                    <Calendar size={13} />
-                    <span className="uppercase tracking-wider text-[10px]">
-                      {formatFullTime(tournament.startDate)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5 font-semibold text-gray-300">
-                    <Users size={13} />
-                    <span className="uppercase tracking-wider text-[10px]">{(tournament.teams || []).length} Teams Joined</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Formats & Prize Box */}
-            <div className="flex flex-row md:flex-col items-center md:items-end gap-3 w-full md:w-auto border-t border-white/5 md:border-none pt-4 md:pt-0">
-              <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-right shrink-0">
-                <div className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">Tournament Format</div>
-                <div className="text-xs font-black text-white uppercase tracking-wider mt-0.5">
-                  {tournament.format ? formatLabel(tournament.format) : 'STANDARD'}
-                </div>
-              </div>
-
-              <div className="bg-[#4D78FF]/10 border border-emerald-500/20 rounded-xl px-4 py-2 text-right shrink-0">
-                <div className="text-[9px] text-[#4D78FF] uppercase tracking-widest font-black">
-                  {selectedCategoryId ? 'Category Prize' : 'Grand Prize Pool'}
-                </div>
-                <div className="text-sm font-black text-[#4D78FF] uppercase tracking-wider mt-0.5">
-                  {tournament.currency === 'USD' ? '$' : 'Rs'} {((selectedCategoryId ? (tournament.categories?.find(c => c.id === selectedCategoryId)?.prizeMoney || tournament.prizeMoney) : tournament.prizeMoney) || 0).toLocaleString()}
-                </div>
-              </div>
-            </div>
+          <h1 className="spx-hero__title">{tournament.name}</h1>
+          <div className="spx-hero__meta">
+            <span><MapPin size={14} /> {tournament.venue || 'Global Arena'}</span>
+            <span><Calendar size={14} /> {formatFullTime(tournament.startDate)}</span>
+            <span><Users size={14} /> {(tournament.teams || []).length} teams</span>
+            <span><Layers size={14} /> {tournament.format ? formatLabel(tournament.format) : 'Standard'}</span>
+          </div>
+          <div className="spx-hero__actions">
+            {onEnterBroadcastMode && <button type="button" className="spx-btn spx-btn--primary" onClick={onEnterBroadcastMode}><Tv size={16} /> Broadcast mode</button>}
+            <button type="button" className={`spx-btn ${onEnterBroadcastMode ? 'spx-btn--ghost' : 'spx-btn--primary'}`} onClick={watchLive}><Play size={16} /> {liveMatches.length ? 'Watch live' : 'View matches'}</button>
+            <button type="button" className="spx-btn spx-btn--icon" onClick={share} aria-label="Share tournament"><Share2 size={16} />{copied && <span className="spx-copied">Link copied</span>}</button>
           </div>
         </div>
-      </div>
+        <div className="spx-stats">
+          <div className="spx-stat"><span className="spx-stat__icon"><Activity size={16} /></span><strong>{liveMatches.length}</strong><small>Live now</small></div>
+          <div className="spx-stat"><span className="spx-stat__icon"><Users size={16} /></span><strong>{(teamsToDisplay || []).length}</strong><small>Teams</small></div>
+          <div className="spx-stat"><span className="spx-stat__icon"><Layers size={16} /></span><strong>{finishedCount}<em>/{matchesToDisplay.length}</em></strong><small>Matches played</small></div>
+          <div className="spx-stat spx-stat--prize"><span className="spx-stat__icon"><Trophy size={16} /></span><strong>{tournament.currency === 'USD' ? '$' : 'Rs'} {prize.toLocaleString()}</strong><small>{selectedCategoryId ? 'Category prize' : 'Prize pool'}</small></div>
+        </div>
+      </section>
 
       {/* Innovative 3D Animated Category Selector */}
       {tournament.categories && tournament.categories.length > 0 && (
@@ -304,8 +270,8 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
       )}
 
       {/* Main Tab Content Display Panel */}
-      <div className="max-w-7xl mx-auto px-1 sm:px-4 mb-16">
-        <div className="bg-[#111111]/50 backdrop-blur-sm rounded-2xl sm:rounded-3xl border border-white/5 overflow-hidden shadow-2xl">
+      <div ref={contentRef} className="max-w-7xl mx-auto px-1 sm:px-4 mb-16 spx-content-wrap">
+        <div className="spx-panel" key={activeTab}>
           <div className="p-1.5 sm:p-6 md:p-8 min-h-[500px]">
             {activeTab === 'live' && (
               <div className="animate-in fade-in duration-500">
@@ -387,19 +353,19 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
       {/* Floating Bottom Navigation Bar with Safe Area Inset Padding */}
       <div className="fixed bottom-0 left-0 right-0 p-4 md:p-6 flex justify-center z-50 pointer-events-none">
         <div 
-          className="pointer-events-auto w-full max-w-[500px] shadow-2xl mx-auto"
+          className="pointer-events-auto w-full max-w-[600px] mx-auto"
           style={{
             paddingBottom: 'calc(env(safe-area-inset-bottom) + 0px)'
           }}
         >
           <div 
             ref={tabsContainerRef} 
-            className="relative flex items-center justify-between bg-[#111111]/90 backdrop-blur-md rounded-full border border-white/10 p-1 md:p-1.5 shadow-2xl"
+            className="spx-dock relative flex items-center justify-between rounded-full p-1 md:p-1.5"
           >
             {/* Sliding GSAP indicator pill */}
             <div 
               ref={indicatorRef} 
-              className="absolute top-1 bottom-1 md:top-1.5 md:bottom-1.5 rounded-full bg-gradient-to-r from-[#4D78FF] to-[#E65C31] shadow-lg shadow-[#4D78FF]/20"
+              className="spx-dock__pill absolute top-1 bottom-1 md:top-1.5 md:bottom-1.5 rounded-full"
               style={{ left: 0, width: 0 }}
             />
             
@@ -420,6 +386,7 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
                     <span className={`text-[9px] md:text-xs uppercase tracking-wider md:tracking-widest font-display whitespace-nowrap ${isActive ? 'font-black' : 'font-bold'}`}>
                       {tab.label}
                     </span>
+                    {tab.id === 'live' && liveMatches.length > 0 && <span className="spx-dock__badge">{liveMatches.length}</span>}
                   </div>
                 </button>
               );

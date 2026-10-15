@@ -58,7 +58,7 @@ export enum SponsorTier {
   TITLE = 'TITLE'
 }
 
-export type BroadcastTheme = 'matchup' | 'fip' | 'light' | 'pinktober';
+export type BroadcastTheme = 'matchup' | 'fip' | 'light' | 'pinktober' | 'sofcom';
 export type NameDisplayMode = 'players' | 'team';
 
 export interface Sponsor {

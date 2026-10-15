@@ -3,6 +3,7 @@ import { Tournament } from '../types';
 import { Avatar } from './ui/Avatar';
 import { MapPin, Trophy, Calendar } from 'lucide-react';
 import { motion } from 'motion/react';
+import './tournamentBannerCard.css';
 
 interface TournamentBannerCardProps {
   tournament: Tournament;
@@ -74,70 +75,48 @@ export const TournamentBannerCard: React.FC<TournamentBannerCardProps> = ({
           </div>
         )}
 
-        {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent opacity-95 transition-opacity group-hover:opacity-100" />
+        {/* Readability scrim: dark band under the text so busy banner art never fights it */}
+        <div className="tbc-scrim" />
 
-        {/* Absolute Badges on Top */}
+        {/* Status badge */}
         <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
-          {isLive && (
-            <span className="flex items-center gap-1.5 bg-[#4D78FF] text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-md">
-              <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
-              Live Now
-            </span>
-          )}
-          {isOngoing && (
-            <span className="flex items-center gap-1 bg-[#E65C31]/15 text-[#E65C31] border border-[#E65C31]/30 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-md">
-              Underway
-            </span>
-          )}
-          {isUpcoming && (
-            <span className="flex items-center gap-1 bg-white/10 text-white border border-white/10 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-md">
-              Upcoming
-            </span>
-          )}
-          {isCompleted && (
-            <span className="flex items-center gap-1 bg-white/5 text-white/60 border border-white/5 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md">
-              Completed
-            </span>
-          )}
+          <span className={`tbc-pill ${isLive ? 'tbc-pill--live' : isOngoing ? 'tbc-pill--ongoing' : isCompleted ? 'tbc-pill--done' : ''}`}>
+            {isLive && <span className="tbc-pill__dot" />}
+            {isLive ? 'Live now' : isOngoing ? 'Underway' : isUpcoming ? 'Upcoming' : 'Completed'}
+          </span>
         </div>
 
-        {/* Top Right Organizer Logo Badge */}
+        {/* Organizer badge */}
         <div className="absolute top-4 right-4 z-10">
-          <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10 shadow-lg">
+          <div className="tbc-org">
             <Avatar
               src={tournament.organizerLogo}
               fallback={tournament.organizer || 'M'}
               size="sm"
-              className="w-4 h-4 border-none shrink-0"
+              className="w-5 h-5 border-none shrink-0"
             />
-            <span className="text-[8px] font-black uppercase tracking-wider text-white max-w-[80px] truncate">
-              {tournament.organizer || 'Matchup'}
-            </span>
+            <span className="tbc-org__name">{tournament.organizer || 'Matchup'}</span>
           </div>
         </div>
 
-        {/* Cinematic Card Meta Content (Bottom overlay) */}
+        {/* Bottom content */}
         <div className="absolute bottom-0 inset-x-0 p-5 z-10 flex flex-col justify-end">
-          <div className="space-y-1">
-            <span className={`text-[10px] font-black uppercase tracking-widest block font-mono ${isOngoing ? 'text-[#E65C31]' : 'text-[#4D78FF]'}`}>
-              {isLive ? `● Live • ${(tournament.teams || []).length} Teams` : isOngoing ? `Underway since ${formattedStartDate}` : isUpcoming ? `Upcoming • ${formattedStartDate}` : 'Tournament Finished'}
-            </span>
-            <h3 className="text-base md:text-lg font-black text-white uppercase tracking-wider line-clamp-1 group-hover:text-[#4D78FF] transition-colors leading-tight">
-              {tournament.name}
-            </h3>
-          </div>
+          <span className="tbc-kicker">
+            {isLive ? <><i className="tbc-kicker__dot" /> Live · {(tournament.teams || []).length} teams</> : isOngoing ? `Underway since ${formattedStartDate}` : isUpcoming ? <><Calendar size={12} /> {formattedStartDate}</> : 'Tournament finished'}
+          </span>
+          <h3 className="tbc-title">{tournament.name}</h3>
 
-          {/* Expanded Meta Info */}
-          <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/10 text-[9px] text-gray-400 font-bold uppercase tracking-wider">
-            <span className="flex items-center gap-1 min-w-0">
-              <MapPin size={11} className="text-[#4D78FF] shrink-0" />
-              <span className="truncate max-w-[120px]">{tournament.venue || 'Global Arena'}</span>
+          <div className="tbc-meta">
+            <span className="tbc-meta__venue">
+              <MapPin size={13} className="shrink-0" />
+              <span className="truncate">{tournament.venue || 'Global Arena'}</span>
             </span>
-            <span className="flex items-center gap-1 text-accent-success shrink-0 font-mono">
-              <Trophy size={11} />
-              <span>{tournament.currency === 'USD' ? '$' : 'Rs'} {(tournament.prizeMoney || 0).toLocaleString()}</span>
-            </span>
+            {!!tournament.prizeMoney && (
+              <span className="tbc-meta__prize">
+                <Trophy size={13} />
+                {tournament.currency === 'USD' ? '$' : 'Rs'} {tournament.prizeMoney.toLocaleString()}
+              </span>
+            )}
           </div>
         </div>
       </div>

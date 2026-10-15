@@ -1,412 +1,632 @@
-
-import React, { useEffect } from 'react';
-import './PublicLanding.css';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import './landing/home.css';
 import { usePlatformStats, AnimatedCounter } from './PublicLandingStats';
 import { useLeaderboard } from '../hooks/useLeaderboard';
 import { useTournaments } from '../hooks/useTournaments';
 import { MatchupLogo } from './MatchupLogo';
 import { MobilePillMenu } from './MobilePillMenu';
+import { PadelIntro } from './landing/PadelIntro';
+import { PadelBall, PadelRacket } from './landing/PadelGear';
+import { setupHomeStory } from './landing/homeStory';
+
+// Homepage, told as a story in chapters: each chapter pins while scrolling
+// scrubs through it (see landing/homeStory.ts). Copy, links and live data are
+// Match Up's own; markup here is the finished state, motion only adds the
+// "before" states, so the page always reads correctly without animation.
+
+const prefersReducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+// The splash → strike transition plays once per page load (every refresh),
+// not when navigating back to the homepage inside the app.
+let introPlayedThisLoad = false;
+
+const Words: React.FC<{ text: string; className?: string }> = ({ text, className }) => (
+  <>
+    {text.split(' ').map((w, i, all) => (
+      // The space sits outside the inline-block: trailing spaces inside one collapse.
+      <React.Fragment key={i}><span className={`h-word ${className || ''}`}><span className="h-word__inner">{w}</span></span>{i < all.length - 1 ? ' ' : ''}</React.Fragment>
+    ))}
+  </>
+);
+
+const FEATURES = [
+  { n: '01', icon: '◉', eyebrow: 'Live engine', title: 'Live scoring', copy: 'Broadcast-ready score updates engineered for courts, organizers, and fans.', href: '#platform', art: 'score' },
+  { n: '02', icon: '♛', eyebrow: 'Competitive layer', title: 'Leaderboards', copy: 'A clear, dynamic view of player form, movement, points, and national standing.', href: '#rankings', art: 'bars' },
+  { n: '03', icon: '▦', eyebrow: 'Operations', title: 'Tournament management', copy: 'Registration, scheduling, brackets, results, and communication in one flow.', href: '#tournaments', art: 'bracket' },
+  { n: '04', icon: '◎', eyebrow: 'Identity', title: 'Player profiles', copy: 'Performance, achievements, history, and competitive identity in one place.', href: '#platform', art: 'profile' },
+] as const;
+
+const TESTIMONIALS = [
+  { quote: '“MatchUp made the tournament feel professional from registration to the final point.”', name: 'Areeb Malik', role: 'Competitive player', initials: 'AM' },
+  { quote: '“We spend less time managing spreadsheets and more time creating a great event.”', name: 'Maha Qazi', role: 'Tournament organizer', initials: 'MQ' },
+  { quote: '“Seeing my ranking move after every match changes how seriously I approach the game.”', name: 'Omer Shah', role: 'Ranked player', initials: 'OS' },
+];
+
+type BannerTournament = ReturnType<typeof useTournaments>['upcomingTournaments'][number] & { state: string };
+
+/** Big, poster-style tournament banner (the event's own artwork leads). */
+const TournamentBanner: React.FC<{ t: BannerTournament; featured?: boolean; onOpen: () => void }> = ({ t, featured, onOpen }) => {
+  const start = new Date(t.date);
+  const end = t.endDate ? new Date(t.endDate) : null;
+  const now = Date.now();
+  const completed = t.state === 'Completed';
+  const live = !completed && start.getTime() <= now && (!end || end.getTime() >= now);
+  const status = completed ? 'Completed' : live ? 'Live now' : 'Open for registration';
+  const fill = t.maxTeams ? Math.min(100, Math.round(((t.teamCount || 0) / t.maxTeams) * 100)) : 0;
+  const initials = t.name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  return (
+    <button type="button" className={`h-banner h-card ${featured ? 'h-banner--featured' : ''}`} onClick={onOpen}>
+      <span className="h-banner__media" aria-hidden="true">
+        {t.bannerUrl
+          ? <img className="h-banner__img" src={t.bannerUrl} alt="" loading="lazy" decoding="async" />
+          : <span className="h-banner__art"><span className="h-banner__art-court" /><span className="h-banner__art-mono">{initials}</span></span>}
+      </span>
+      <span className="h-banner__shade" aria-hidden="true" />
+      <span className="h-banner__top">
+        <span className={`h-banner__status ${live ? 'is-live' : completed ? 'is-done' : ''}`}>{live && <span className="h-dot" />}{status}</span>
+        <span className="h-banner__org">
+          {t.organizerLogo ? <img src={t.organizerLogo} alt="" /> : <span className="h-banner__org-fallback">{(t.organizer || 'M')[0]}</span>}
+          {t.organizer || 'Matchup'}
+        </span>
+      </span>
+      <span className="h-banner__date"><strong>{start.getDate()}</strong><span>{start.toLocaleDateString('en-US', { month: 'short' })}</span></span>
+      <span className="h-banner__body">
+        <span className="h-banner__name">{t.name}</span>
+        <span className="h-banner__meta">
+          <span>⌖ {t.venue || 'TBA'}</span>
+          {!!t.prizeMoney && <span className="h-banner__prize">🏆 {t.currency === 'USD' ? '$' : 'Rs'} {t.prizeMoney.toLocaleString()}</span>}
+        </span>
+        {!completed && !!t.maxTeams && (t.teamCount || 0) <= t.maxTeams && (
+          <span className="h-banner__cap"><span className="h-banner__cap-bar"><i style={{ width: `${Math.max(fill, 4)}%` }} /></span><small>{t.teamCount || 0}/{t.maxTeams} teams</small></span>
+        )}
+      </span>
+      <span className="h-banner__go" aria-hidden="true">→</span>
+    </button>
+  );
+};
+
+const INSTAGRAM_URL = 'https://www.instagram.com/matchupsport/';
+const REELS = [
+  { src: '/reels/karachi-vs-lahore.mp4', caption: 'It’s Karachi VS Lahore time at @maidan_pakistan… Matchup capturing each shot in Copa De Padel.', tag: 'Copa De Padel' },
+  { src: '/reels/fip-promises-live.mp4', caption: 'FIP Promises, but make it LIVE. 🎾⚡️ Every point. Every game. Every moment, tracked live by Matchup.', tag: 'FIP Promises' },
+];
+
+/** Instagram reel: plays muted only while on screen, tap to hear it. */
+const Reel: React.FC<{ src: string; caption: string; tag: string; autoplay: boolean }> = ({ src, caption, tag, autoplay }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [muted, setMuted] = useState(true);
+  const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !autoplay || !('IntersectionObserver' in window)) return;
+    const io = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) v.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+      else { v.pause(); setPlaying(false); }
+    }, { threshold: 0.35 });
+    io.observe(v);
+    return () => io.disconnect();
+  }, [autoplay]);
+
+  const toggleSound = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    setMuted(v.muted);
+    if (v.paused) v.play().then(() => setPlaying(true)).catch(() => {});
+  };
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) v.play().then(() => setPlaying(true)).catch(() => {});
+    else { v.pause(); setPlaying(false); }
+  };
+
+  return (
+    <figure className="h-reel h-card">
+      <video ref={videoRef} className="h-reel__video" src={`${src}#t=0.1`} muted playsInline loop preload="metadata" onClick={togglePlay} aria-label={caption} />
+      {!playing && <button type="button" className="h-reel__play" onClick={togglePlay} aria-label="Play reel">▶</button>}
+      <div className="h-reel__top">
+        <a className="h-reel__handle" href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer"><span className="h-reel__ig" aria-hidden="true" />@matchupsport</a>
+        <button type="button" className="h-reel__sound" onClick={toggleSound} aria-label={muted ? 'Unmute reel' : 'Mute reel'}>{muted ? '🔇' : '🔊'}</button>
+      </div>
+      <figcaption className="h-reel__caption"><span className="h-reel__tag">{tag}</span>{caption}</figcaption>
+    </figure>
+  );
+};
+
+const FeatureArt: React.FC<{ kind: string }> = ({ kind }) => {
+  if (kind === 'score') return (
+    <div className="h-art h-art--score">
+      <div className="h-art__live"><span className="h-dot" /> Live · Center Court</div>
+      <div className="h-art__row"><span>Tariq / Qureshi</span><b>6</b><b>4</b><em>40</em></div>
+      <div className="h-art__row"><span>Raza / Khan</span><b>4</b><b>3</b><em>15</em></div>
+    </div>
+  );
+  if (kind === 'bars') return (
+    <div className="h-art h-art--bars">
+      {[62, 88, 48, 100, 74].map((h, i) => <span key={i} style={{ '--h': `${h}%` } as React.CSSProperties}><i>{['04', '02', '05', '01', '03'][i]}</i></span>)}
+    </div>
+  );
+  if (kind === 'bracket') return (
+    <div className="h-art h-art--bracket">
+      <div className="h-art__col"><span className="is-win">QF 1</span><span>QF 2</span><span className="is-win">QF 3</span><span>QF 4</span></div>
+      <div className="h-art__col"><span className="is-win">SF 1</span><span>SF 2</span></div>
+      <div className="h-art__col"><span className="is-final">Final</span></div>
+    </div>
+  );
+  return (
+    <div className="h-art h-art--profile">
+      <div className="h-art__avatar">MU</div>
+      <div><strong>Player profile</strong><small>⌖ National · #04</small></div>
+      <div className="h-art__stats"><span><b>68%</b>Win rate</span><span><b>142</b>Matches</span><span><b>12</b>Titles</span></div>
+    </div>
+  );
+};
 
 export const PublicLanding: React.FC<{ onNavigate: (tab: string) => void }> = ({ onNavigate }) => {
   const stats = usePlatformStats();
   const { leaderboard } = useLeaderboard();
   const { upcomingTournaments, completedTournaments } = useTournaments();
 
+  const [motionOk] = useState(() => !prefersReducedMotion());
+  const [introActive, setIntroActive] = useState(() => motionOk && !introPlayedThisLoad);
+  const [heroIn, setHeroIn] = useState(false);
+  const [query, setQuery] = useState('');
+  const [city, setCity] = useState('All cities');
+  const rootRef = useRef<HTMLDivElement>(null);
+  const storyRef = useRef<ReturnType<typeof setupHomeStory> | null>(null);
+
+  // Build the story before first paint so nothing flashes in its final state.
+  useLayoutEffect(() => {
+    if (!rootRef.current) return;
+    const story = setupHomeStory(rootRef.current, { motion: motionOk });
+    storyRef.current = story;
+    return () => { story.destroy(); storyRef.current = null; };
+  }, [motionOk]);
+
   useEffect(() => {
-
-  const reducedMotion = false; // Interactive demo: motion intentionally enabled
-  const mobileQuery = window.matchMedia('(max-width: 820px)');
-  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-  const lerp = (start: number, end: number, amount: number) => start + (end - start) * amount;
-
-  const nav = document.querySelector('.site-nav');
-  const progressBar = document.querySelector('.scroll-progress span') as HTMLElement;
-  const hero = document.querySelector('.hero') as HTMLElement;
-  const heroContent = document.querySelector('.hero-content') as HTMLElement;
-  const heroGrid = document.querySelector('.hero-grid') as HTMLElement;
-  const heroOrbit = document.querySelector('.hero-orbit') as HTMLElement;
-  const court = document.querySelector('.court-stage') as HTMLElement;
-  const glowOne = document.querySelector('.hero-glow--one') as HTMLElement;
-  const glowTwo = document.querySelector('.hero-glow--two') as HTMLElement;
-  const featureSection = document.querySelector('.feature-story') as HTMLElement;
-  const featureTrack = document.querySelector('.feature-track') as HTMLElement;
-  const featureCards = [...document.querySelectorAll('.feature-card')] as HTMLElement[];
-  const featureProgress = document.querySelector('.feature-progress span') as HTMLElement;
-  const performanceSection = document.querySelector('.performance-section') as HTMLElement;
-  const performanceBg = document.querySelector('.performance-bg') as HTMLElement;
-  const appSection = document.querySelector('.app-section') as HTMLElement;
-  const phone = document.querySelector('.phone') as HTMLElement;
-  const finalCta = document.querySelector('.final-cta') as HTMLElement;
-  const finalOrb = document.querySelector('.final-cta__orb') as HTMLElement;
-
-  const getScrollTop = () => {
-    const sc = document.getElementById('main-scroll-container');
-    return sc ? sc.scrollTop : (window.scrollY || document.documentElement.scrollTop || 0);
-  };
-  let targetScroll = getScrollTop();
-  let renderedScroll = targetScroll;
-  let viewportHeight = window.innerHeight;
-  let viewportWidth = window.innerWidth;
-  let featureTravel = 0;
-  let rafId = 0;
-
-  function updateMeasurements() {
-    viewportHeight = window.innerHeight;
-    viewportWidth = window.innerWidth;
-    if (!featureSection || !featureTrack || mobileQuery.matches || reducedMotion) {
-      if (featureSection) featureSection.style.removeProperty('--feature-height');
-      featureTravel = 0;
-      return;
+    if (!introActive) {
+      const id = requestAnimationFrame(() => setHeroIn(true));
+      return () => cancelAnimationFrame(id);
     }
-    const sideBreathingRoom = Math.max(70, viewportWidth * 0.08);
-    featureTravel = Math.max(0, featureTrack.scrollWidth - viewportWidth + sideBreathingRoom);
-    const scrollDistance = Math.max(viewportHeight * 1.4, featureTravel * 1.18);
-    featureSection.style.setProperty('--feature-height', `${Math.ceil(viewportHeight + scrollDistance)}px`);
-  }
+  }, [introActive]);
 
-  function elementProgress(element: HTMLElement, startOffset = 0, endOffset = 0) {
-    if (!element) return 0;
-    const rect = element.getBoundingClientRect();
-    const start = viewportHeight - startOffset;
-    const end = -rect.height + endOffset;
-    return clamp((start - rect.top) / Math.max(1, start - end), 0, 1);
-  }
+  useEffect(() => { if (heroIn) storyRef.current?.playHeroEntrance(); }, [heroIn]);
 
-  function render() {
-    renderedScroll = reducedMotion ? targetScroll : lerp(renderedScroll, targetScroll, 0.105);
-    const sc = document.getElementById('main-scroll-container');
-    const scrollHeight = sc ? sc.scrollHeight : document.documentElement.scrollHeight;
-    const maxScroll = Math.max(1, scrollHeight - viewportHeight);
-    const globalProgress = clamp(renderedScroll / maxScroll, 0, 1);
+  // Live data changes section heights: let pinned chapters re-measure.
+  useEffect(() => { storyRef.current?.refresh(); }, [leaderboard.length, upcomingTournaments.length, completedTournaments.length]);
 
-    if (progressBar) progressBar.style.transform = `scaleX(${globalProgress})`;
-    if (nav) nav.classList.toggle('is-scrolled', renderedScroll > 28);
-
-    if (!reducedMotion && hero) {
-      const heroHeight = Math.max(1, hero.offsetHeight);
-      const hp = clamp(renderedScroll / heroHeight, 0, 1.18);
-      const mobileFactor = mobileQuery.matches ? 0.55 : 1;
-
-      if (heroContent) {
-        heroContent.style.transform = `translate3d(0, ${(-hp * 145 * mobileFactor).toFixed(2)}px, 0) scale(${(1 - hp * .035).toFixed(4)})`;
-        heroContent.style.opacity = String(clamp(1 - hp * 0.82, 0.18, 1));
-      }
-      if (heroGrid) {
-        heroGrid.style.transform = `perspective(800px) rotateX(65deg) scale(1.4) translate3d(0, ${27 + hp * 13}%, 0)`;
-      }
-      if (heroOrbit) {
-        heroOrbit.style.transform = `translate3d(${(hp * 72 * mobileFactor).toFixed(2)}px, ${(-hp * 115 * mobileFactor).toFixed(2)}px, 0) rotate(${(hp * 34).toFixed(2)}deg)`;
-      }
-      if (court) {
-        court.style.transform = `perspective(1000px) rotateX(${(58 - hp * 10).toFixed(2)}deg) rotateZ(${(-18 + hp * 8).toFixed(2)}deg) translate3d(${(hp * 52).toFixed(2)}px, ${(-hp * 78).toFixed(2)}px, 0) scale(${(1 - hp * .08).toFixed(4)})`;
-      }
-      if (glowOne) glowOne.style.transform = `translate3d(${(-hp * 75).toFixed(2)}px, ${(hp * 95).toFixed(2)}px, 0) scale(${(1 + hp * .18).toFixed(3)})`;
-      if (glowTwo) glowTwo.style.transform = `translate3d(${(hp * 54).toFixed(2)}px, ${(hp * 135).toFixed(2)}px, 0)`;
-    }
-
-    if (!reducedMotion && featureSection && featureTrack && !mobileQuery.matches) {
-      const sectionTop = featureSection.offsetTop;
-      const scrollRange = Math.max(1, featureSection.offsetHeight - viewportHeight);
-      const fp = clamp((renderedScroll - sectionTop) / scrollRange, 0, 1);
-      const x = -featureTravel * fp;
-      featureTrack.style.transform = `translate3d(${x.toFixed(2)}px,0,0)`;
-      if (featureProgress) featureProgress.style.transform = `scaleX(${fp})`;
-
-      featureCards.forEach((card) => {
-        const rect = card.getBoundingClientRect();
-        const center = rect.left + rect.width / 2;
-        const normalized = clamp((center - viewportWidth / 2) / (viewportWidth * .72), -1.25, 1.25);
-        const depth = Math.abs(normalized);
-        card.style.transform = `translate3d(0, ${(depth * 44).toFixed(2)}px, 0) rotateY(${(-normalized * 8).toFixed(2)}deg) scale(${(1 - depth * .045).toFixed(4)})`;
-        card.style.opacity = String(clamp(1 - depth * .25, .56, 1));
-        card.classList.toggle('is-near-center', depth < .28);
-      });
-    }
-
-    if (!reducedMotion && performanceSection && performanceBg) {
-      const pp = elementProgress(performanceSection, viewportHeight * .08, viewportHeight * .12);
-      performanceBg.style.transform = `translate3d(0, ${((pp - .5) * 150).toFixed(2)}px, 0) scale(${(1.08 + pp * .08).toFixed(3)})`;
-    }
-
-    if (!reducedMotion && appSection && phone) {
-      const ap = elementProgress(appSection, viewportHeight * .05, viewportHeight * .15);
-      const lift = (0.5 - ap) * 120;
-      phone.style.transform = `translate3d(0, ${lift.toFixed(2)}px, 0) rotateY(${(12 - ap * 13).toFixed(2)}deg) rotateZ(${(-6 + ap * 4).toFixed(2)}deg) scale(${(.9 + ap * .1).toFixed(3)})`;
-    }
-
-    if (!reducedMotion && finalCta && finalOrb) {
-      const cp = elementProgress(finalCta, 0, viewportHeight * .15);
-      finalOrb.style.transform = `translate3d(0, ${((.5 - cp) * 100).toFixed(2)}px, 0) rotate(${(cp * 38).toFixed(2)}deg) scale(${(.78 + cp * .36).toFixed(3)})`;
-      finalOrb.style.opacity = String(clamp(.25 + cp, .25, 1));
-    }
-
-    const isSettled = Math.abs(renderedScroll - targetScroll) < 0.08;
-    if (!isSettled || !reducedMotion) rafId = requestAnimationFrame(render);
-  }
-
-  function onScroll() {
-    targetScroll = getScrollTop();
-    if (reducedMotion && !rafId) rafId = requestAnimationFrame(() => { rafId = 0; render(); });
-  }
-
-  function restartRenderLoop() {
-    cancelAnimationFrame(rafId);
-    renderedScroll = getScrollTop();
-    targetScroll = renderedScroll;
-    updateMeasurements();
-    rafId = requestAnimationFrame(render);
-  }
-
-  // Reveal animations remain native and work inside local/embedded previews.
-  const revealElements = [...document.querySelectorAll('[data-reveal]')];
-  if (reducedMotion || !('IntersectionObserver' in window)) {
-    revealElements.forEach((element: any) => { element.style.opacity = '1'; element.style.transform = 'none'; });
-  } else {
-    revealElements.forEach((element: any) => { element.style.opacity = '0'; element.style.transform = 'translateY(34px)'; });
-    const revealObserver = new IntersectionObserver((entries, observer) => {
-      entries.forEach((entry: any) => {
-        if (!entry.isIntersecting) return;
-        entry.target.animate(
-          [{ opacity: 0, transform: 'translateY(34px)' }, { opacity: 1, transform: 'translateY(0)' }],
-          { duration: 780, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }
-        );
-        observer.unobserve(entry.target);
-      });
-    }, { threshold: .08, rootMargin: '0px 0px -7% 0px' });
-    revealElements.forEach((element) => revealObserver.observe(element));
-    // Safety fallback for restrictive embedded browsers.
-    window.setTimeout(() => revealElements.forEach((element: any) => {
-      if (getComputedStyle(element).opacity === '0' && element.getBoundingClientRect().top < viewportHeight * 1.05) {
-        element.style.opacity = '1'; element.style.transform = 'none';
-      }
-    }), 1400);
-  }
-
-  // Leaderboard search and city filter.
-  const search = document.querySelector('#playerSearch') as HTMLInputElement;
-  const city = document.querySelector('#cityFilter') as HTMLSelectElement;
-  const rows = [...document.querySelectorAll('.player-row')] as HTMLElement[];
-  function filterRows() {
-    const query = (search?.value || '').toLowerCase().trim();
-    const selectedCity = city?.value || 'All cities';
-    rows.forEach((row) => {
-      const matchesQuery = (row.dataset.search || '').includes(query);
-      const matchesCity = selectedCity === 'All cities' || row.dataset.city === selectedCity || row.dataset.city === 'Any';
-      row.hidden = !(matchesQuery && matchesCity);
-    });
-  }
-  search?.addEventListener('input', filterRows);
-  city?.addEventListener('change', filterRows);
-
-  // Mobile navigation handled by React state.
-
-  // Anchor navigation uses the browser's native scroll and never locks the wheel.
-  document.querySelectorAll('a[href^="#"]').forEach((link) => {
-    link.addEventListener('click', (event) => {
-      const selector = link.getAttribute('href');
-      if (!selector || selector === '#') return;
-      const target = document.querySelector(selector);
-      if (!target) return;
-      event.preventDefault();
-      target.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
-    });
-  });
-
-  const pointerMove = (event: any) => {
-    if (!hero || mobileQuery.matches || reducedMotion) return;
-    hero.style.setProperty('--pointer-x', `${(event.clientX / viewportWidth * 100).toFixed(1)}%`);
-    hero.style.setProperty('--pointer-y', `${(event.clientY / viewportHeight * 100).toFixed(1)}%`);
-  };
-  window.addEventListener('pointermove', pointerMove, { passive: true });
-
-  // Feature track drag and wheel scrolling (replaces visible scrollbar while preserving all functionality)
-  let isDown = false;
-  let startX = 0;
-  let scrollLeft = 0;
-  let hasDragged = false;
-
-  const handleMouseDown = (e: MouseEvent) => {
-    if (!featureTrack) return;
-    isDown = true;
-    hasDragged = false;
-    startX = e.pageX - featureTrack.offsetLeft;
-    scrollLeft = featureTrack.scrollLeft;
+  const finishIntro = () => {
+    introPlayedThisLoad = true;
+    setHeroIn(true);
+    setIntroActive(false);
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!isDown || !featureTrack) return;
-    const x = e.pageX - featureTrack.offsetLeft;
-    const walk = x - startX;
-    if (Math.abs(walk) > 4) {
-      hasDragged = true;
-      e.preventDefault();
-      featureTrack.scrollLeft = scrollLeft - walk;
-    }
+  const getHeroPose = () => {
+    const el = rootRef.current?.querySelector('.h-hero .h-rig__ball .mu-ball') as HTMLElement | null;
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { ball: { x: r.left + r.width / 2, y: r.top + r.height / 2, scale: r.width / 56 }, racket: null };
   };
 
-  const handleMouseUp = () => {
-    isDown = false;
+  const searching = query.trim().length > 0;
+  const rows = useMemo(() => {
+    const q = query.toLowerCase().trim();
+    return leaderboard.slice(0, 8).map((p, i) => ({ ...p, rank: i + 1 })).filter(p => !q || p.name.toLowerCase().includes(q));
+  }, [leaderboard, query]);
+  // Podium for the top three (when not searching), the rest as a list.
+  const podium = searching ? [] : rows.slice(0, 3);
+  const listRows = searching ? rows : rows.slice(3);
+  const pts = (p: { points: number; wins: number }) => p.points || p.wins * 10;
+
+  const tournamentCards = [
+    ...upcomingTournaments.slice(0, 3).map(t => ({ ...t, state: 'Open for Registration' })),
+    ...(upcomingTournaments.length < 2 ? completedTournaments.slice(0, 3 - upcomingTournaments.length).map(t => ({ ...t, state: 'Completed' })) : []),
+  ];
+
+  // Sign-up CTAs open the auth screen on "Create account"; "Log in" opens "Sign in".
+  const goSignup = () => {
+    try { sessionStorage.setItem('mu_auth_intent', 'signup'); } catch { /* private mode */ }
+    onNavigate('auth-player');
   };
 
-  const handleClickCapture = (e: MouseEvent) => {
-    if (hasDragged) {
-      e.preventDefault();
-      e.stopPropagation();
-      hasDragged = false;
-    }
+  const scrollTo = (e: React.MouseEvent, id: string) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    e.preventDefault();
+    el.scrollIntoView({ behavior: motionOk ? 'smooth' : 'auto', block: 'start' });
   };
-
-  const handleWheel = (e: WheelEvent) => {
-    if (!featureTrack) return;
-    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-      const maxScroll = featureTrack.scrollWidth - featureTrack.clientWidth;
-      if (maxScroll > 5) {
-        const canScrollLeft = featureTrack.scrollLeft > 0 && e.deltaY < 0;
-        const canScrollRight = featureTrack.scrollLeft < maxScroll - 1 && e.deltaY > 0;
-        if (canScrollLeft || canScrollRight) {
-          e.preventDefault();
-          featureTrack.scrollLeft += e.deltaY;
-        }
-      }
-    }
-  };
-
-  if (featureTrack) {
-    featureTrack.addEventListener('mousedown', handleMouseDown);
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    featureTrack.addEventListener('click', handleClickCapture, true);
-    featureTrack.addEventListener('wheel', handleWheel, { passive: false });
-  }
-
-  const scrollEl = document.getElementById('main-scroll-container') || window;
-  scrollEl.addEventListener('scroll', onScroll, { passive: true });
-  window.addEventListener('resize', restartRenderLoop, { passive: true });
-  window.addEventListener('load', restartRenderLoop, { once: true });
-  let rObs: ResizeObserver | null = null;
-  if ('ResizeObserver' in window && featureTrack) {
-    rObs = new ResizeObserver(updateMeasurements);
-    rObs.observe(featureTrack);
-  }
-  mobileQuery.addEventListener?.('change', restartRenderLoop);
-  
-  // Need to force an initial measurement wait for React to flush DOM
-  setTimeout(() => restartRenderLoop(), 50);
-  
-  return () => {
-     const scrollEl = document.getElementById('main-scroll-container') || window;
-     scrollEl.removeEventListener('scroll', onScroll);
-     window.removeEventListener('resize', restartRenderLoop);
-     window.removeEventListener('load', restartRenderLoop);
-     window.removeEventListener('pointermove', pointerMove);
-     mobileQuery.removeEventListener?.('change', restartRenderLoop);
-     if (featureTrack) {
-       featureTrack.removeEventListener('mousedown', handleMouseDown);
-       window.removeEventListener('mousemove', handleMouseMove);
-       window.removeEventListener('mouseup', handleMouseUp);
-       featureTrack.removeEventListener('click', handleClickCapture, true);
-       featureTrack.removeEventListener('wheel', handleWheel);
-     }
-     cancelAnimationFrame(rafId);
-     if (rObs) rObs.disconnect();
-  };
-
-  }, []);
 
   return (
-    <div className="pl-root">
+    <div ref={rootRef} className={['home', motionOk && 'home--motion', heroIn && 'home--hero-in'].filter(Boolean).join(' ')}>
+      {introActive && <PadelIntro getHeroPose={getHeroPose} onReveal={() => setHeroIn(true)} onDone={finishIntro} />}
 
-<div className="noise"></div><div className="scroll-progress" aria-hidden="true"><span></span></div>
-<nav className="site-nav">
-  <a className="nav-logo" href="#top"><MatchupLogo className="h-6 w-auto" /></a>
-  <div className="nav-links"><a href="#rankings">Rankings</a><a href="#tournaments">Tournaments</a><a href="#clubs">Clubs</a><a href="#community">Community</a><a onClick={() => onNavigate('live')} style={{ cursor: 'pointer' }}>Spectator Mode</a></div>
-  <div className="nav-actions"><a className="nav-login" onClick={() => onNavigate('auth-player')}>Log in</a><a className="button button--sm button--primary" onClick={() => onNavigate('auth-player')}>Start playing →</a></div>
-  <div className="mobile-toggle-wrapper">
-    <MobilePillMenu items={[
-      { label: 'Rankings', href: '#rankings' },
-      { label: 'Tournaments', href: '#tournaments' },
-      { label: 'Clubs', href: '#clubs' },
-      { label: 'Community', href: '#community' },
-      { label: 'Spectator Mode', onClick: () => onNavigate('live') },
-      { label: 'Log In', onClick: () => onNavigate('auth-player') },
-      { label: 'Play Now', onClick: () => onNavigate('auth-player') }
-    ]} />
-  </div>
-</nav>
+      <div className="h-noise" aria-hidden="true" />
+      <div className="h-progress" aria-hidden="true"><span /></div>
 
-<main>
-<section className="hero" id="top">
-  <div className="hero-grid"></div><div className="hero-glow hero-glow--one"></div><div className="hero-glow hero-glow--two"></div>
-  <div className="hero-orbit"><span className="orbit-ring orbit-ring--one"></span><span className="orbit-ring orbit-ring--two"></span><span className="orbit-ball"></span></div>
-  <div className="court-stage"><div className="court-stage__surface"><span className="court-line court-line--outer"></span><span className="court-line court-line--middle"></span><span className="court-line court-line--service-left"></span><span className="court-line court-line--service-right"></span><span className="court-net"></span><span className="player-dot player-dot--one"></span><span className="player-dot player-dot--two"></span><span className="player-dot player-dot--three"></span><span className="player-dot player-dot--four"></span></div></div>
-  <div className="hero-content container">
-    <div className="hero-kicker"><span className="live-dot"></span> Pakistan's competitive padel operating system</div>
-    <h1>Where competition<br/><span>meets technology.</span></h1>
-    <p>Track matches, climb leaderboards, organize tournaments, and elevate your game.</p>
-    <div className="hero-actions"><a className="button button--primary" onClick={() => onNavigate('auth-player')}>Start playing →</a><a className="button button--ghost" onClick={() => onNavigate('live')} style={{ cursor: 'pointer' }}>Spectator mode ›</a></div>
-    <div className="hero-proof"><div className="avatar-stack"><span>HT</span><span>SQ</span><span>AR</span><span>+2K</span></div><p><strong>Built for players.</strong><br/>Trusted by clubs and organizers.</p></div>
-  </div>
-  <a className="scroll-cue scroll-cue--prototype" href="#platform"><span>Scroll to explore</span><b>↓</b></a>
-</section>
+      <nav className="h-nav">
+        <a className="h-nav__logo" href="#top" onClick={e => scrollTo(e, 'top')} aria-label="Match Up home"><MatchupLogo className="h-6 w-auto" /></a>
+        <div className="h-nav__links">
+          <a href="#rankings" onClick={e => scrollTo(e, 'rankings')}>Rankings</a>
+          <a href="#tournaments" onClick={e => scrollTo(e, 'tournaments')}>Tournaments</a>
+          <a href="#clubs" onClick={e => scrollTo(e, 'clubs')}>Clubs</a>
+          <a href="#community" onClick={e => scrollTo(e, 'community')}>Community</a>
+          <button type="button" onClick={() => onNavigate('live')}>Spectator Mode</button>
+        </div>
+        <div className="h-nav__actions">
+          <button type="button" className="h-nav__login" onClick={() => onNavigate('auth-player')}>Log in</button>
+          <button type="button" className="h-btn h-btn--primary h-btn--sm" onClick={() => goSignup()}>Start playing →</button>
+        </div>
+        <div className="h-nav__mobile">
+          <MobilePillMenu items={[
+            { label: 'Rankings', href: '#rankings' },
+            { label: 'Tournaments', href: '#tournaments' },
+            { label: 'Clubs', href: '#clubs' },
+            { label: 'Community', href: '#community' },
+            { label: 'Spectator Mode', onClick: () => onNavigate('live') },
+            { label: 'Log In', onClick: () => onNavigate('auth-player') },
+            { label: 'Play Now', onClick: () => goSignup() },
+          ]} />
+        </div>
+      </nav>
 
-<section className="live-strip"><div className="container live-strip__inner"><div className="live-strip__label">◉ <span>Platform live</span></div>
-<div className="mini-stat"><AnimatedCounter value={stats.activePlayers} format={true} /><span>Active players</span></div>
-<div className="mini-stat"><AnimatedCounter value={stats.matchesLive} format={true} /><span>Matches live</span></div>
-<div className="mini-stat"><AnimatedCounter value={stats.tournamentsHosted} format={true} /><span>Tournaments hosted</span></div>
-<div className="mini-stat"><AnimatedCounter value={stats.totalMatchesPlayed} format={true} /><span>Matches organized</span></div>
-</div></section>
+      <main>
+        {/* ── Chapter 1 · The serve ─────────────────────────────────────── */}
+        <section className="h-hero" id="top">
+          <div className="h-hero__stage">
+            <div className="h-hero__bg" aria-hidden="true" />
+            <div className="h-hero__grid" aria-hidden="true" />
+            <div className="h-hero__court-wrap" aria-hidden="true">
+              <div className="h-court">
+                <span className="h-court__line h-court__line--outer" />
+                <span className="h-court__line h-court__line--mid" />
+                <span className="h-court__line h-court__line--sl" />
+                <span className="h-court__line h-court__line--sr" />
+                <span className="h-court__net" />
+                <span className="h-court__player h-court__player--1" />
+                <span className="h-court__player h-court__player--2" />
+                <span className="h-court__player h-court__player--3" />
+                <span className="h-court__player h-court__player--4" />
+                <span className="h-court__bounce" />
+                <span className="h-court__rally"><span className="h-court__ball" /></span>
+              </div>
+            </div>
+            <div className="h-rig" aria-hidden="true">
+              <div className="h-rig__racket"><div className="h-rig__kick"><PadelRacket /></div></div>
+              <div className="h-rig__ball"><div className="h-rig__bob"><PadelBall /></div></div>
+            </div>
 
-<section className="intro-section section" id="platform"><div className="container intro-grid"><div data-reveal="true"><p className="eyebrow">✦ One connected platform</p><h2>Everything the game needs.<br/><span>Nothing it doesn't.</span></h2></div><p className="section-copy" data-reveal="true">MatchUp connects players, clubs, scores, tournaments, rankings, and community into one high-performance system built for the pace of modern padel.</p></div></section>
+            <div className="h-hero__copy h-container">
+              <p className="h-kicker"><span className="h-dot" /> Pakistan's competitive padel operating system</p>
+              <h1 className="h-hero__title">
+                <span className="h-line"><Words text="Where competition" /></span>
+                <span className="h-line h-accent"><Words text="meets technology." /></span>
+              </h1>
+              <p className="h-hero__lede">Track matches, climb leaderboards, organize tournaments, and elevate your game.</p>
+              <div className="h-hero__actions">
+                <button type="button" className="h-btn h-btn--primary h-magnetic" onClick={goSignup}>Start playing →</button>
+                <button type="button" className="h-btn h-btn--ghost" onClick={() => onNavigate('live')}>Spectator mode ›</button>
+              </div>
+              <div className="h-hero__proof">
+                <div className="h-avatars"><span>HT</span><span>SQ</span><span>AR</span><span>+2K</span></div>
+                <p><strong>Built for players.</strong><br />Trusted by clubs and organizers.</p>
+              </div>
+            </div>
+            <a className="h-scroll-cue" href="#platform" onClick={e => scrollTo(e, 'platform')}><span>Scroll to explore</span><b>↓</b></a>
+          </div>
+        </section>
 
-<section className="feature-story"><div className="feature-pin"><div className="feature-track">
-  <article className="feature-intro-card feature-card"><p className="eyebrow">Built to compete</p><h3>From first serve<br/>to final ranking.</h3><div className="feature-progress"><span></span></div></article>
-  <article className="feature-card"><div className="feature-card__number">01</div><div className="feature-card__icon">◉</div><p className="feature-card__eyebrow">Live engine</p><h3>Live scoring</h3><p>Broadcast-ready score updates engineered for courts, organizers, and fans.</p><a href="#platform">Explore feature →</a></article>
-  <article className="feature-card"><div className="feature-card__number">02</div><div className="feature-card__icon">♛</div><p className="feature-card__eyebrow">Competitive layer</p><h3>Leaderboards</h3><p>A clear, dynamic view of player form, movement, points, and national standing.</p><a href="#rankings">Explore feature →</a></article>
-  <article className="feature-card"><div className="feature-card__number">03</div><div className="feature-card__icon">▦</div><p className="feature-card__eyebrow">Operations</p><h3>Tournament management</h3><p>Registration, scheduling, brackets, results, and communication in one flow.</p><a href="#tournaments">Explore feature →</a></article>
-  <article className="feature-card"><div className="feature-card__number">04</div><div className="feature-card__icon">◎</div><p className="feature-card__eyebrow">Identity</p><h3>Player profiles</h3><p>Performance, achievements, history, and competitive identity in one place.</p><a href="#platform">Explore feature →</a></article>
-</div></div></section>
+        {/* ── Live band ──────────────────────────────────────────────────── */}
+        <section className="h-band" aria-label="Platform live">
+          <div className="h-band__track">
+            {[0, 1].map(k => (
+              <div className="h-band__set" key={k} aria-hidden={k === 1}>
+                <span className="h-band__label"><span className="h-dot" /> Platform live</span>
+                <span className="h-band__stat"><AnimatedCounter value={stats.activePlayers} format /> <small>Active players</small></span>
+                <span className="h-band__sep">✦</span>
+                <span className="h-band__stat"><AnimatedCounter value={stats.matchesLive} format /> <small>Matches live</small></span>
+                <span className="h-band__sep">✦</span>
+                <span className="h-band__stat"><AnimatedCounter value={stats.tournamentsHosted} format /> <small>Tournaments hosted</small></span>
+                <span className="h-band__sep">✦</span>
+                <span className="h-band__stat"><AnimatedCounter value={stats.totalMatchesPlayed} format /> <small>Matches organized</small></span>
+                <span className="h-band__sep">✦</span>
+              </div>
+            ))}
+          </div>
+        </section>
 
-<section className="rankings-section section" id="rankings"><div className="container"><div className="section-heading" data-reveal="true"><div><p className="eyebrow">♛ National rankings</p><h2>Your game.<br/><span>Measured.</span></h2></div><p>Live standings that reward consistency, performance, and the courage to keep competing.</p></div>
-<div className="leaderboard-shell" data-reveal="true"><div className="leaderboard-head"><div><span className="pulse-badge"><span></span> {stats.totalMatchesPlayed} Matches Organized</span><h3>MatchUp Top Players</h3></div><div className="leaderboard-filters"><label className="search-control">⌕ <input id="playerSearch" placeholder="Search player or club" /></label><select id="cityFilter"><option>All cities</option><option>Karachi</option><option>Lahore</option><option>Islamabad</option></select></div></div>
-<div className="leaderboard-table"><div className="leaderboard-row leaderboard-row--header"><span>Rank</span><span>Player</span><span>Club</span><span>Form</span><span>Record</span><span>Points</span></div>
-{leaderboard.slice(0,4).map((player, idx) => (
-<a key={player.id} className="leaderboard-row player-row" data-city="Any" data-search={player.name.toLowerCase()}><span className="rank-cell"><b>0{idx+1}</b><small className="move move--flat">-</small></span><span className="player-cell"><span className="player-avatar">{player.name.substring(0,2).toUpperCase()}</span><span><strong>{player.name}</strong><small>⌖ National</small></span></span><span className="club-cell">Matchup</span><span className="form-cell"><i className="win">W</i><i className="win">W</i><i className="win">W</i><i className="loss">L</i><i className="win">W</i></span><span className="record-cell"><strong>{player.wins}-{player.matchesPlayed - player.wins}</strong><small>{Math.round(player.gwp)}% win rate</small></span><span className="points-cell"><strong>{player.points || (player.wins * 10)}</strong><span>›</span></span></a>
-))}
-</div><div className="leaderboard-foot"><span>Ranking logic remains controlled by the MatchUp backend.</span><a onClick={() => onNavigate('live')}>Enter Spectator Arena →</a></div></div></div></section>
+        {/* ── Chapter 2 · The idea ───────────────────────────────────────── */}
+        <section className="h-manifesto" id="platform">
+          <div className="h-manifesto__stage h-container">
+            <div className="h-manifesto__rings" aria-hidden="true"><span /><span /><span /></div>
+            <p className="h-eyebrow">✦ One connected platform</p>
+            <h2 className="h-manifesto__title">
+              <span className="h-line"><Words text="One platform." className="h-scrub" /></span>
+              <span className="h-line h-accent"><Words text="Every point." className="h-scrub" /></span>
+            </h2>
+            <p className="h-manifesto__copy">MatchUp connects players, clubs, scores, tournaments, rankings, and community into one high-performance system built for the pace of modern padel.</p>
+          </div>
+        </section>
 
-<section className="tournament-section section" id="tournaments"><div className="container"><div className="section-heading" data-reveal="true"><div><p className="eyebrow">ϟ Tournament command center</p><h2>Every round.<br/><span>In real time.</span></h2></div><p>Registration, schedules, brackets, live scores, and results organized into one cinematic tournament experience.</p></div>
-<div className="tournament-layout"><div className="bracket-card" data-reveal="true"><div className="card-topline"><span>◉ Latest Tournament · Live</span><span>Center Court</span></div><div className="bracket-flow"><div className="match-node match-node--live"><div className="match-node__head"><span>Quarterfinal</span><small>7:30 PM</small></div><div className="match-team"><span>Tariq / Qureshi</span><strong>5</strong></div><div className="match-team"><span>Raza / Khan</span><strong>4</strong></div><div className="match-status"><span className="live-dot"></span> live</div></div><div className="match-node"><div className="match-node__head"><span>Quarterfinal</span><small>8:15 PM</small></div><div className="match-team"><span>Ahmed / Siddiqui</span></div><div className="match-team"><span>Malik / Farooq</span></div><div className="match-status">scheduled</div></div><div className="match-node"><div className="match-node__head"><span>Semifinal</span><small>9:30 PM</small></div><div className="match-team"><span>Winner QF 1</span></div><div className="match-team"><span>Winner QF 2</span></div><div className="match-status">scheduled</div></div><div className="match-node"><div className="match-node__head"><span>Final</span><small>11:00 PM</small></div><div className="match-team"><span>Winner SF 1</span></div><div className="match-team"><span>Winner SF 2</span></div><div className="match-status">scheduled</div></div></div><div className="court-visual"><span className="court-ball"></span><span className="court-trail"></span></div></div>
-<aside className="tournament-list" data-reveal="true"><div className="tournament-list__head"><div><p className="eyebrow">Next up</p><h3>Upcoming tournaments</h3></div><a onClick={() => onNavigate('auth-player')}>View all</a></div>{upcomingTournaments.slice(0,3).map(t => {    const d = new Date(t.date);    const m = d.toLocaleDateString('en-US', {month: 'short'});    const dy = d.getDate();    return (<a key={t.id} className="tournament-item" onClick={() => onNavigate('auth-player')}><div className="date-tile"><strong>{dy}</strong><span>{m}</span></div><div className="tournament-item__body"><strong>{t.name}</strong><span>⌖ {t.venue || 'TBA'}</span><div className="capacity"><i style={{width: '60%'}}></i></div><small>Open for Registration</small></div><span>›</span></a>)})}
-{upcomingTournaments.length < 2 && completedTournaments.length > 0 && (
-  <>
-    <div className="tournament-list__head" style={{ marginTop: '32px' }}><div><p className="eyebrow">Recent</p><h3>Completed tournaments</h3></div></div>
-    {completedTournaments.slice(0, 3 - upcomingTournaments.length).map(t => {
-      const d = new Date(t.date);
-      const m = d.toLocaleDateString('en-US', {month: 'short'});
-      const dy = d.getDate();
-      return (
-      <a key={t.id} className="tournament-item" onClick={() => onNavigate('auth-player')}><div className="date-tile"><strong>{dy}</strong><span>{m}</span></div><div className="tournament-item__body"><strong>{t.name}</strong><span>⌖ {t.venue || 'TBA'}</span><small style={{color: '#66719B'}}>Completed</small></div><span>›</span></a>
-      )
-    })}
-  </>
-)}
-</aside></div></div></section>
+        {/* ── Chapter 3 · The journey ────────────────────────────────────── */}
+        <section className="h-features" aria-label="Built to compete">
+          <div className="h-features__stage">
+            <div className="h-features__track">
+              <article className="h-feature h-feature--intro">
+                <p className="h-eyebrow h-eyebrow--dark">Built to compete</p>
+                <h3>From first serve<br />to final ranking.</h3>
+                <p className="h-feature__hint">Scroll to follow the rally →</p>
+              </article>
+              {FEATURES.map(f => (
+                <article className="h-feature h-card" key={f.n}>
+                  <div className="h-feature__top"><span className="h-feature__n">{f.n}</span><span className="h-feature__icon">{f.icon}</span></div>
+                  <FeatureArt kind={f.art} />
+                  <div className="h-feature__body">
+                    <p className="h-feature__eyebrow">{f.eyebrow}</p>
+                    <h3>{f.title}</h3>
+                    <p>{f.copy}</p>
+                    <a href={f.href} onClick={e => scrollTo(e, f.href.slice(1))}>Explore feature →</a>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <div className="h-features__rail" aria-hidden="true">
+              <span className="h-features__rail-fill" />
+              <span className="h-features__rail-ball" />
+              {FEATURES.map((f, i) => <span key={f.n} className="h-features__stop" style={{ left: `${((i + 1) / FEATURES.length) * 100}%` }}>{f.n}</span>)}
+            </div>
+          </div>
+        </section>
 
-<section className="performance-section section" id="clubs"><div className="performance-bg"></div><div className="container performance-grid"><div className="performance-copy" data-reveal="true"><p className="eyebrow">◴ Network performance</p><h2>The momentum<br/><span>is measurable.</span></h2><p>Every match makes the network smarter, the rankings sharper, and the community stronger.</p><a className="text-link" onClick={() => onNavigate('auth-admin')}>Explore clubs →</a></div><div className="metric-grid" data-reveal="true">
-<div className="metric-card"><span>↗</span><AnimatedCounter value={stats.totalMatchesPlayed} format={true} /><span>Total matches played</span><small>+21% this season</small></div>
-<div className="metric-card"><span>◇</span><AnimatedCounter value={stats.activeClubs} format={true} /><span>Active clubs</span><small>Across regions</small></div>
-<div className="metric-card"><span>▦</span><AnimatedCounter value={stats.monthlyTournaments} format={true} /><span>Monthly tournaments</span><small>Growing every month</small></div>
-<div className="metric-card"><span>◎</span><AnimatedCounter value={stats.userGrowth} prefix="+" suffix="%" /><span>User growth</span><small>Last 90 days</small></div>
-</div></div></section>
+        {/* ── Chapter 4 · The ranking ────────────────────────────────────── */}
+        <section className="h-rankings" id="rankings">
+          <div className="h-rankings__stage h-container">
+            <div className="h-heading">
+              <div><p className="h-eyebrow">♛ National rankings</p><h2><span className="h-line">Your game.</span><span className="h-line h-accent">Measured.</span></h2></div>
+              <p>Live standings that reward consistency, performance, and the courage to keep competing.</p>
+            </div>
+            <div className="h-board h-card">
+              <div className="h-board__head">
+                <div><span className="h-badge"><span className="h-dot" /> {stats.totalMatchesPlayed} Matches Organized</span><h3>MatchUp Top Players</h3></div>
+                <div className="h-board__filters">
+                  <div className="h-search">⌕ <input aria-label="Search player or club" placeholder="Search player or club" value={query} onChange={e => setQuery(e.target.value)} /></div>
+                  <select aria-label="City" value={city} onChange={e => setCity(e.target.value)}><option>All cities</option><option>Karachi</option><option>Lahore</option><option>Islamabad</option></select>
+                </div>
+              </div>
+              {podium.length > 0 && (
+                <div className={`h-podium h-podium--${podium.length}`}>
+                  {podium.map(p => (
+                    <div key={p.id} className={`h-podium__card h-podium__card--${p.rank}`}>
+                      <span className="h-podium__rank">{String(p.rank).padStart(2, '0')}</span>
+                      <span className="h-podium__ring" style={{ '--p': Math.round(p.gwp) } as React.CSSProperties}>
+                        <span className="h-podium__avatar">{p.name.substring(0, 2).toUpperCase()}</span>
+                      </span>
+                      <strong className="h-podium__name">{p.name}</strong>
+                      <span className="h-podium__meta">⌖ National · {p.wins}-{p.matchesPlayed - p.wins} · {Math.round(p.gwp)}% wins</span>
+                      <span className="h-podium__pts"><b>{pts(p)}</b> pts</span>
+                      <span className="h-podium__step" aria-hidden="true" />
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="h-board__table">
+                {listRows.length > 0 && <div className="h-board__row h-board__row--head"><span>Rank</span><span>Player</span><span>Club</span><span>Win rate</span><span>Record</span><span>Points</span></div>}
+                {listRows.map(player => (
+                  <div key={player.id} className="h-board__row h-board__player">
+                    <span className="h-board__rank"><b>{String(player.rank).padStart(2, '0')}</b></span>
+                    <span className="h-board__who"><span className="h-avatar">{player.name.substring(0, 2).toUpperCase()}</span><span><strong>{player.name}</strong><small>⌖ National</small></span></span>
+                    <span className="h-board__club">Matchup</span>
+                    <span className="h-board__rate"><span className="h-board__rate-bar"><i style={{ width: `${Math.max(4, Math.round(player.gwp))}%` }} /></span><small>{Math.round(player.gwp)}%</small></span>
+                    <span className="h-board__record"><strong>{player.wins}-{player.matchesPlayed - player.wins}</strong><small>{player.matchesPlayed} matches</small></span>
+                    <span className="h-board__points"><strong>{pts(player)}</strong></span>
+                  </div>
+                ))}
+                {rows.length === 0 && <div className="h-board__empty">{leaderboard.length ? 'No players match that search.' : 'Rankings are loading…'}</div>}
+              </div>
+              <div className="h-board__foot"><span>Ranking logic remains controlled by the MatchUp backend.</span><button type="button" onClick={() => onNavigate('live')}>Enter Spectator Arena →</button></div>
+            </div>
+          </div>
+        </section>
 
-<section className="community-section section" id="community"><div className="container"><div className="section-heading" data-reveal="true"><div><p className="eyebrow">◉ Beyond the scoreboard</p><h2>Built around<br/><span>the people who play.</span></h2></div><p>Competition creates stories. MatchUp gives those stories a place to live, move, and inspire the next match.</p></div><div className="community-grid"><article className="highlight-card" data-reveal="true"><div className="highlight-visual"><span className="play-ring">▶</span><div className="score-overlay"><small>Match point</small><strong>6:4 · 5:5</strong></div></div><div className="highlight-copy"><span>Match highlight</span><h3>One rally. Twenty-six shots. A place in the final.</h3><a onClick={() => onNavigate('live')}>Watch the point →</a></div></article><div className="testimonial-stack" data-reveal="true"><blockquote className="active"><p>“MatchUp made the tournament feel professional from registration to the final point.”</p><footer><span className="player-avatar">AM</span><span><strong>Areeb Malik</strong><small>Competitive player</small></span></footer></blockquote><blockquote><p>“We spend less time managing spreadsheets and more time creating a great event.”</p><footer><span className="player-avatar">MQ</span><span><strong>Maha Qazi</strong><small>Tournament organizer</small></span></footer></blockquote><blockquote><p>“Seeing my ranking move after every match changes how seriously I approach the game.”</p><footer><span className="player-avatar">OS</span><span><strong>Omer Shah</strong><small>Ranked player</small></span></footer></blockquote></div></div></div></section>
+        {/* ── Chapter 5 · The tournament ─────────────────────────────────── */}
+        <section className="h-tournament" id="tournaments">
+          <div className="h-tournament__stage h-container">
+            <div className="h-tournament__copy">
+              <p className="h-eyebrow">ϟ Tournament command center</p>
+              <h2><span className="h-line">Every round.</span><span className="h-line h-accent">In real time.</span></h2>
+              <p>Registration, schedules, brackets, live scores, and results organized into one cinematic tournament experience.</p>
+              <ol className="h-steps">
+                {['Registration', 'Schedules', 'Live scores', 'Results'].map((s, i) => <li key={s} className="h-step" data-step={i}><span>0{i + 1}</span>{s}</li>)}
+              </ol>
+            </div>
+            <div className="h-bracket h-card">
+              <div className="h-bracket__top"><span><span className="h-dot" /> Latest Tournament · Live</span><span>Center Court</span></div>
+              <div className="h-bracket__grid">
+                <div className="h-bracket__col">
+                  <div className="h-match h-match--live" data-round="qf">
+                    <div className="h-match__head"><span>Quarterfinal</span><small>7:30 PM</small></div>
+                    <div className="h-match__team"><span>Tariq / Qureshi</span><strong>5</strong></div>
+                    <div className="h-match__team"><span>Raza / Khan</span><strong>4</strong></div>
+                    <div className="h-match__status"><span className="h-dot" /> live</div>
+                  </div>
+                  <div className="h-match" data-round="qf">
+                    <div className="h-match__head"><span>Quarterfinal</span><small>8:15 PM</small></div>
+                    <div className="h-match__team"><span>Ahmed / Siddiqui</span></div>
+                    <div className="h-match__team"><span>Malik / Farooq</span></div>
+                    <div className="h-match__status">scheduled</div>
+                  </div>
+                </div>
+                <svg className="h-bracket__wires" viewBox="0 0 100 200" preserveAspectRatio="none" aria-hidden="true">
+                  <path d="M0 50 H50 V100 H100" /><path d="M0 150 H50 V100" />
+                </svg>
+                <div className="h-bracket__col">
+                  <div className="h-match" data-round="sf">
+                    <div className="h-match__head"><span>Semifinal</span><small>9:30 PM</small></div>
+                    <div className="h-match__team"><span>Winner QF 1</span></div>
+                    <div className="h-match__team"><span>Winner QF 2</span></div>
+                    <div className="h-match__status">scheduled</div>
+                  </div>
+                </div>
+                <svg className="h-bracket__wires" viewBox="0 0 100 200" preserveAspectRatio="none" aria-hidden="true"><path d="M0 100 H100" /></svg>
+                <div className="h-bracket__col">
+                  <div className="h-match h-match--final" data-round="f">
+                    <div className="h-match__head"><span>Final</span><small>11:00 PM</small></div>
+                    <div className="h-match__team"><span>Winner SF 1</span></div>
+                    <div className="h-match__team"><span>Winner SF 2</span></div>
+                    <div className="h-match__status">scheduled</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="h-container h-upcoming">
+            <div className="h-upcoming__head"><div><p className="h-eyebrow">Next up</p><h3>{upcomingTournaments.length ? 'Upcoming tournaments' : 'Recent tournaments'}</h3></div><button type="button" onClick={() => onNavigate('auth-player')}>View all</button></div>
+            <div className={`h-upcoming__grid h-upcoming__grid--${Math.min(tournamentCards.length, 3)}`}>
+              {tournamentCards.map((t, i) => (
+                <TournamentBanner key={t.id} t={t} featured={i === 0 && tournamentCards.length > 1} onOpen={() => onNavigate('auth-player')} />
+              ))}
+            </div>
+          </div>
+        </section>
 
-<section className="app-section section"><div className="container app-shell" data-reveal="true"><div className="phone-stage"><div className="phone"><div className="phone-island"></div><div className="phone-screen"><MatchupLogo className="h-6 w-auto" /><p>Good evening, Player</p><h4>Your next match</h4><div className="phone-match"><span>Tonight · 8:30 PM</span><strong>Center Court</strong><small>Matchup Club</small></div><div className="phone-score"><span>Current rank</span><strong>#04</strong></div></div></div></div><div className="app-copy"><p className="eyebrow">MatchUp in your pocket</p><h2>Your competitive life.<br/><span>Always in play.</span></h2><p>Book, compete, score, follow, and grow wherever the game takes you.</p><div className="app-actions"><a className="store-button"><small>Download on the</small><strong>App Store</strong></a><a className="store-button"><small>Get it on</small><strong>Google Play</strong></a></div></div></div></section>
+        {/* ── Chapter 6 · The momentum ───────────────────────────────────── */}
+        <section className="h-momentum" id="clubs">
+          <div className="h-momentum__stage">
+            <div className="h-momentum__word" aria-hidden="true">Momentum · Momentum · Momentum ·</div>
+            <div className="h-container h-momentum__grid">
+              <div className="h-momentum__copy">
+                <p className="h-eyebrow">◴ Network performance</p>
+                <h2><span className="h-line">The momentum</span><span className="h-line h-accent">is measurable.</span></h2>
+                <p>Every match makes the network smarter, the rankings sharper, and the community stronger.</p>
+                <button type="button" className="h-link" onClick={() => onNavigate('auth-admin')}>Explore clubs →</button>
+              </div>
+              <div className="h-metrics">
+                <div className="h-metric h-metric--hero h-card">
+                  <div className="h-metric__head"><span className="h-metric__icon">↗</span><span className="h-metric__chip">+21% this season</span></div>
+                  <strong><span className="h-count" data-count={stats.totalMatchesPlayed}>{stats.totalMatchesPlayed.toLocaleString()}</span></strong>
+                  <span className="h-metric__label">Total matches played</span>
+                  <div className="h-metric__chart" aria-hidden="true">
+                    {[22, 30, 26, 38, 34, 46, 42, 55, 51, 64, 72, 86].map((h, i) => <i key={i} style={{ '--h': `${h}%`, '--i': i } as React.CSSProperties} />)}
+                  </div>
+                </div>
+                <div className="h-metric h-card">
+                  <span className="h-metric__icon">◇</span>
+                  <strong><span className="h-count" data-count={stats.activeClubs}>{stats.activeClubs.toLocaleString()}</span></strong>
+                  <span className="h-metric__label">Active clubs</span>
+                  <small>Across regions</small>
+                  <span className="h-metric__orbit" aria-hidden="true"><i /><i /><i /></span>
+                </div>
+                <div className="h-metric h-card">
+                  <span className="h-metric__icon">▦</span>
+                  <strong><span className="h-count" data-count={stats.monthlyTournaments}>{stats.monthlyTournaments.toLocaleString()}</span></strong>
+                  <span className="h-metric__label">Monthly tournaments</span>
+                  <small>Growing every month</small>
+                  <span className="h-metric__dots" aria-hidden="true">{Array.from({ length: 14 }, (_, i) => <i key={i} className={i % 3 === 0 ? 'on' : ''} />)}</span>
+                </div>
+                <div className="h-metric h-metric--wide h-card">
+                  <div>
+                    <span className="h-metric__icon">◎</span>
+                    <strong><span className="h-count" data-count={stats.activePlayers}>{stats.activePlayers.toLocaleString()}</span></strong>
+                    <span className="h-metric__label">Active players</span>
+                    <small>Competing on MatchUp</small>
+                  </div>
+                  <div className="h-avatars h-avatars--lg" aria-hidden="true"><span>AB</span><span>SQ</span><span>HT</span><span>AR</span><span>MK</span><span>+</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
-<section className="final-cta section"><div className="final-cta__orb"></div><div className="container final-cta__content" data-reveal="true"><MatchupLogo className="h-10 w-auto mb-6" /><p className="eyebrow">The next point starts here</p><h2>Play more.<br/><span>Become harder to beat.</span></h2><p>Create your MatchUp profile and step into Pakistan's fastest-growing competitive padel network.</p><a className="button button--primary button--large" onClick={() => onNavigate('auth-player')}>Start playing now →</a></div></section>
-</main>
-<footer className="site-footer"><div className="container footer-top"><div className="footer-brand"><MatchupLogo className="h-6 w-auto mb-4" /><p>The operating system for modern padel competition.</p><div className="socials"><a>Instagram</a><a>Facebook</a><a>LinkedIn</a></div></div><div className="footer-links"><div><strong>Compete</strong><a onClick={() => onNavigate('leaderboard')}>Leaderboards</a><a onClick={() => onNavigate('landing')}>Tournaments</a><a onClick={() => onNavigate('live')}>Live matches</a><a onClick={() => onNavigate('auth-admin')}>Clubs</a></div><div><strong>Platform</strong><a onClick={() => onNavigate('auth-player')}>Players</a><a onClick={() => onNavigate('auth-admin')}>Organizers</a><a>Club management</a><a>Support</a></div><div><strong>Company</strong><a>About MatchUp</a><a>Contact</a><a>Privacy</a><a>Terms</a></div></div><div className="newsletter"><strong>Stay in the rally.</strong><p>Get tournament drops, ranking updates, and MatchUp news.</p><label><input placeholder="Email address" /><button>→</button></label></div></div><div className="container footer-bottom"><span>© 2026 MatchUp. All rights reserved.</span><span>Designed for the next generation of competition.</span></div></footer>
+        {/* ── Chapter 7 · The people ─────────────────────────────────────── */}
+        <section className="h-community" id="community">
+          <div className="h-community__stage h-container">
+            <div className="h-heading">
+              <div><p className="h-eyebrow">◉ Beyond the scoreboard</p><h2><span className="h-line">Built around</span><span className="h-line h-accent">the people who play.</span></h2></div>
+              <p>Competition creates stories. MatchUp gives those stories a place to live, move, and inspire the next match.</p>
+            </div>
+            <div className="h-community__grid">
+              <div className="h-reels">
+                <div className="h-reels__grid">
+                  {REELS.map(r => <Reel key={r.src} {...r} autoplay={motionOk} />)}
+                </div>
+                <div className="h-reels__foot">
+                  <a className="h-btn h-btn--ghost h-btn--sm" href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer"><span className="h-reel__ig" aria-hidden="true" /> Follow @matchupsport</a>
+                  <button type="button" className="h-link" onClick={() => onNavigate('live')}>Watch live matches →</button>
+                </div>
+              </div>
+              <div className="h-stack">
+                {TESTIMONIALS.map((t, i) => (
+                  <blockquote className="h-quote h-card" key={t.name} style={{ '--i': i } as React.CSSProperties}>
+                    <p>{t.quote}</p>
+                    <footer><span className="h-avatar">{t.initials}</span><span><strong>{t.name}</strong><small>{t.role}</small></span></footer>
+                  </blockquote>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
 
+        {/* ── Chapter 8 · In your pocket ─────────────────────────────────── */}
+        <section className="h-app">
+          <div className="h-app__stage h-container">
+            <div className="h-app__phone-wrap">
+              <div className="h-chip h-chip--rank" aria-hidden="true"><small>Current rank</small><strong>#04</strong></div>
+              <div className="h-chip h-chip--live" aria-hidden="true"><span className="h-dot" /> Live · 6:4</div>
+              <div className="h-chip h-chip--next" aria-hidden="true"><small>Tonight</small><strong>8:30 PM</strong></div>
+              <div className="h-phone">
+                <div className="h-phone__island" />
+                <div className="h-phone__screen">
+                  <MatchupLogo className="h-6 w-auto" />
+                  <p>Good evening, Player</p>
+                  <h4>Your next match</h4>
+                  <div className="h-phone__match"><span>Tonight · 8:30 PM</span><strong>Center Court</strong><small>Matchup Club</small></div>
+                  <div className="h-phone__score"><span>Current rank</span><strong>#04</strong></div>
+                </div>
+              </div>
+            </div>
+            <div className="h-app__copy">
+              <p className="h-eyebrow">MatchUp in your pocket</p>
+              <h2><span className="h-line">Your competitive life.</span><span className="h-line h-accent">Always in play.</span></h2>
+              <p>Book, compete, score, follow, and grow wherever the game takes you.</p>
+              <div className="h-app__stores">
+                <a className="h-store"><small>Download on the</small><strong>App Store</strong></a>
+                <a className="h-store"><small>Get it on</small><strong>Google Play</strong></a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Chapter 9 · Your move ──────────────────────────────────────── */}
+        <section className="h-final">
+          <div className="h-final__glow" aria-hidden="true" />
+          <div className="h-rig h-rig--final" aria-hidden="true">
+            <div className="h-rig__racket"><div className="h-rig__kick"><PadelRacket /></div></div>
+            <div className="h-rig__ball"><div className="h-rig__bob"><PadelBall /></div></div>
+          </div>
+          <div className="h-container h-final__content">
+            <MatchupLogo className="h-10 w-auto h-final__logo" />
+            <p className="h-eyebrow">The next point starts here</p>
+            <h2><span className="h-line">Play more.</span><span className="h-line h-accent">Become harder to beat.</span></h2>
+            <p>Create your MatchUp profile and step into Pakistan's fastest-growing competitive padel network.</p>
+            <button type="button" className="h-btn h-btn--primary h-btn--lg h-magnetic" onClick={goSignup}>Start playing now →</button>
+          </div>
+        </section>
+      </main>
+
+      <footer className="h-footer">
+        <div className="h-container h-footer__top">
+          <div className="h-footer__brand"><MatchupLogo className="h-6 w-auto" /><p>The operating system for modern padel competition.</p><div className="h-footer__socials"><a>Instagram</a><a>Facebook</a><a>LinkedIn</a></div></div>
+          <div className="h-footer__links">
+            <div><strong>Compete</strong><button type="button" onClick={() => onNavigate('leaderboard')}>Leaderboards</button><button type="button" onClick={() => onNavigate('landing')}>Tournaments</button><button type="button" onClick={() => onNavigate('live')}>Live matches</button><button type="button" onClick={() => onNavigate('auth-admin')}>Clubs</button></div>
+            <div><strong>Platform</strong><button type="button" onClick={() => onNavigate('auth-player')}>Players</button><button type="button" onClick={() => onNavigate('auth-admin')}>Organizers</button><a>Club management</a><a>Support</a></div>
+            <div><strong>Company</strong><a>About MatchUp</a><a>Contact</a><a>Privacy</a><a>Terms</a></div>
+          </div>
+          <div className="h-footer__news"><strong>Stay in the rally.</strong><p>Get tournament drops, ranking updates, and MatchUp news.</p><label><input placeholder="Email address" aria-label="Email address" /><button type="button" aria-label="Subscribe">→</button></label></div>
+        </div>
+        <div className="h-footer__word" aria-hidden="true">MATCHUP</div>
+        <div className="h-container h-footer__bottom"><span>© 2026 MatchUp. All rights reserved.</span><span>Designed for the next generation of competition.</span></div>
+      </footer>
     </div>
   );
 };

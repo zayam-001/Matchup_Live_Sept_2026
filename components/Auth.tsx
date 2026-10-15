@@ -6,6 +6,8 @@ import { collection, doc, getDoc } from 'firebase/firestore';
 import { motion } from 'motion/react';
 import { SkillLevel, Tournament } from '../types';
 import { ArrowRight, Trophy, Shield, Activity, Loader2, User, Lock, ChevronRight, Eye, EyeOff, Mail } from 'lucide-react';
+import './landing/home.css';
+import './auth.css';
 
 export const Auth: React.FC<{ 
     initialMode: 'player' | 'operations', 
@@ -30,8 +32,14 @@ export const Auth: React.FC<{
         setAccessMode(mode);
         window.location.hash = mode === 'player' ? 'auth-player' : 'auth-admin';
     };
+    // Opens on Sign in. Only a sign-up call to action ("Start playing", /signup)
+    // asks for Create account, via a one-shot session flag.
     const [isLogin, setIsLogin] = useState(() => {
-        return !!localStorage.getItem('deviceId');
+        try {
+            const intent = sessionStorage.getItem('mu_auth_intent');
+            sessionStorage.removeItem('mu_auth_intent');
+            return intent !== 'signup';
+        } catch { return true; }
     });
     const [googleUser, setGoogleUser] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -419,412 +427,191 @@ export const Auth: React.FC<{
         );
     }
 
-    return (
-        <div className="min-h-screen flex items-center justify-center px-4 pt-28 md:pt-36 pb-20">
-            <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-                
-                {/* Branding / Value Prop Side */}
-                <div className="hidden lg:flex flex-col justify-center space-y-8 pr-12">
-                    <div>
-                        <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-1.5 mb-6">
-                            <span className="w-2 h-2 rounded-full bg-brand animate-pulse"></span>
-                            <span className="text-xs font-bold uppercase tracking-widest text-content-muted">Player Portal</span>
-                        </div>
-                        <h1 className="text-5xl font-black text-white tracking-tighter italic leading-tight mb-4">
-                            YOUR GLOBAL<br/>
-                            <span className="text-brand">SPORTS IDENTITY</span>
-                        </h1>
-                        <p className="text-content-secondary text-lg font-medium leading-relaxed">
-                            Join the premier tournament platform. Manage your teams, track your stats, and compete in broadcast-ready events across the country.
-                        </p>
-                    </div>
+    const field = (label: string, input: React.ReactNode, span = false) => (
+        <div className={`auth__field ${span ? 'auth__field--span' : ''}`}>
+            <span className="auth__label">{label}</span>
+            {input}
+        </div>
+    );
+    const passwordInput = (value: string, set: (v: string) => void, shown: boolean, toggle: () => void, placeholder = '••••••••') => (
+        <div className="auth__input-wrap">
+            <Lock size={16} className="auth__input-icon" />
+            <input required type={shown ? 'text' : 'password'} value={value} onChange={(e) => set(e.target.value)} className="auth__input auth__input--icon auth__input--trail" placeholder={placeholder} />
+            <button type="button" onClick={toggle} className="auth__eye" aria-label={shown ? 'Hide' : 'Show'}>{shown ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+        </div>
+    );
+    const segIndex = accessMode === 'player' ? 0 : 1;
+    const tabIndex = accessMode === 'player' ? (isLogin ? 0 : 1) : (opRole === 'admin' ? 0 : 1);
+    const creating = accessMode === 'player' && (!isLogin || !!googleUser);
 
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-4 bg-surface-panel p-4 rounded-2xl border border-white/5">
-                            <div className="bg-brand/10 p-3 rounded-xl text-brand"><Trophy size={24} /></div>
-                            <div>
-                                <h3 className="text-white font-bold">Unified History</h3>
-                                <p className="text-sm text-content-muted">One profile for all your tournaments.</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-4 bg-surface-panel p-4 rounded-2xl border border-white/5">
-                            <div className="bg-brand/10 p-3 rounded-xl text-brand"><Activity size={24} /></div>
-                            <div>
-                                <h3 className="text-white font-bold">Live Stats</h3>
-                                <p className="text-sm text-content-muted">Real-time scoring and bracket progression.</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-4 bg-surface-panel p-4 rounded-2xl border border-white/5">
-                            <div className="bg-brand/10 p-3 rounded-xl text-brand"><Shield size={24} /></div>
-                            <div>
-                                <h3 className="text-white font-bold">Verified Identity</h3>
-                                <p className="text-sm text-content-muted">Professional profiles for serious competitors.</p>
-                            </div>
+    return (
+        <div className="auth">
+            {/* ── Visual side: the live court, the racket and the pitch ── */}
+            <div className="auth__visual">
+                <div className="home home--motion home--hero-in auth__scene" aria-hidden="true">
+                    <div className="auth__court-wrap">
+                        <div className="h-court">
+                            <span className="h-court__line h-court__line--outer" />
+                            <span className="h-court__line h-court__line--mid" />
+                            <span className="h-court__line h-court__line--sl" />
+                            <span className="h-court__line h-court__line--sr" />
+                            <span className="h-court__net" />
+                            <span className="h-court__player h-court__player--1" />
+                            <span className="h-court__player h-court__player--2" />
+                            <span className="h-court__player h-court__player--3" />
+                            <span className="h-court__player h-court__player--4" />
+                            <span className="h-court__bounce" />
+                            <span className="h-court__rally"><span className="h-court__ball" /></span>
                         </div>
                     </div>
                 </div>
+                <div className="auth__pitch">
+                    <span className="auth__kicker"><span className="auth__dot" /> {accessMode === 'player' ? 'Player portal' : 'Operations console'}</span>
+                    <h1 className="auth__title">
+                        {accessMode === 'player' ? <>Your global<br /><span>sports identity.</span></> : <>Run every<br /><span>match live.</span></>}
+                    </h1>
+                    <p className="auth__lede">
+                        {accessMode === 'player'
+                            ? 'Join the premier tournament platform. Manage your teams, track your stats, and compete in broadcast-ready events across the country.'
+                            : 'Organisers and referees: schedule, score and broadcast tournaments from one console.'}
+                    </p>
+                    <div className="auth__pills">
+                        <span className="auth__pill"><Trophy size={15} /> Unified history</span>
+                        <span className="auth__pill"><Activity size={15} /> Live stats</span>
+                        <span className="auth__pill"><Shield size={15} /> Verified identity</span>
+                    </div>
+                </div>
+            </div>
 
-                {/* Auth Form Side */}
-                <Card variant="elevated" className="p-8 md:p-10 border-white/10 shadow-2xl relative overflow-hidden">
-                    {/* Decorative Background */}
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-brand/10 blur-[100px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+            {/* ── Form side ── */}
+            <div className="auth__side">
+                <motion.div className="auth__panel" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}>
+                    <div className="auth__seg" style={{ '--i': segIndex } as React.CSSProperties}>
+                        <span className="auth__seg-pill" aria-hidden="true" />
+                        <button type="button" onClick={() => { handleSwitchMode('player'); setError(''); }} className={accessMode === 'player' ? 'is-on' : ''}>Player access</button>
+                        <button type="button" onClick={() => { handleSwitchMode('operations'); setError(''); }} className={accessMode === 'operations' ? 'is-on' : ''}>Admin / Staff</button>
+                    </div>
 
-                    <div className="relative z-10">
-                        {/* Access Mode Toggle */}
-                        <div className="flex bg-surface-ground rounded-xl p-1 mb-8 border border-white/5">
-                            <button
-                                onClick={() => { handleSwitchMode('player'); setError(''); }}
-                                className={`flex-1 py-2 text-xs font-bold uppercase tracking-widest rounded-lg transition-all ${accessMode === 'player' ? 'bg-surface-panel text-white shadow-md' : 'text-content-muted hover:text-white'}`}
-                            >
-                                Player Access
-                            </button>
-                            <button
-                                onClick={() => { handleSwitchMode('operations'); setError(''); }}
-                                className={`flex-1 py-2 text-xs font-bold uppercase tracking-widest rounded-lg transition-all ${accessMode === 'operations' ? 'bg-surface-panel text-white shadow-md' : 'text-content-muted hover:text-white'}`}
-                            >
-                                Admin / Staff
-                            </button>
-                        </div>
-
+                    <div className="auth__tabs" style={{ '--i': tabIndex } as React.CSSProperties}>
+                        <span className="auth__tabs-bar" aria-hidden="true" />
                         {accessMode === 'player' ? (
                             <>
-                                <div className="flex gap-6 mb-8 border-b border-white/10">
-                                    <button 
-                                        onClick={() => { if (!googleUser) { setIsLogin(true); setError(''); } }}
-                                        className={`pb-4 text-sm font-bold uppercase tracking-wider transition-colors relative ${isLogin ? 'text-white' : 'text-content-muted hover:text-content-secondary'}`}
-                                    >
-                                        Sign In
-                                        {isLogin && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand rounded-t-full"></div>}
-                                    </button>
-                                    <button 
-                                        onClick={() => { if (!googleUser) { setIsLogin(false); setError(''); } }}
-                                        className={`pb-4 text-sm font-bold uppercase tracking-wider transition-colors relative ${!isLogin ? 'text-white' : 'text-content-muted hover:text-content-secondary'}`}
-                                    >
-                                        Create Account
-                                        {!isLogin && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand rounded-t-full"></div>}
-                                    </button>
-                                </div>
+                                <button type="button" onClick={() => { if (!googleUser) { setIsLogin(true); setError(''); } }} className={isLogin ? 'is-on' : ''}>Sign in</button>
+                                <button type="button" onClick={() => { if (!googleUser) { setIsLogin(false); setError(''); } }} className={!isLogin ? 'is-on' : ''}>Create account</button>
+                            </>
+                        ) : (
+                            <>
+                                <button type="button" onClick={() => { setOpRole('admin'); setError(''); }} className={opRole === 'admin' ? 'is-on' : ''}>Admin</button>
+                                <button type="button" onClick={() => { setOpRole('referee'); setError(''); }} className={opRole === 'referee' ? 'is-on' : ''}>Referee</button>
+                            </>
+                        )}
+                    </div>
 
-                                {error && (
-                                    <div className="mb-6 p-4 bg-accent-error/10 border border-accent-error/20 rounded-xl text-accent-error text-sm font-medium">
-                                        {error}
-                                    </div>
-                                )}
+                    {error && <div className="auth__alert auth__alert--error">{error}</div>}
 
-                                {!googleUser && (
+                    <motion.div key={`${accessMode}-${isLogin}-${opRole}`} initial={{ opacity: 0, x: 18 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}>
+                        {accessMode === 'player' ? (
+                            <>
+                                {!googleUser ? (
                                     <>
-                                        <button 
-                                            onClick={handleGoogleSignIn}
-                                            disabled={isLoading}
-                                            className="w-full bg-white text-black hover:bg-gray-100 font-bold py-4 rounded-xl mb-6 transition-all shadow-lg flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed"
-                                        >
+                                        <button onClick={handleGoogleSignIn} disabled={isLoading} className="auth__google">
                                             <svg className="w-5 h-5" viewBox="0 0 24 24">
-                                                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                                                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                                                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
                                                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                                                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                                             </svg>
                                             Continue with Google
                                         </button>
-
-                                        <div className="mb-6 flex items-center gap-4">
-                                            <div className="flex-1 h-px bg-white/10"></div>
-                                            <span className="text-xs font-bold uppercase tracking-widest text-content-muted">OR</span>
-                                            <div className="flex-1 h-px bg-white/10"></div>
-                                        </div>
+                                        <div className="auth__or"><span>or</span></div>
                                     </>
+                                ) : (
+                                    <div className="auth__alert auth__alert--info">Almost there! Please complete your profile to finish signing up.</div>
                                 )}
 
-                                {googleUser && (
-                                    <div className="mb-6 p-4 bg-brand/10 border border-brand/20 rounded-xl text-brand text-sm font-medium">
-                                        Almost there! Please complete your profile to finish signing up.
-                                    </div>
-                                )}
-
-                                <form onSubmit={handleSubmit} className="space-y-5">
-                                    {(!isLogin || googleUser) && (
+                                <form onSubmit={handleSubmit} className={`auth__form ${creating ? 'auth__form--grid' : ''}`}>
+                                    {creating && (
                                         <>
-                                            <div>
-                                                <label className="block text-xs font-bold uppercase tracking-widest text-content-muted mb-2">Full Name</label>
-                                                <input 
-                                                    required 
-                                                    type="text" 
-                                                    value={name}
-                                                    onChange={(e) => setName(e.target.value)}
-                                                    className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all" 
-                                                    placeholder="e.g. Ali Hassan" 
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold uppercase tracking-widest text-content-muted mb-2">Phone Number</label>
-                                                <input 
-                                                    required 
-                                                    type="tel" 
-                                                    value={phone}
-                                                    onChange={handlePhoneChange}
-                                                    className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all" 
-                                                    placeholder="+923000000000" 
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold uppercase tracking-widest text-content-muted mb-2">CNIC</label>
-                                                <input 
-                                                    required 
-                                                    type="text" 
-                                                    value={cnic}
-                                                    onChange={(e) => {
-                                                        // Only allow digits and hyphens
-                                                        const val = e.target.value;
-                                                        if (/^[\d-]*$/.test(val)) {
-                                                            handleCnicChange(e);
-                                                        }
-                                                    }}
-                                                    className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all" 
-                                                    placeholder="XXXXX-XXXXXXX-X" 
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold uppercase tracking-widest text-content-muted mb-2">Gender</label>
-                                                <select 
-                                                    value={gender}
-                                                    onChange={(e) => setGender(e.target.value as 'male' | 'female' | 'other')}
-                                                    className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all appearance-none"
-                                                >
+                                            {field('Full name', <input required type="text" value={name} onChange={(e) => setName(e.target.value)} className="auth__input" placeholder="e.g. Ali Hassan" />)}
+                                            {field('Phone number', <input required type="tel" value={phone} onChange={handlePhoneChange} className="auth__input" placeholder="+923000000000" />)}
+                                            {field('CNIC', <input required type="text" value={cnic} onChange={(e) => { if (/^[\d-]*$/.test(e.target.value)) handleCnicChange(e); }} className="auth__input" placeholder="XXXXX-XXXXXXX-X" />)}
+                                            {field('Gender', (
+                                                <select value={gender} onChange={(e) => setGender(e.target.value as 'male' | 'female' | 'other')} className="auth__input auth__select">
                                                     <option value="male">Male</option>
                                                     <option value="female">Female</option>
                                                     <option value="other">Other</option>
                                                 </select>
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold uppercase tracking-widest text-content-muted mb-2">Skill Level</label>
-                                                <select 
-                                                    value={skillLevel}
-                                                    onChange={(e) => setSkillLevel(e.target.value as SkillLevel)}
-                                                    className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all appearance-none"
-                                                >
+                                            ))}
+                                            {field('Skill level', (
+                                                <select value={skillLevel} onChange={(e) => setSkillLevel(e.target.value as SkillLevel)} className="auth__input auth__select">
                                                     <option value={SkillLevel.NEWCOMER}>Newcomer</option>
                                                     <option value={SkillLevel.BEGINNER}>Beginner</option>
                                                     <option value={SkillLevel.INTERMEDIATE}>Intermediate</option>
                                                     <option value={SkillLevel.ADVANCED}>Advanced</option>
                                                     <option value={SkillLevel.PROFESSIONAL}>Professional</option>
                                                 </select>
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold uppercase tracking-widest text-content-muted mb-2">Promo Code (Optional)</label>
-                                                <input 
-                                                    type="text" 
-                                                    value={promoCode}
-                                                    onChange={(e) => {
-                                                        if (!promoCodeReadOnly) {
-                                                            setPromoCode(e.target.value.toUpperCase());
-                                                        }
-                                                    }}
-                                                    readOnly={promoCodeReadOnly}
-                                                    className={`w-full bg-surface-ground border border-white/10 rounded-xl p-4 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all uppercase ${promoCodeReadOnly ? 'opacity-70 cursor-not-allowed bg-white/5' : ''}`} 
-                                                    placeholder="e.g. PADEL24" 
-                                                    maxLength={6}
-                                                />
-                                            </div>
+                                            ))}
+                                            {field('Promo code (optional)', <input type="text" value={promoCode} onChange={(e) => { if (!promoCodeReadOnly) setPromoCode(e.target.value.toUpperCase()); }} readOnly={promoCodeReadOnly} className={`auth__input uppercase ${promoCodeReadOnly ? 'is-readonly' : ''}`} placeholder="e.g. PADEL24" maxLength={6} />)}
                                         </>
                                     )}
-
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-widest text-content-muted mb-2">Email Address</label>
-                                        <div className="relative">
-                                            <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-                                            <input
-                                                required
-                                                type="email"
-                                                value={googleUser ? googleUser.email : email}
-                                                onChange={(e) => setEmail(e.target.value)}
-                                                disabled={!!googleUser}
-                                                className={`w-full bg-surface-ground border border-white/10 rounded-xl p-4 pl-12 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all ${googleUser ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                                placeholder="player@example.com"
-                                            />
+                                    {field('Email address', (
+                                        <div className="auth__input-wrap">
+                                            <Mail size={16} className="auth__input-icon" />
+                                            <input required type="email" value={googleUser ? googleUser.email : email} onChange={(e) => setEmail(e.target.value)} disabled={!!googleUser} className={`auth__input auth__input--icon ${googleUser ? 'is-readonly' : ''}`} placeholder="player@example.com" />
                                         </div>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-widest text-content-muted mb-2">Password</label>
-                                        <div className="relative">
-                                            <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-                                            <input
-                                                required
-                                                type={showPassword ? "text" : "password"}
-                                                value={password}
-                                                onChange={(e) => setPassword(e.target.value)}
-                                                className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 pl-12 pr-12 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all"
-                                                placeholder="••••••••"
-                                            />
-                                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white focus:outline-none">
-                                                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-2 mt-4">
-                                        <input 
-                                            type="checkbox" 
-                                            id="rememberMe" 
-                                            checked={rememberMe}
-                                            onChange={(e) => setRememberMe(e.target.checked)}
-                                            className="w-4 h-4 rounded border-white/10 bg-surface-ground text-brand focus:ring-brand focus:ring-offset-surface-panel"
-                                        />
-                                        <label htmlFor="rememberMe" className="text-sm text-content-muted cursor-pointer">
-                                            Remember this device
-                                        </label>
-                                    </div>
-
-                                    <button 
-                                        type="submit" 
-                                        disabled={isLoading}
-                                        className="w-full bg-brand hover:bg-brand-light text-content-inverse font-bold py-4 rounded-xl mt-4 transition-all shadow-lg shadow-brand/20 flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
-                                    >
-                                        {isLoading ? (
-                                            <Loader2 size={20} className="animate-spin" />
-                                        ) : (
-                                            <>
-                                                {isLogin ? 'Enter Portal' : 'Create Identity'}
-                                                <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                                            </>
-                                        )}
+                                    ), creating)}
+                                    {field('Password', passwordInput(password, setPassword, showPassword, () => setShowPassword(!showPassword)), creating)}
+                                    <label className="auth__remember">
+                                        <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
+                                        <span>Remember this device</span>
+                                    </label>
+                                    <button type="submit" disabled={isLoading} className="auth__submit">
+                                        {isLoading ? <Loader2 size={20} className="animate-spin" /> : <>{isLogin ? 'Enter portal' : 'Create identity'}<ArrowRight size={18} /></>}
                                     </button>
                                 </form>
                             </>
                         ) : (
-                            <>
-                                <div className="flex gap-6 mb-8 border-b border-white/10">
-                                    <button 
-                                        onClick={() => { setOpRole('admin'); setError(''); }}
-                                        className={`pb-4 text-sm font-bold uppercase tracking-wider transition-colors relative ${opRole === 'admin' ? 'text-white' : 'text-content-muted hover:text-content-secondary'}`}
-                                    >
-                                        Admin
-                                        {opRole === 'admin' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand rounded-t-full"></div>}
-                                    </button>
-                                    <button 
-                                        onClick={() => { setOpRole('referee'); setError(''); }}
-                                        className={`pb-4 text-sm font-bold uppercase tracking-wider transition-colors relative ${opRole === 'referee' ? 'text-white' : 'text-content-muted hover:text-content-secondary'}`}
-                                    >
-                                        Referee
-                                        {opRole === 'referee' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand rounded-t-full"></div>}
-                                    </button>
-                                </div>
-
-                                {error && (
-                                    <div className="mb-6 p-4 bg-accent-error/10 border border-accent-error/20 rounded-xl text-accent-error text-sm font-medium">
-                                        {error}
-                                    </div>
+                            <form onSubmit={handleSubmit} className="auth__form">
+                                {opRole === 'admin' ? (
+                                    <>
+                                        {field('Admin email', (
+                                            <div className="auth__input-wrap">
+                                                <Mail size={16} className="auth__input-icon" />
+                                                <input required type="email" value={opEmail} onChange={(e) => setOpEmail(e.target.value)} className="auth__input auth__input--icon" placeholder="admin@example.com" />
+                                            </div>
+                                        ))}
+                                        {field('Password', passwordInput(opPassword, setOpPassword, showOpPassword, () => setShowOpPassword(!showOpPassword)))}
+                                    </>
+                                ) : (
+                                    <>
+                                        {tournamentId ? (
+                                            <div className="auth__tournament">
+                                                <span>Tournament</span>
+                                                <strong>{tournaments.find(t => t.id === tournamentId || t.slug === tournamentId)?.name || 'Loading...'}</strong>
+                                            </div>
+                                        ) : field('Select tournament', (
+                                            <div className="auth__input-wrap">
+                                                <select required value={selectedTournamentId} onChange={(e) => setSelectedTournamentId(e.target.value)} className="auth__input auth__select">
+                                                    <option value="" disabled className="text-black bg-white">Select a tournament</option>
+                                                    {tournaments.map(t => <option key={t.id} value={t.id} className="text-black bg-white">{t.name}</option>)}
+                                                </select>
+                                                <ChevronRight className="auth__chev" size={16} />
+                                            </div>
+                                        ))}
+                                        {field('Referee passcode', passwordInput(opPasscode, setOpPasscode, showOpPasscode, () => setShowOpPasscode(!showOpPasscode), 'Enter tournament passcode'))}
+                                    </>
                                 )}
-
-
-                                <form onSubmit={handleSubmit} className="space-y-5">
-                                    {opRole === 'admin' ? (
-                                        <>
-                                            <div>
-                                                <label className="block text-xs font-bold uppercase tracking-widest text-content-muted mb-2">Admin Email</label>
-                                                <div className="relative">
-                                                    <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-                                                    <input
-                                                        required
-                                                        type="email"
-                                                        value={opEmail}
-                                                        onChange={(e) => setOpEmail(e.target.value)}
-                                                        className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 pl-12 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all"
-                                                        placeholder="admin@example.com"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold uppercase tracking-widest text-content-muted mb-2">Password</label>
-                                                <div className="relative">
-                                                    <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-                                                    <input
-                                                        required
-                                                        type={showOpPassword ? "text" : "password"}
-                                                        value={opPassword}
-                                                        onChange={(e) => setOpPassword(e.target.value)}
-                                                        className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 pl-12 pr-12 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all"
-                                                        placeholder="••••••••"
-                                                    />
-                                                    <button type="button" onClick={() => setShowOpPassword(!showOpPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white focus:outline-none">
-                                                        {showOpPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <>
-                                            {tournamentId ? (
-                                                <div className="bg-surface-panel p-4 rounded-xl border border-brand/20 mb-4">
-                                                    <div className="text-xs font-bold uppercase tracking-widest text-brand mb-1">Tournament</div>
-                                                    <div className="text-white font-bold">{tournaments.find(t => t.id === tournamentId || t.slug === tournamentId)?.name || "Loading..."}</div>
-                                                </div>
-                                            ) : (
-                                                <div>
-                                                    <label className="block text-xs font-bold uppercase tracking-widest text-content-muted mb-2">Select Tournament</label>
-                                                    <div className="relative">
-                                                        <select 
-                                                            required
-                                                            value={selectedTournamentId}
-                                                            onChange={(e) => setSelectedTournamentId(e.target.value)}
-                                                            className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all appearance-none"
-                                                        >
-                                                            <option value="" disabled className="text-black bg-white">Select a tournament</option>
-                                                            {tournaments.map(t => (
-                                                                <option key={t.id} value={t.id} className="text-black bg-white">{t.name}</option>
-                                                            ))}
-                                                        </select>
-                                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-content-muted">
-                                                            <ChevronRight className="rotate-90" size={18} />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-                                            <div>
-                                                <label className="block text-xs font-bold uppercase tracking-widest text-content-muted mb-2">Referee Passcode</label>
-                                                <div className="relative">
-                                                    <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-                                                    <input
-                                                        required
-                                                        type={showOpPasscode ? "text" : "password"}
-                                                        value={opPasscode}
-                                                        onChange={(e) => setOpPasscode(e.target.value)}
-                                                        className="w-full bg-surface-ground border border-white/10 rounded-xl p-4 pl-12 pr-12 text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all"
-                                                        placeholder="Enter tournament passcode"
-                                                    />
-                                                    <button type="button" onClick={() => setShowOpPasscode(!showOpPasscode)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white focus:outline-none">
-                                                        {showOpPasscode ? <EyeOff size={20} /> : <Eye size={20} />}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </>
-                                    )}
-
-                                    <button 
-                                        type="submit" 
-                                        disabled={isLoading}
-                                        className="w-full bg-brand hover:bg-brand-light text-content-inverse font-bold py-4 rounded-xl mt-4 transition-all shadow-lg shadow-brand/20 flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
-                                    >
-                                        {isLoading ? (
-                                            <Loader2 size={20} className="animate-spin" />
-                                        ) : (
-                                            <>
-                                                Access Console
-                                                <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                                            </>
-                                        )}
-                                    </button>
-                                </form>
-                            </>
+                                <button type="submit" disabled={isLoading} className="auth__submit">
+                                    {isLoading ? <Loader2 size={20} className="animate-spin" /> : <>Access console<ArrowRight size={18} /></>}
+                                </button>
+                            </form>
                         )}
-                        
-                        <div className="mt-8 text-center">
-                            <p className="text-xs text-content-muted">
-                                By continuing, you agree to the Match Up <a href="#privacy" className="text-brand hover:underline">Terms of Service</a> and <a href="#privacy" className="text-brand hover:underline">Privacy Policy</a>.
-                            </p>
-                        </div>
-                    </div>
-                </Card>
+                    </motion.div>
+
+                    <p className="auth__terms">
+                        By continuing, you agree to the Match Up <a href="#privacy">Terms of Service</a> and <a href="#privacy">Privacy Policy</a>.
+                    </p>
+                </motion.div>
             </div>
         </div>
     );
