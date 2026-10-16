@@ -20,7 +20,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { TournamentDetail } from './TournamentDetail';
 import { TeamAmericanoStandings } from './TeamAmericanoStandings';
 import './spectator.css';
-import { getActiveFormat, isTeamAmericanoFormat } from '../lib/teamAmericano';
+import { getActiveFormat, isTeamAmericanoFormat, isPointsScoredFormat } from '../lib/teamAmericano';
 
 const getMatchTimestamp = (m: any): number => {
   const time = m.scheduledTime || m.scheduledAt;
@@ -1321,7 +1321,7 @@ const RecentMatchSummary = ({ match, teams }: any) => {
     const t1DisplayName = formatCleanName(t1?.name || match.team1Name || [ getFirstName(t1?.player1?.name), getFirstName(t1?.player2?.name) ].filter(n => n && n.trim()).join(' & ') || 'TBA') || 'TBA';
     const t2DisplayName = formatCleanName(t2?.name || match.team2Name || [ getFirstName(t2?.player1?.name), getFirstName(t2?.player2?.name) ].filter(n => n && n.trim()).join(' & ') || 'TBA') || 'TBA';
 
-    const isAmericanoMatch = match.roundName?.toLowerCase().includes("americano") || (match.score && (match.score.americanoTargetPoints !== undefined || match.score.americanoMode !== undefined));
+    const isAmericanoMatch = match.roundName?.toLowerCase().includes("americano");
 
     return (
         <Card variant="panel" className="p-6 flex flex-col md:flex-row items-center justify-between gap-6">
@@ -2361,7 +2361,10 @@ const BroadcastMatchCard = ({ match: initialMatch, tournament, theme }: { match:
 
     // Americano-style matches are one running points total: no set columns,
     // the total sits in the score box (and stays there once the match ends).
-    const isPointsMatch = score.americanoMode !== undefined || score.americanoTargetPoints !== undefined;
+    // Decided by the format, not by score fields: the referee scorer used to
+    // write americanoMode into every match, which made normal padel matches
+    // show their games in the score box instead of 15/30/40.
+    const isPointsMatch = isPointsScoredFormat(getActiveFormat(tournament, match.categoryId));
     const pointsTotal = (side: 1 | 2) => String((side === 1 ? score.p1Games : score.p2Games) ?? 0);
 
     // S1-S3: finished sets, then the set in progress, then dashes.

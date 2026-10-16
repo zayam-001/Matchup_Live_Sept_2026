@@ -241,7 +241,8 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
       isTiebreak: matchState.isTiebreak,
       server: matchState.server,
       history: stringHistory,
-      ...({ americanoTargetPoints, americanoMode } as any)
+      // Only Americano matches carry the rally-points settings.
+      ...(isAmericano ? ({ americanoTargetPoints, americanoMode } as any) : {})
     };
 
     // Do not dispatch intermediate score updates if we are in the process of submitting the final end match

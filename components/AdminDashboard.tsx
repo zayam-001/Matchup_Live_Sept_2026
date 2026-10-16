@@ -3,7 +3,7 @@ import { BulkUploadTeamsModal } from "./BulkUploadTeamsModal";
 import { TournamentLiveBadge } from "./TournamentLiveBadge";
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { TournamentFormat, SkillLevel, Tournament, MatchStatus, RoundRobinType, Team, Match, SponsorTier, Sponsor, Venue, BroadcastTheme } from '../types';
-import { createTournament, deleteTournament, updateTournament, subscribeToTournaments, subscribeToTournament, updateTeamStatus, generateSchedule, assignTeamGroup, updateTournamentTeamsGroups, updateMatchDetails, addKnockoutMatch, subscribeToVenues, uploadSystemImage, getOrganiserCredits, deductOrganiserCredits, enrollTeamManually, subscribeToStandings, searchGlobalTeams, refundOrganiserCredits, retireTournament, appendNewMexicanoRound, deleteMatch, replaceTeamInTournament, editTeamInTournament, syncAllDataToGlobal, checkAndHealTournamentStats, bulkUploadPendingTeams, isTeamInCategory, isMatchInCategory } from '../services/storage';
+import { createTournament, deleteTournament, updateTournament, subscribeToTournaments, subscribeToTournament, updateTeamStatus, generateSchedule, assignTeamGroup, updateTournamentTeamsGroups, updateMatchDetails, addKnockoutMatch, subscribeToVenues, uploadSystemImage, getOrganiserCredits, deductOrganiserCredits, enrollTeamManually, subscribeToStandings, searchGlobalTeams, refundOrganiserCredits, retireTournament, appendNewMexicanoRound, deleteMatch, replaceTeamInTournament, editTeamInTournament, syncAllDataToGlobal, getTournamentSponsors, checkAndHealTournamentStats, bulkUploadPendingTeams, isTeamInCategory, isMatchInCategory } from '../services/storage';
 import { Check, X, Calendar, Users, Trophy, PlayCircle, Lock, RefreshCcw, ChevronLeft, Plus, ChevronRight, Grid, ArrowRight, Settings, Edit3, ArrowUpRight, MapPin, DollarSign, Database, Trash2, Mail, Phone, Hash, AlertTriangle, Loader2, LogOut, Camera, Image as ImageIcon, Medal, Activity, Clock, PlusCircle, Download, Share2, Copy, QrCode, ExternalLink, List, Archive, ChevronDown, History, RotateCcw } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -131,7 +131,7 @@ export const ScoreCorrectionModal = ({ match, tournamentId, onCancel, onComplete
     );
 
     // Americano-style matches are one running points total, not sets.
-    const isPointsMatch = !!pointsMatch || match.score?.americanoMode !== undefined || match.score?.americanoTargetPoints !== undefined;
+    const isPointsMatch = pointsMatch !== undefined ? !!pointsMatch : (match.score?.americanoMode !== undefined || match.score?.americanoTargetPoints !== undefined);
     const team1SetsWon = isPointsMatch ? (sets[0]?.team1 || 0) : sets.filter(s => s.team1 > s.team2).length;
     const team2SetsWon = isPointsMatch ? (sets[0]?.team2 || 0) : sets.filter(s => s.team2 > s.team1).length;
 
@@ -1470,25 +1470,33 @@ const getTournamentCredits = (t: any) => {
 
 // --- SUB-COMPONENTS ---
 
-// Wrapper to fetch detailed tournament data if editing (needed for sponsors)
+// Wrapper to fetch detailed tournament data if editing (needed for sponsors).
+// The form must not open until the sponsors subcollection has actually loaded:
+// the tournament doc usually arrives first, and opening then started the form
+// with zero sponsors - saving that edit deleted every sponsor.
 function CreateTournamentWizardWrapper({ initialData, tournamentId, onCancel, onCreate }: any) {
     const [fullData, setFullData] = useState<Tournament | null>(initialData);
-    const [loading, setLoading] = useState(!!tournamentId);
+    const [docLoaded, setDocLoaded] = useState(!tournamentId);
+    const [sponsors, setSponsors] = useState<any[] | null>(tournamentId ? null : (initialData?.sponsors || []));
+    const [sponsorError, setSponsorError] = useState(false);
 
     useEffect(() => {
-        if (tournamentId) {
-            // Subscribe to get full data including sponsors subcollection
-            const unsubscribe = subscribeToTournament(tournamentId, (data) => {
-                setFullData(data);
-                setLoading(false);
-            });
-            return () => unsubscribe();
-        }
+        if (!tournamentId) return;
+        let alive = true;
+        const unsubscribe = subscribeToTournament(tournamentId, (data) => {
+            setFullData(data);
+            setDocLoaded(true);
+        });
+        getTournamentSponsors(tournamentId)
+            .then(list => { if (alive) setSponsors(list); })
+            .catch(err => { console.error('Failed to load sponsors', err); if (alive) setSponsorError(true); });
+        return () => { alive = false; unsubscribe(); };
     }, [tournamentId]);
 
-    if (loading) return <div className="p-8 text-white text-center">Loading tournament details...</div>;
+    if (sponsorError) return <div className="p-8 text-white text-center">Couldn't load this tournament's sponsors. Close and try again so existing sponsors aren't lost.</div>;
+    if (!docLoaded || sponsors === null) return <div className="p-8 text-white text-center">Loading tournament details...</div>;
 
-    return <CreateTournamentWizard initialData={fullData} onCancel={onCancel} onCreate={onCreate} />;
+    return <CreateTournamentWizard initialData={fullData ? { ...fullData, sponsors } : fullData} onCancel={onCancel} onCreate={onCreate} />;
 };
 
 function RetireConfirmationModal({ target, onCancel, onConfirm }: any) {

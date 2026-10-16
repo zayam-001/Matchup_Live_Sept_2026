@@ -488,6 +488,13 @@ const createMatchObject = (tId: string, name: string, round: number, stage: 'GRO
 export const sortSponsors = <T extends { order?: number }>(list: T[]): T[] =>
     [...list].sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
 
+/** One-off read of a tournament's sponsors subcollection (ordered). */
+export const getTournamentSponsors = async (tId: string): Promise<Sponsor[]> => {
+    if (!db) return [];
+    const snap = await getDocs(collection(db, "tournaments", tId, "sponsors"));
+    return sortSponsors(snap.docs.map(d => ({ id: d.id, ...d.data() } as Sponsor)));
+};
+
 // Helper to save sponsors to sub-collection
 const saveSponsorsToSubCollection = async (tId: string, sponsors: Sponsor[]) => {
     const batch = writeBatch(db);
@@ -3525,8 +3532,8 @@ export const recalculateMatchResult = async (tId: string, mId: string, sets: any
             isTiebreak: false,
             history: [],
             // Keep the Americano scoring rule so the match still reads as a points match.
-            ...(existing.score?.americanoMode !== undefined ? { americanoMode: existing.score.americanoMode } : {}),
-            ...(existing.score?.americanoTargetPoints !== undefined ? { americanoTargetPoints: existing.score.americanoTargetPoints } : {}),
+            ...(opts?.pointsMatch !== false && existing.score?.americanoMode !== undefined ? { americanoMode: existing.score.americanoMode } : {}),
+            ...(opts?.pointsMatch !== false && existing.score?.americanoTargetPoints !== undefined ? { americanoTargetPoints: existing.score.americanoTargetPoints } : {}),
             // A points match entered by hand (never live-scored) still needs to read as one.
             ...(opts?.pointsMatch && existing.score?.americanoMode === undefined && existing.score?.americanoTargetPoints === undefined ? { americanoMode: 'fixed_total' } : {}),
         } as ScoreState;
