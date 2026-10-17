@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowLeftRight, Ban, Coffee, Loader2, Mail, RefreshCcw, Shuffle, Trophy, UserMinus } from 'lucide-react';
+import { ArrowLeftRight, Ban, Check, Coffee, Edit3, Loader2, Mail, RefreshCcw, RotateCcw, Shuffle, Trophy, UserMinus } from 'lucide-react';
+import { auth, resetMatchToScheduled } from '../services/storage';
 import type { Match, Team, Tournament } from '../types';
 import {
     getRoundOverview,
@@ -26,6 +27,8 @@ interface Props {
     tournament: Tournament;
     categoryId: string | null;
     matches: Match[]; // already filtered to this category
+    /** Open the admin's enter/correct-final-score dialog for a match. */
+    onEnterResult?: (m: Match) => void;
 }
 
 const SCORING_LABEL = { points_total: 'total points', first_to: 'first to', timed: 'timed rounds' } as const;
@@ -34,7 +37,7 @@ const cleanCourt = (c?: string | null) => String(c || '').replace(/"/g, '') || '
 const fmtTime = (iso?: string | null) => (iso ? new Date(iso).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : 'TBD');
 
 /** Schedule, byes, swaps, withdrawals, finals and round alerts for a Team Americano event. */
-export const TeamAmericanoPanel: React.FC<Props> = ({ tournament, categoryId, matches }) => {
+export const TeamAmericanoPanel: React.FC<Props> = ({ tournament, categoryId, matches, onEnterResult }) => {
     const cfg = getTeamAmericanoConfig(tournament, categoryId);
     const [busy, setBusy] = useState<string | null>(null);
     const [swap, setSwap] = useState<{ round: number; picked: string[] } | null>(null);
@@ -113,6 +116,29 @@ export const TeamAmericanoPanel: React.FC<Props> = ({ tournament, categoryId, ma
             </button>
         );
     };
+
+    const isLiveMatch = (m: Match) => ['IN_PROGRESS', 'LIVE'].includes(String(m.status).toUpperCase());
+    // Per-match admin actions: undo a mistaken start, enter/correct the result.
+    const actionsCell = (m: Match) => (
+        <span className="flex items-center justify-end gap-1">
+            {isLiveMatch(m) && (
+                <button type="button" title="Reset to not started (started by mistake)" disabled={!!busy}
+                    onClick={() => {
+                        const pts = (m.score?.history || []).length;
+                        if (!window.confirm(pts ? `This match already has ${pts} point(s) scored. Reset it to not started and clear the score?` : 'Reset this match to not started? It leaves the live screens.')) return;
+                        run(`reset_${m.id}`, () => resetMatchToScheduled(tournament.id, m.id, auth?.currentUser?.email || 'admin'), 'Match reset to not started');
+                    }}
+                    className="p-1.5 rounded-lg text-content-muted hover:text-amber-300 hover:bg-amber-500/10"><RotateCcw size={14} /></button>
+            )}
+            {onEnterResult && m.team1Id && m.team2Id && (
+                <button type="button" title={isMatchFinished(m) ? 'Correct final score' : 'Enter final score & complete'} disabled={!!busy}
+                    onClick={() => onEnterResult(m)}
+                    className={`p-1.5 rounded-lg ${isMatchFinished(m) ? 'text-content-muted hover:text-white hover:bg-white/10' : 'text-brand hover:bg-brand/15'}`}>
+                    {isMatchFinished(m) ? <Edit3 size={14} /> : <Check size={14} />}
+                </button>
+            )}
+        </span>
+    );
 
     const scoreCell = (m: Match) => {
         if (!isMatchStarted(m)) return <span className="text-content-muted text-xs">{fmtTime(m.scheduledTime)}</span>;
@@ -228,11 +254,12 @@ export const TeamAmericanoPanel: React.FC<Props> = ({ tournament, categoryId, ma
                                 </div>
                                 <div className="divide-y divide-white/5">
                                     {r.matches.map(m => (
-                                        <div key={m.id} className="grid grid-cols-[72px_1fr_auto_1fr] sm:grid-cols-[96px_1fr_90px_1fr] items-center gap-2 px-4 py-2.5 text-sm">
+                                        <div key={m.id} className="grid grid-cols-[72px_1fr_auto_1fr_64px] sm:grid-cols-[96px_1fr_90px_1fr_72px] items-center gap-2 px-4 py-2.5 text-sm">
                                             <span className="text-[11px] font-bold text-content-muted uppercase truncate">{cleanCourt(m.court)}</span>
                                             <span className="flex justify-end min-w-0">{chip(r.round, m.team1Id, canSwap && swap?.round === r.round)}</span>
                                             <span className="text-center">{scoreCell(m)}</span>
                                             <span className="flex min-w-0">{chip(r.round, m.team2Id, canSwap && swap?.round === r.round)}</span>
+                                            {actionsCell(m)}
                                         </div>
                                     ))}
                                     {r.byeTeamIds.map(id => (

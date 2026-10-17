@@ -219,3 +219,45 @@
   background: radial-gradient(circle at 35% 35%, #F4FF9A 0%, #C6E03A 55%, #8FA91C 100%);
   box-shadow: 0 0 6px rgba(198, 224, 58, 0.8), inset -1px -1px 2px rgba(0, 0, 0, 0.35);
 }
+
+/* ── Pinktober theme (Tournament.broadcastTheme === 'pinktober') ────────────
+   Deep plum to raspberry scorebug with a hot-pink ribbon rail, pink score
+   box and a soft-pink serve ball - matches the Pink Ribbon broadcast. */
+.themePinktober {
+  background:
+    radial-gradient(ellipse 60% 140% at 100% 50%, rgba(255, 140, 198, 0.35), transparent 70%),
+    linear-gradient(90deg, #3a0a2a 0%, #5a1240 60%, #7d1650 100%);
+  border-left: 6px solid #ff4f9a;
+  box-shadow: 0 8px 30px rgba(40, 0, 25, 0.7), 0 0 24px rgba(232, 62, 140, 0.4);
+  border-radius: 4px;
+}
+.themePinktober .obsDivider,
+.themePinktober .scoreRowDivider {
+  background: rgba(255, 140, 198, 0.4);
+}
+.themePinktober .obsSetNum {
+  color: #ffd6e8;
+}
+.themePinktober .activeGameBox {
+  border: 0;
+  background: linear-gradient(180deg, #ff4f9a 0%, #e83e8c 55%, #c2185b 100%);
+  border-radius: 3px;
+  width: 46px;
+  box-shadow: 0 0 14px rgba(255, 79, 154, 0.45);
+}
+.themePinktober .activeGameDivider {
+  background: rgba(255, 255, 255, 0.4);
+}
+.themePinktober .pointsCol {
+  background: rgba(255, 214, 232, 0.14);
+  border: 1px solid rgba(255, 214, 232, 0.35);
+  border-radius: 3px;
+  width: 42px;
+}
+.themePinktober .pointsDivider {
+  background: rgba(255, 214, 232, 0.35);
+}
+.themePinktober .servingBall {
+  background: radial-gradient(circle at 35% 35%, #fff0f6 0%, #ffb3d6 55%, #e83e8c 100%);
+  box-shadow: 0 0 6px rgba(255, 140, 198, 0.85), inset -1px -1px 2px rgba(0, 0, 0, 0.3);
+}

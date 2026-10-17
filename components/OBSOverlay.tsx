@@ -5,6 +5,7 @@ import { Match, MatchStatus } from "../types";
 import { useMatchResult } from "../hooks/useMatchResult";
 import { useTournamentDoc } from "../hooks/useTournamentDoc";
 import { surnamePair, teamPlayerNames } from "../lib/nameDisplay";
+import { getActiveFormat, isPointsScoredFormat } from "../lib/teamAmericano";
 
 /**
  * OBS Broadcast Stream Overlay
@@ -284,6 +285,11 @@ export default function OBSOverlay({
   // Active set box and points column should only show when a set is actively being played and match is not over
   const hasActiveSet = !isMatchCompleted && !isSetCompleted;
 
+  // Americano formats are one running points total: show a single score box.
+  const isPointsMatch = isPointsScoredFormat(getActiveFormat(tournament as any, match.categoryId));
+  const themeClass = tournament?.broadcastTheme === 'sofcom' ? styles.themeSofcom
+    : tournament?.broadcastTheme === 'pinktober' ? styles.themePinktober : '';
+
   const p1Games = match.score?.p1Games ?? 0;
   const p2Games = match.score?.p2Games ?? 0;
   const p1Points = match.score?.p1Points ?? "0";
@@ -308,7 +314,7 @@ export default function OBSOverlay({
 
       {/* Primary Scoreboard Scorebug */}
       {activeOverlay === "scoreboard" && (
-        <div className={`${styles.obsCard} ${tournament?.broadcastTheme === 'sofcom' ? styles.themeSofcom : ''}`} ref={cardRef}>
+        <div className={`${styles.obsCard} ${themeClass}`} ref={cardRef}>
           {/* Left Column: Team 1 & Team 2 Names + Server Indicator */}
           <div className={styles.obsLeftCol}>
             {/* Row 1: Team 1 */}
@@ -359,8 +365,8 @@ export default function OBSOverlay({
               </div>
             )}
 
-            {/* Points Column - only shown during active set play */}
-            {hasActiveSet && (
+            {/* Points Column - only shown during active set play (not for Americano: the box above already is the points) */}
+            {hasActiveSet && !isPointsMatch && (
               <div className={styles.pointsCol}>
                 <div className={styles.pointsNum} ref={points1Ref}>
                   {p1Points}

@@ -3906,6 +3906,33 @@ export const getCourtsByVenueIds = async (venueIds: string[]) => {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 };
 
+/**
+ * Undo a match that was started by mistake: back to "scheduled" with a clean
+ * score, off the live/broadcast screens. Round, teams, schedule time and
+ * court are kept. Point events recorded for it are left as an audit trail.
+ */
+export const resetMatchToScheduled = async (tId: string, mId: string, by?: string) => {
+    if (!db) return;
+    const updates: any = {
+        status: MatchStatus.SCHEDULED,
+        score: deepClone(initialScore),
+        winnerTeamId: deleteField(),
+        actualCourtId: deleteField(),
+        conflictAcknowledged: deleteField(),
+        activeBroadcastEvent: deleteField(),
+        obsEnabled: false,
+        resetAt: new Date().toISOString(),
+        resetBy: by || 'unknown',
+    };
+    // mergeFields replaces each listed field whole (a plain merge would deep-
+    // merge `score` and keep stale keys like rawPointsA / americanoMode).
+    const batch = writeBatch(db);
+    batch.set(doc(db, "tournaments", tId, "matches", mId), updates, { mergeFields: Object.keys(updates) });
+    batch.set(doc(db, "matches", mId), { ...updates, tournamentId: tId, id: mId }, { mergeFields: [...Object.keys(updates), 'tournamentId', 'id'] });
+    batch.delete(doc(db, "obsIndex", mId));
+    await batch.commit();
+};
+
 export const resumeMatch = async (tId: string, mId: string) => {
     if (db) {
         const mRef = doc(db, "tournaments", tId, "matches", mId);

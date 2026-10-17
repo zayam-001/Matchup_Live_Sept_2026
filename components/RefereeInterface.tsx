@@ -324,6 +324,27 @@ const ScoringControl = ({ match: initialMatch, teams, tournamentId, isAmericano,
                 <span className="text-[10px] font-black uppercase tracking-widest text-brand">Court: {match.court || 'TBD'}</span>
                 <span className="w-1 h-1 rounded-full bg-white/20 mx-1"></span>
                 <span className="text-[10px] font-black uppercase tracking-widest text-content-secondary">{match.roundName || 'Match'}</span>
+                {/* Started the wrong match? Undo it while no points are on the board. */}
+                {String(match.status).toUpperCase() === 'IN_PROGRESS' && !(match.score?.history?.length) && (
+                    <button
+                        type="button"
+                        onClick={async () => {
+                            if (!confirm('Cancel this start? The match goes back to "not started" and leaves the live screens.')) return;
+                            try {
+                                const { resetMatchToScheduled } = await import('../services/storage');
+                                await resetMatchToScheduled(tournamentId, match.id, 'referee');
+                                toast.success('Start cancelled', 'The match is back to not started.');
+                                onBack();
+                            } catch (err) {
+                                console.error('Failed to cancel start', err);
+                                toast.error("Couldn't cancel the start", 'Please try again.');
+                            }
+                        }}
+                        className="ml-2 px-2.5 py-1 rounded-md border border-amber-400/40 bg-amber-400/10 text-amber-300 text-[10px] font-black uppercase tracking-widest hover:bg-amber-400/20"
+                    >
+                        Cancel start
+                    </button>
+                )}
             </div>
             <div className="flex-1 w-full relative min-h-0 md:h-full">
                 <MatchScoringSystem 

@@ -3,7 +3,7 @@ import { BulkUploadTeamsModal } from "./BulkUploadTeamsModal";
 import { TournamentLiveBadge } from "./TournamentLiveBadge";
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { TournamentFormat, SkillLevel, Tournament, MatchStatus, RoundRobinType, Team, Match, SponsorTier, Sponsor, Venue, BroadcastTheme } from '../types';
-import { createTournament, deleteTournament, updateTournament, subscribeToTournaments, subscribeToTournament, updateTeamStatus, generateSchedule, assignTeamGroup, updateTournamentTeamsGroups, updateMatchDetails, addKnockoutMatch, subscribeToVenues, uploadSystemImage, getOrganiserCredits, deductOrganiserCredits, enrollTeamManually, subscribeToStandings, searchGlobalTeams, refundOrganiserCredits, retireTournament, appendNewMexicanoRound, deleteMatch, replaceTeamInTournament, editTeamInTournament, syncAllDataToGlobal, getTournamentSponsors, checkAndHealTournamentStats, bulkUploadPendingTeams, isTeamInCategory, isMatchInCategory } from '../services/storage';
+import { createTournament, deleteTournament, updateTournament, subscribeToTournaments, subscribeToTournament, updateTeamStatus, generateSchedule, assignTeamGroup, updateTournamentTeamsGroups, updateMatchDetails, addKnockoutMatch, subscribeToVenues, uploadSystemImage, getOrganiserCredits, deductOrganiserCredits, enrollTeamManually, subscribeToStandings, searchGlobalTeams, refundOrganiserCredits, retireTournament, appendNewMexicanoRound, deleteMatch, replaceTeamInTournament, editTeamInTournament, syncAllDataToGlobal, getTournamentSponsors, resetMatchToScheduled, checkAndHealTournamentStats, bulkUploadPendingTeams, isTeamInCategory, isMatchInCategory } from '../services/storage';
 import { Check, X, Calendar, Users, Trophy, PlayCircle, Lock, RefreshCcw, ChevronLeft, Plus, ChevronRight, Grid, ArrowRight, Settings, Edit3, ArrowUpRight, MapPin, DollarSign, Database, Trash2, Mail, Phone, Hash, AlertTriangle, Loader2, LogOut, Camera, Image as ImageIcon, Medal, Activity, Clock, PlusCircle, Download, Share2, Copy, QrCode, ExternalLink, List, Archive, ChevronDown, History, RotateCcw } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -4555,7 +4555,7 @@ const ScheduleTab = ({ tournament, categoryId }: { tournament: Tournament; categ
             </div>
             
             {isTeamAmericanoFormat(getActiveFormat(tournament, categoryId)) ? (
-                <TeamAmericanoPanel tournament={tournament} categoryId={categoryId} matches={filteredMatches} />
+                <TeamAmericanoPanel tournament={tournament} categoryId={categoryId} matches={filteredMatches} onEnterResult={setScoringMatch} />
             ) : (
                 <AutoMatchSuggestions tournament={tournament} matches={filteredMatches} categoryId={categoryId} />
             )}
@@ -4778,6 +4778,16 @@ const ScheduleTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                     size="sm"
                     footer={
                         <div className="flex flex-col gap-2 w-full">
+                            {['IN_PROGRESS', 'LIVE'].includes(String(editingMatch.status).toUpperCase()) && (
+                                <button onClick={async () => {
+                                    const pts = (editingMatch.score?.history || []).length;
+                                    if (!window.confirm(pts ? `This match already has ${pts} point(s) scored. Reset it to not started and clear the score?` : 'Reset this match to not started? It leaves the live screens.')) return;
+                                    try { await resetMatchToScheduled(tournament.id, editingMatch.id, auth.currentUser?.email || 'admin'); toast.success('Match reset to not started'); setEditingMatch(null); }
+                                    catch (e) { console.error(e); toast.error("Couldn't reset the match", 'Please try again.'); }
+                                }} className="w-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-bold py-3 rounded-lg flex items-center justify-center gap-2 border border-amber-500/30 transition-colors">
+                                    <RotateCcw size={16}/> Reset to not started
+                                </button>
+                            )}
                             {canEnterResult(editingMatch) && (
                                 <button onClick={() => { setScoringMatch(editingMatch); setEditingMatch(null); }} className="w-full bg-white/10 hover:bg-white/20 font-bold py-3 rounded-lg flex items-center justify-center gap-2 border border-[#E65C31]/50 border-dashed text-[#E65C31] transition-colors">
                                     {isMatchCompleted(editingMatch) ? <><Edit3 size={16}/> Correct Final Score</> : <><Check size={16}/> Enter Final Score &amp; Complete</>}
@@ -5357,6 +5367,16 @@ const KnockoutTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                     size="sm"
                     footer={
                         <div className="flex flex-col gap-2 w-full">
+                            {['IN_PROGRESS', 'LIVE'].includes(String(editingMatch.status).toUpperCase()) && (
+                                <button onClick={async () => {
+                                    const pts = (editingMatch.score?.history || []).length;
+                                    if (!window.confirm(pts ? `This match already has ${pts} point(s) scored. Reset it to not started and clear the score?` : 'Reset this match to not started? It leaves the live screens.')) return;
+                                    try { await resetMatchToScheduled(tournament.id, editingMatch.id, auth.currentUser?.email || 'admin'); toast.success('Match reset to not started'); setEditingMatch(null); }
+                                    catch (e) { console.error(e); toast.error("Couldn't reset the match", 'Please try again.'); }
+                                }} className="w-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-bold py-3 rounded-lg flex items-center justify-center gap-2 border border-amber-500/30 transition-colors">
+                                    <RotateCcw size={16}/> Reset to not started
+                                </button>
+                            )}
                             {canEnterResult(editingMatch) && (
                                 <button onClick={() => { setCorrectingScoreMatch(editingMatch); setEditingMatch(null); }} className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 border border-[#E65C31]/50 border-dashed text-[#E65C31] transition-colors shadow-[0_0_15px_rgba(230,92,49,0.1)] hover:shadow-[0_0_25px_rgba(230,92,49,0.2)]">
                                     {isMatchCompleted(editingMatch) ? <><Edit3 size={16}/> Correct Final Score</> : <><Check size={16}/> Enter Final Score &amp; Complete</>}
