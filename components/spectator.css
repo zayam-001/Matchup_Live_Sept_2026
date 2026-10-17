@@ -203,3 +203,7 @@
 .spx-theme-pinktober table thead th:last-child { color: #ff8cc6 !important; }
 .spx-theme-pinktober table tbody tr:hover { background: rgba(255, 140, 198, .08) !important; }
 .spx-theme-pinktober table tbody tr:nth-child(-n+3) { background: linear-gradient(90deg, rgba(255, 140, 198, .1), transparent 60%); }
+/* Pinktober: live match popup */
+.spx-modal-pink [class*="bg-[#0D0D0D]"] { background: linear-gradient(170deg, #5a1240, #2e0822) !important; border-color: rgba(255, 214, 232, .18) !important; }
+.spx-modal-pink [class*="bg-black"] { background-color: rgba(30, 4, 22, .85) !important; }
+.spx-modal-pink [class*="via-[#4D78FF]"] { --tw-gradient-via: #ff8cc6 !important; }

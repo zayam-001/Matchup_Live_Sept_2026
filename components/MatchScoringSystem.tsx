@@ -597,6 +597,24 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
     );
   };
 
+  // An Americano match that has already reached its target (e.g. reopened
+  // after the referee closed the end prompt or reloaded at 4-20 of 24) used
+  // to sit there forever: the end check only ran on the point that crossed
+  // the target. Ask again once whenever the screen holds a finished score.
+  const targetPromptShownRef = useRef(false);
+  useEffect(() => {
+    if (!isAmericano || isMatchEnded || workflowPhase !== 'SCORING' || targetPromptShownRef.current) return;
+    const a = matchState.pointsA, b = matchState.pointsB;
+    const reached = americanoMode === 'first_to'
+      ? (a >= americanoTargetPoints || b >= americanoTargetPoints)
+      : americanoMode === 'fixed_total' ? (a + b >= americanoTargetPoints) : false;
+    if (!reached) return;
+    targetPromptShownRef.current = true;
+    setSelectedWinnerId(a >= b ? 1 : 2);
+    setResolutionType('normal');
+    setWorkflowPhase('FINAL_CONFIRMATION');
+  }, [isAmericano, isMatchEnded, workflowPhase, matchState.pointsA, matchState.pointsB, americanoMode, americanoTargetPoints]);
+
   const handleManualAction = (targetPhase: 'SET_END_PROMPT' | 'WINNER_SELECTION') => {
     let winnerTeam: TeamId = matchState.gamesA >= matchState.gamesB ? 'teamA' : 'teamB';
     if (matchState.gamesA === matchState.gamesB) {

@@ -2983,6 +2983,7 @@ export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Matc
     const activeModalMatch = selectedLiveMatch 
         ? (matches.find(m => m.id === selectedLiveMatch.id) || selectedLiveMatch)
         : null;
+    const modalIsPoints = !!activeModalMatch && isPointsScoredFormat(getActiveFormat(tournament, activeModalMatch.categoryId));
 
             const getTeamNamesAndPlayers = (teamId?: string, fallbackTeamName?: string, fallbackPlayerNames?: string) => {
         const t = teams.find(team => team.id === teamId);
@@ -3157,9 +3158,9 @@ export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Matc
             </div>
             <PaginationBar page={liveSafePage} totalPages={liveTotalPages} onChange={setLivePage} />
             {/* Interactive Court Detail / Detailed Scoreboard Overlay */}
-            <AnimatePresence>
+            {createPortal(<AnimatePresence>
                 {activeModalMatch && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
+<div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto ${tournament?.broadcastTheme === 'pinktober' ? 'spx-theme-pinktober spx-modal-pink' : ''}`}>
                         <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -3212,15 +3213,15 @@ export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Matc
                                         <div className="flex flex-col items-center justify-center bg-black border border-white/10 rounded-2xl px-6 py-4 min-w-[120px] shadow-2xl">
                                             <div className="flex items-center gap-3 font-mono">
                                                 <span className="text-3xl md:text-4xl font-black text-[#4D78FF] tracking-widest">
-                                                    {activeModalMatch.score?.p1Points === '0' ? '00' : activeModalMatch.score?.p1Points}
+                                                    {modalIsPoints ? (activeModalMatch.score?.p1Games ?? 0) : activeModalMatch.score?.p1Points === '0' ? '00' : activeModalMatch.score?.p1Points}
                                                 </span>
                                                 <span className="text-gray-600 font-black text-xl">-</span>
                                                 <span className="text-3xl md:text-4xl font-black text-[#4D78FF] tracking-widest">
-                                                    {activeModalMatch.score?.p2Points === '0' ? '00' : activeModalMatch.score?.p2Points}
+                                                    {modalIsPoints ? (activeModalMatch.score?.p2Games ?? 0) : activeModalMatch.score?.p2Points === '0' ? '00' : activeModalMatch.score?.p2Points}
                                                 </span>
                                             </div>
                                             <div className="text-[10px] uppercase font-black tracking-widest text-gray-500 mt-2">
-                                                Set {activeModalMatch.score?.currentSet || 1}
+                                                {modalIsPoints ? 'Points' : `Set ${activeModalMatch.score?.currentSet || 1}`}
                                             </div>
                                         </div>
 
@@ -3243,8 +3244,8 @@ export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Matc
                                         </div>
                                     </div>
 
-                                    {/* Set Scores breakdown */}
-                                    <div className="grid grid-cols-2 gap-4 mt-6 pt-5 border-t border-white/5 text-center text-xs">
+                                    {/* Set Scores breakdown (not for single-set Americano formats) */}
+                                    {!modalIsPoints && <div className="grid grid-cols-2 gap-4 mt-6 pt-5 border-t border-white/5 text-center text-xs">
                                         <div>
                                             <span className="text-gray-400 uppercase font-black tracking-wider block mb-1">Set History</span>
                                             <div className="flex items-center justify-center gap-2">
@@ -3271,7 +3272,7 @@ export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Matc
                                                 )}
                                             </div>
                                         </div>
-                                    </div>
+                                    </div>}
                                 </div>
 
                                 {/* Chronological Events Timeline */}
@@ -3314,7 +3315,7 @@ export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Matc
                         </motion.div>
                     </div>
                 )}
-            </AnimatePresence>
+            </AnimatePresence>, document.body)}
         </div>
     );
 };
