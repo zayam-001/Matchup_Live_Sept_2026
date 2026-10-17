@@ -50,8 +50,8 @@ export const TeamAmericanoStandings: React.FC<Props> = ({ tournament, categoryId
     const hasUnresolvedTie = standings.some(t => t.tieUnresolved && t.standingRank <= 4);
 
     const exportCsv = () => {
-        const header = ['Rank', 'Team', 'Player 1', 'Player 2', 'Played', 'Wins', 'Losses', 'Draws', 'Points For', 'Points Against', 'Differential', 'Byes', 'Bye Points', 'Total Points'];
-        const rows = standings.map(t => [t.standingRank, t.name, t.player1?.name, t.player2?.name, t.matchesPlayed, t.wins, t.losses, t.ties, t.pointsScored, t.pointsConceded, t.pointDifferential, t.byes, t.byePoints, t.points]);
+        const header = ['Rank', 'Team', 'Player 1', 'Player 2', 'Played', 'Won', 'Tied', 'Lost', 'Points For', 'Points Against', 'Diff', 'Total Score'];
+        const rows = standings.map(t => [t.standingRank, t.name, t.player1?.name, t.player2?.name, t.matchesPlayed, t.wins, t.ties, t.losses, t.pointsScored, t.pointsConceded, t.pointDifferential, t.points]);
         const csv = [header, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
         const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
         const a = document.createElement('a');
@@ -101,17 +101,18 @@ export const TeamAmericanoStandings: React.FC<Props> = ({ tournament, categoryId
             <div className="bg-[#0A0A0A] rounded-2xl border border-white/5 overflow-hidden">
                 <div className="overflow-x-auto">
                     {view === 'teams' ? (
-                        <table className="w-full text-left font-mono min-w-[640px]">
+                        <table className="w-full text-left font-mono min-w-[720px]">
                             <thead className="bg-[#111111] text-[10px] text-content-muted font-black uppercase tracking-widest border-b border-white/10">
                                 <tr>
                                     <th className="px-3 md:px-5 py-3">Team</th>
-                                    <th className="px-2 py-3 text-center" title="Matches played">P</th>
-                                    <th className="px-2 py-3 text-center" title="Wins - Losses - Draws">W-L-D</th>
-                                    <th className="px-2 py-3 text-center" title="Points for">PF</th>
-                                    <th className="px-2 py-3 text-center" title="Points against">PA</th>
-                                    <th className="px-2 py-3 text-center" title="Point differential">+/-</th>
-                                    <th className="px-2 py-3 text-center" title="Byes (points awarded)">Byes</th>
-                                    <th className="px-3 md:px-5 py-3 text-right text-[#4D78FF]" title="Total points (points for + bye points)">Pts</th>
+                                    <th className="px-2 py-3 text-center">Played</th>
+                                    <th className="px-2 py-3 text-center">Won</th>
+                                    <th className="px-2 py-3 text-center">Tied</th>
+                                    <th className="px-2 py-3 text-center">Lost</th>
+                                    <th className="px-2 py-3 text-center">Points For</th>
+                                    <th className="px-2 py-3 text-center">Points Against</th>
+                                    <th className="px-2 py-3 text-center" title="Points for minus points against">Diff</th>
+                                    <th className="px-3 md:px-5 py-3 text-right text-[#4D78FF]" title="Total Score = Points For">Total Score</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
@@ -132,11 +133,12 @@ export const TeamAmericanoStandings: React.FC<Props> = ({ tournament, categoryId
                                             </div>
                                         </td>
                                         <td className="px-2 py-3 text-center text-[#8A9AB0] text-sm">{t.matchesPlayed}</td>
-                                        <td className="px-2 py-3 text-center text-content-secondary text-sm">{t.wins}-{t.losses}-{t.ties}</td>
+                                        <td className="px-2 py-3 text-center text-[#10B981] text-sm">{t.wins}</td>
+                                        <td className="px-2 py-3 text-center text-content-secondary text-sm">{t.ties}</td>
+                                        <td className="px-2 py-3 text-center text-[#EF4444]/90 text-sm">{t.losses}</td>
                                         <td className="px-2 py-3 text-center text-white text-sm">{t.pointsScored}</td>
                                         <td className="px-2 py-3 text-center text-[#8A9AB0] text-sm">{t.pointsConceded}</td>
                                         <td className={`px-2 py-3 text-center text-sm font-bold ${t.pointDifferential > 0 ? 'text-[#10B981]' : t.pointDifferential < 0 ? 'text-[#EF4444]' : 'text-[#8A9AB0]'}`}>{t.pointDifferential > 0 ? `+${t.pointDifferential}` : t.pointDifferential}</td>
-                                        <td className="px-2 py-3 text-center text-[#8A9AB0] text-sm" title={t.byes ? `${t.byePoints} bye points` : undefined}>{t.byes ? `${t.byes} (+${t.byePoints})` : '-'}</td>
                                         <td className="px-3 md:px-5 py-3 text-right text-[#4D78FF] font-black text-lg">{t.points}</td>
                                     </tr>
                                 ))}
@@ -148,9 +150,9 @@ export const TeamAmericanoStandings: React.FC<Props> = ({ tournament, categoryId
                                 <tr>
                                     <th className="px-3 md:px-5 py-3">Player</th>
                                     <th className="px-2 py-3">Team</th>
-                                    <th className="px-2 py-3 text-center">P</th>
-                                    <th className="px-2 py-3 text-center">W</th>
-                                    <th className="px-3 md:px-5 py-3 text-right text-[#4D78FF]">Pts</th>
+                                    <th className="px-2 py-3 text-center">Played</th>
+                                    <th className="px-2 py-3 text-center">Won</th>
+                                    <th className="px-3 md:px-5 py-3 text-right text-[#4D78FF]">Total Score</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
@@ -168,7 +170,7 @@ export const TeamAmericanoStandings: React.FC<Props> = ({ tournament, categoryId
                     )}
                 </div>
             </div>
-            <p className="text-[10px] text-content-muted px-1">Ranked by total points, then: {cfg.tiebreakers.map(tb => ({ wins: 'wins', pointDiff: 'point difference', headToHead: 'head-to-head', fewestByes: 'fewest byes' }[tb])).join(' → ')}.</p>
+            <p className="text-[10px] text-content-muted px-1">Ranked by Total Score (points for), then point difference, then wins.</p>
         </div>
     );
 };

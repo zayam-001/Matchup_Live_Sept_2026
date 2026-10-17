@@ -104,23 +104,6 @@ export const TeamAmericanoSetup: React.FC<Props> = ({ value, onChange, teamCount
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label className={labelClass}>Bye Score</label>
-                    <select className={fieldClass} value={cfg.byeScoring} onChange={e => set({ byeScoring: e.target.value as TeamAmericanoConfig['byeScoring'] })}>
-                        <option value="average">Tournament average per match</option>
-                        <option value="fixed">Fixed number of points</option>
-                        <option value="zero">Zero</option>
-                    </select>
-                </div>
-                {cfg.byeScoring === 'fixed' && (
-                    <div>
-                        <label className={labelClass}>Points per Bye</label>
-                        <input type="number" min={0} className={fieldClass} value={cfg.byePoints} onChange={e => set({ byePoints: num(e.target.value) ?? 0 })} />
-                    </div>
-                )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
                     <label className={labelClass}>Finals</label>
                     <select className={fieldClass} value={cfg.finals} onChange={e => set({ finals: e.target.value as TeamAmericanoConfig['finals'] })}>
                         <option value="none">No finals (standings decide)</option>
@@ -137,19 +120,9 @@ export const TeamAmericanoSetup: React.FC<Props> = ({ value, onChange, teamCount
                 </div>
             </div>
 
-            <div>
-                <label className={labelClass}>Tiebreaker Order <span className="text-content-muted font-normal">(after total points)</span></label>
-                <div className="space-y-1.5">
-                    {cfg.tiebreakers.map((tb, i) => (
-                        <div key={tb} className="flex items-center gap-3 bg-surface-panel border border-white/10 rounded-xl px-3 py-2">
-                            <span className="w-5 h-5 rounded-full bg-white/10 text-[10px] font-bold text-white flex items-center justify-center">{i + 1}</span>
-                            <span className="flex-1 text-sm text-white">{TIEBREAKER_LABELS[tb]}</span>
-                            <button type="button" aria-label="Move up" disabled={i === 0} onClick={() => moveTiebreaker(i, -1)} className="p-1 text-content-muted hover:text-white disabled:opacity-20"><ArrowUp size={14} /></button>
-                            <button type="button" aria-label="Move down" disabled={i === cfg.tiebreakers.length - 1} onClick={() => moveTiebreaker(i, 1)} className="p-1 text-content-muted hover:text-white disabled:opacity-20"><ArrowDown size={14} /></button>
-                        </div>
-                    ))}
-                    <p className="text-[11px] text-content-muted px-1">Still level after all of these: the teams are flagged as tied for the admin to decide or settle with a sudden-death playoff.</p>
-                </div>
+            <div className="rounded-xl border border-white/10 bg-surface-panel px-3 py-2.5">
+                <span className={labelClass}>Standings</span>
+                <p className="text-xs text-content-muted">Ranked by <span className="text-white font-bold">Total Score</span> (points for), then <span className="text-white font-bold">point difference</span>, then <span className="text-white font-bold">wins</span>. Byes earn no points. Teams still level are flagged as tied for the organizer to decide.</p>
             </div>
 
             <label className="flex items-start gap-3 cursor-pointer select-none">

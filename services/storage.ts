@@ -3346,8 +3346,12 @@ export const updateMatchScore = async (tId: string, mId: string, newScore: Score
            batch.set(obsIndexRef, { tournamentId: tId, matchId: mId, timestamp: new Date().toISOString() }, { merge: true });
            await batch.commit();
 
-           // Trigger auto-heal of tournament stats in background
-           (async () => {
+           // Standings only count finished matches, so recalculating them on
+           // every point was pure load (it read every match in the tournament
+           // per point, per court) and slowed referees' saves on venue Wi-Fi.
+           // Only heal when the match actually finishes.
+           const finishedNow = status === MatchStatus.COMPLETED || String(status).toUpperCase() === "FINISHED" || String(status).toUpperCase() === "COMPLETED";
+           if (finishedNow) (async () => {
                try {
                    const tRef = doc(db, "tournaments", tId);
                    const tSnap = await getDoc(tRef);

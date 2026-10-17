@@ -61,6 +61,9 @@ export const TIEBREAKER_LABELS: Record<TeamAmericanoTiebreaker, string> = {
 
 export const DEFAULT_TIEBREAKERS: TeamAmericanoTiebreaker[] = ['wins', 'pointDiff', 'headToHead', 'fewestByes'];
 
+/** Standings order after Total Score (= points for). Not configurable. */
+export const RANKING_TIEBREAKERS: TeamAmericanoTiebreaker[] = ['pointDiff', 'wins', 'headToHead'];
+
 export const TARGET_POINT_PRESETS = [16, 21, 24, 32];
 
 export type ResolvedTeamAmericanoConfig = Required<Omit<TeamAmericanoConfig, 'rounds'>> & { rounds?: number };
@@ -522,19 +525,21 @@ export const computeTeamAmericanoStandings = <T extends Team>(
         cfg.byeScoring === 'zero' ? 0
         : cfg.byeScoring === 'fixed' ? Number(cfg.byePoints) || 0
         : finishedTeamMatches > 0 ? Math.round(totalScored / finishedTeamMatches) : 0;
+    // Byes are counted for scheduling fairness but earn no points:
+    // Total Score is Points For only (organiser rule).
+    void byeValue;
     overview.forEach(r => {
         if (!r.matches.some(isMatchFinished)) return;
         r.byeTeamIds.forEach(id => {
             const row = rows.get(id);
             if (!row) return;
             row.byes += 1;
-            row.byePoints += byeValue;
         });
     });
 
     rows.forEach(row => {
         row.pointDifferential = row.pointsScored - row.pointsConceded;
-        row.points = row.pointsScored + row.byePoints;
+        row.points = row.pointsScored; // Total Score = Points For
         // Mirror into the generic fields older screens/exports read.
         (row as any).gamesWon = row.pointsScored;
         (row as any).gamesLost = row.pointsConceded;
@@ -583,7 +588,9 @@ export const computeTeamAmericanoStandings = <T extends Team>(
         return splitByKey(group, keyFor(first, group)).flatMap(g => resolve(g, rest));
     };
 
-    const tieGroups = splitByKey(active, t => t.points).flatMap(g => resolve(g, cfg.tiebreakers));
+    // Fixed ranking: Total Score (points for), then point difference, then
+    // wins; head-to-head only as a last resort before flagging a tie.
+    const tieGroups = splitByKey(active, t => t.points).flatMap(g => resolve(g, RANKING_TIEBREAKERS));
     let ordered: TeamAmericanoStanding<T>[] = [];
     tieGroups.forEach(group => {
         const playedSomething = group.some(t => t.matchesPlayed > 0);

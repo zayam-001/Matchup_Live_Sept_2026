@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { X, ArrowLeft, Info } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { X } from 'lucide-react';
 import { Avatar } from './ui/Avatar';
 import { MatchResultCard } from './MatchResultCard';
 import { Match, Team } from '../types';
@@ -9,210 +10,185 @@ export const TeamDetailsOverlay = ({ team, matches, teams, tournament, onClose, 
     const [activeTab, setActiveTab] = useState<'UPCOMING' | 'RESULTS'>('RESULTS');
     const [filterPeriod, setFilterPeriod] = useState<'TODAY' | 'ALL'>('ALL');
 
+    // Esc closes; the page behind doesn't scroll while the drawer is open.
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', onKey);
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+    }, [onClose]);
+
     if (!team) return null;
 
     const teamId = team.id;
+    const isDone = (m: Match) => m.status === 'COMPLETED' || String(m.status).toUpperCase() === 'FINISHED';
+    const isLive = (m: Match) => ['IN_PROGRESS', 'LIVE'].includes(String(m.status).toUpperCase());
     const teamMatches = matches.filter(m => m.team1Id === teamId || m.team2Id === teamId);
-    
-    const completedMatches = teamMatches.filter(m => (m.status === 'COMPLETED' || String(m.status).toUpperCase() === 'FINISHED'));
-    const upcomingMatches = teamMatches.filter(m => (m.status !== 'COMPLETED' && String(m.status).toUpperCase() !== 'FINISHED'));
+    const completedMatches = teamMatches.filter(isDone);
+    const upcomingMatches = teamMatches.filter(m => !isDone(m));
 
-    const wins = team.wins !== undefined ? team.wins : completedMatches.filter(m => m.winnerTeamId === teamId).length;
-    const losses = team.losses !== undefined ? team.losses : (completedMatches.length - wins);
-    const played = wins + losses;
-    const gd = (team.gamesWon || 0) - (team.gamesLost || 0);
+    const t: any = team;
+    const wins = t.wins !== undefined ? t.wins : completedMatches.filter(m => m.winnerTeamId === teamId).length;
+    const ties = t.ties !== undefined ? t.ties : completedMatches.filter(m => !m.winnerTeamId).length;
+    const losses = t.losses !== undefined ? t.losses : Math.max(0, completedMatches.length - wins - ties);
+    const played = t.matchesPlayed !== undefined ? t.matchesPlayed : wins + losses + ties;
+    const isPointsTable = t.pointsScored !== undefined; // Team Americano standings row
+    const diff = isPointsTable ? (t.pointDifferential ?? 0) : (t.gamesWon || 0) - (t.gamesLost || 0);
+    const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
 
     const getFirstName = (name?: string) => name ? name.split(' ')[0] : '';
-    const displayTitle = formatCleanName([getFirstName(team.player1?.name), getFirstName(team.player2?.name)].filter(n => n && n.trim()).join(' & ') || team.name || 'TBA') || 'TBA';
+    const playersLine = [team.player1?.name, team.player2?.name].filter(n => n && n.trim() && n.toUpperCase() !== 'N/A').join(' & ');
+    const displayTitle = formatCleanName(team.name || playersLine) || 'TBA';
+    const showPlayersLine = !!playersLine && formatCleanName(team.name || '').toLowerCase() !== playersLine.toLowerCase();
+    const sideName = (tm: Team | undefined, fallback?: string) => tm
+        ? formatCleanName(tm.name || [getFirstName(tm.player1?.name), getFirstName(tm.player2?.name)].filter(n => n && n.trim()).join(' & ')) || 'TBA'
+        : formatCleanName(fallback) || 'TBA';
 
     const isToday = (dateString: string) => {
         const d = new Date(dateString);
         const today = new Date();
-        return d.getDate() === today.getDate() &&
-            d.getMonth() === today.getMonth() &&
-            d.getFullYear() === today.getFullYear();
+        return d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
     };
 
     let displayMatches = activeTab === 'UPCOMING' ? upcomingMatches : completedMatches;
-    if (filterPeriod === 'TODAY') {
-        displayMatches = displayMatches.filter(m => m.scheduledTime && isToday(m.scheduledTime));
-    }
-    
-    displayMatches.sort((a, b) => new Date(b.scheduledTime).getTime() - new Date(a.scheduledTime).getTime());
+    if (filterPeriod === 'TODAY') displayMatches = displayMatches.filter(m => m.scheduledTime && isToday(m.scheduledTime));
+    displayMatches = [...displayMatches].sort((a, b) => activeTab === 'UPCOMING'
+        ? new Date(a.scheduledTime).getTime() - new Date(b.scheduledTime).getTime()
+        : new Date(b.scheduledTime).getTime() - new Date(a.scheduledTime).getTime());
 
-    return (
-        <div className="fixed top-16 md:top-24 left-0 right-0 bottom-0 z-[999] bg-black/90 backdrop-blur-sm flex justify-end animate-in fade-in duration-300">
-            <div className="w-full md:w-[500px] h-full bg-[#0A0A0A] border-l border-t border-white/5 flex flex-col animate-in slide-in-from-right duration-300 shadow-xl overflow-hidden">
-                
-                {/* Header Section Matches Design */}
-                <div className="p-4 md:p-6 pb-6 bg-[#111111] shadow-lg relative flex flex-col rounded-bl-[24px] border-b border-white/5">
-                    <div className="flex justify-between items-center mb-4">
-                        <button onClick={onClose} className="p-2 -ml-2 text-white hover:bg-white/10 rounded-full transition-colors">
-                            <ArrowLeft size={24} />
-                        </button>
-                        <button className="p-2 -mr-2 text-content-muted hover:text-white rounded-full transition-colors">
-                            <Info size={24} />
-                        </button>
-                    </div>
+    const stats: { label: string; value: string; tone?: string }[] = [
+        { label: 'Played', value: String(played) },
+        { label: 'Won', value: String(wins), tone: 'text-[#34D399]' },
+        ...(isPointsTable || ties > 0 ? [{ label: 'Tied', value: String(ties) }] : []),
+        { label: 'Lost', value: String(losses), tone: 'text-[#FF7A6B]' },
+        { label: isPointsTable ? 'Diff' : 'GD', value: signed(diff), tone: diff > 0 ? 'text-[#34D399]' : diff < 0 ? 'text-[#FF7A6B]' : undefined },
+        ...(isPointsTable ? [{ label: 'Score', value: String(t.points ?? t.pointsScored ?? 0), tone: 'text-[#7EA0FF]' }] : []),
+    ];
 
-                    <div className="flex items-center gap-4 mb-6">
-                        <div className="flex relative shrink-0">
-                            {team?.player1?.photoUrl ? (
-                                <Avatar src={team.player1.photoUrl} fallback={team.player1.name || ''} size="lg" className="border-[4px] border-[#111111] z-10 w-16 h-16 shadow-xl" />
-                            ) : (
-                                <Avatar fallback={displayTitle} size="lg" className="border-[4px] border-[#111111] z-10 w-16 h-16 shadow-xl" />
-                            )}
-                            {team?.player2 && (
-                                <Avatar src={team.player2.photoUrl} fallback={team.player2.name || ''} size="lg" className="border-[4px] border-[#111111] -ml-6 z-0 w-16 h-16 shadow-xl" />
-                            )}
-                        </div>
-                        <h2 className="text-xl md:text-2xl font-black text-white leading-tight">{displayTitle}</h2>
-                    </div>
+    const scoreOf = (m: Match) => {
+        const sc: any = m.score || {};
+        if (sc.p1SetScores?.length) return sc.p1SetScores.map((s1: number, i: number) => `${s1}-${sc.p2SetScores?.[i] ?? 0}`).join('  ');
+        if ((sc.p1Sets || 0) > 0 || (sc.p2Sets || 0) > 0) return `${sc.p1Sets}-${sc.p2Sets}`;
+        return `${sc.p1Games || 0}-${sc.p2Games || 0}`;
+    };
+    const badgeOf = (m: Match) => {
+        if (isDone(m)) {
+            if (!m.winnerTeamId) return { text: 'Tied', cls: 'bg-white/10 text-white/80' };
+            return m.winnerTeamId === teamId ? { text: 'Won', cls: 'bg-[#34D399]/15 text-[#34D399]' } : { text: 'Lost', cls: 'bg-[#FF7A6B]/15 text-[#FF7A6B]' };
+        }
+        if (isLive(m)) return { text: 'Live', cls: 'bg-[#FF3B3B]/15 text-[#FF6B6B]' };
+        return { text: m.scheduledTime ? new Date(m.scheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Scheduled', cls: 'bg-[#4D78FF]/15 text-[#7EA0FF]' };
+    };
 
-                    <div className="flex justify-between items-center text-center px-0 md:px-2">
-                        <div className="flex-1 border-r border-white/10">
-                            <div className="text-2xl font-black text-white">{played}</div>
-                            <div className="text-[10px] text-content-muted font-bold uppercase mt-1 tracking-wider">Played</div>
-                        </div>
-                        <div className="flex-1 border-r border-white/10">
-                            <div className="text-2xl font-black text-white">{wins}</div>
-                            <div className="text-[10px] text-content-muted font-bold uppercase mt-1 tracking-wider">Win</div>
-                        </div>
-                        <div className="flex-1 border-r border-white/10">
-                            <div className="text-2xl font-black text-white">{losses}</div>
-                            <div className="text-[10px] text-content-muted font-bold uppercase mt-1 tracking-wider">Loss</div>
-                        </div>
-                        <div className="flex-1">
-                            <div className="text-2xl font-black text-white">{gd > 0 ? `+${gd}` : gd}</div>
-                            <div className="text-[10px] text-content-muted font-bold uppercase mt-1 tracking-wider">GD</div>
-                        </div>
-                    </div>
+    const playerCard = (p: any, label: string) => p && (
+        <div className="flex items-center gap-3 min-w-0">
+            <Avatar src={p.photoUrl} fallback={p.name || ''} size="md" className="w-10 h-10 shrink-0" />
+            <div className="min-w-0">
+                <div className="text-[10px] text-white/45 font-bold uppercase tracking-widest">{label}</div>
+                <div className="font-bold text-white text-sm truncate">{p.name || 'N/A'}</div>
+                {showContactInfo && p.phone && <div className="text-xs text-white/60 truncate">📞 {p.phone}</div>}
+                {showContactInfo && p.email && <div className="text-xs text-white/60 truncate" title={p.email}>✉️ {p.email}</div>}
+                {showContactInfo && p.cnic && <div className="text-[11px] text-white/60">🪪 CNIC: {p.cnic}</div>}
+            </div>
+        </div>
+    );
 
-                    <div className="mt-6 flex bg-white/5 p-1 rounded-full relative z-10 border border-white/5">
-                        <button 
-                            className={`flex-1 py-2 text-sm font-black capitalize rounded-full transition-all ${activeTab === 'UPCOMING' ? 'bg-[#2A2A2A] text-white shadow-lg border border-white/10' : 'text-content-muted hover:text-white'}`}
-                            onClick={() => setActiveTab('UPCOMING')}
-                        >
-                            Upcoming
-                        </button>
-                        <button 
-                            className={`flex-1 py-2 text-sm font-black capitalize rounded-full transition-all ${activeTab === 'RESULTS' ? 'bg-[#2A2A2A] text-white shadow-lg border border-white/10' : 'text-content-muted hover:text-white'}`}
-                            onClick={() => setActiveTab('RESULTS')}
-                        >
-                            Results
-                        </button>
-                    </div>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto px-4 md:px-6 pt-4 pb-20 space-y-4">
-                    {/* Players Contact & Info segments */}
-                    {(team.player1 || team.player2) && (
-                        <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-4">
-                            <h3 className="text-xs font-black tracking-widest text-[#4D78FF] uppercase">
-                                {showContactInfo ? "Team Players & Contact Info" : "Team Players"}
-                            </h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                {team.player1 && (
-                                    <div className="space-y-1">
-                                        <div className="text-[9px] text-content-muted font-black uppercase tracking-widest">Player 1</div>
-                                        <div className="font-bold text-white text-sm">{team.player1.name || "N/A"}</div>
-                                        {showContactInfo && team.player1.phone && <div className="text-xs text-content-secondary">📞 {team.player1.phone}</div>}
-                                        {showContactInfo && team.player1.email && <div className="text-xs text-content-secondary truncate" title={team.player1.email}>✉️ {team.player1.email}</div>}
-                                        {showContactInfo && (team.player1 as any).cnic && <div className="text-[11px] text-content-secondary">🪪 CNIC: {(team.player1 as any).cnic}</div>}
-                                    </div>
-                                )}
-                                {team.player2 && (
-                                    <div className="space-y-1">
-                                        <div className="text-[9px] text-content-muted font-black uppercase tracking-widest">Player 2</div>
-                                        <div className="font-bold text-white text-sm">{team.player2.name || "N/A"}</div>
-                                        {showContactInfo && team.player2.phone && <div className="text-xs text-content-secondary">📞 {team.player2.phone}</div>}
-                                        {showContactInfo && team.player2.email && <div className="text-xs text-content-secondary truncate" title={team.player2.email}>✉️ {team.player2.email}</div>}
-                                        {showContactInfo && (team.player2 as any).cnic && <div className="text-[11px] text-content-secondary">🪪 CNIC: {(team.player2 as any).cnic}</div>}
-                                    </div>
-                                )}
+    return createPortal(
+        <div className="fixed inset-0 z-[10000] flex justify-end animate-in fade-in duration-200" role="dialog" aria-modal="true" aria-label={`${displayTitle} details`}>
+            <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/70 backdrop-blur-sm cursor-default" />
+            <aside className="relative w-full sm:w-[520px] h-full flex flex-col bg-[#0B1030] border-l border-white/10 shadow-[-30px_0_80px_rgba(0,0,0,0.5)] animate-in slide-in-from-right duration-300">
+                {/* Header */}
+                <div className="shrink-0 px-5 sm:px-6 pt-5 pb-5 border-b border-white/10 bg-[radial-gradient(120%_120%_at_100%_0%,rgba(77,120,255,0.25),transparent_55%)]">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-4 min-w-0">
+                            <div className="flex shrink-0">
+                                <Avatar src={team.player1?.photoUrl} fallback={team.player1?.name || displayTitle} size="lg" className="w-14 h-14 border-[3px] border-[#0B1030] z-10" />
+                                {team.player2 && <Avatar src={team.player2.photoUrl} fallback={team.player2.name || ''} size="lg" className="w-14 h-14 border-[3px] border-[#0B1030] -ml-5" />}
+                            </div>
+                            <div className="min-w-0">
+                                <div className="text-2xl leading-tight font-black text-white truncate tracking-tight">{displayTitle}</div>
+                                {showPlayersLine && <p className="text-sm text-white/60 truncate mt-0.5">{playersLine}</p>}
                             </div>
                         </div>
+                        <button type="button" onClick={onClose} aria-label="Close" className="shrink-0 w-10 h-10 grid place-items-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">
+                            <X size={18} />
+                        </button>
+                    </div>
+
+                    <div className="mt-5 grid gap-px rounded-2xl overflow-hidden border border-white/10 bg-white/10" style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))` }}>
+                        {stats.map(st => (
+                            <div key={st.label} className="bg-[#0E1438] px-2 py-3 text-center">
+                                <div className={`text-xl font-black ${st.tone || 'text-white'}`}>{st.value}</div>
+                                <div className="text-[9px] text-white/50 font-bold uppercase tracking-widest mt-0.5 truncate">{st.label}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Body */}
+                <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-5">
+                    {(team.player1 || team.player2) && (
+                        <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                            <div className="text-[11px] font-black tracking-widest text-[#7EA0FF] uppercase mb-3">{showContactInfo ? 'Players & contact' : 'Players'}</div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {playerCard(team.player1, 'Player 1')}
+                                {playerCard(team.player2, 'Player 2')}
+                            </div>
+                        </section>
                     )}
 
-                    <div className="flex bg-[#1A1A1A] rounded-xl overflow-hidden p-1 border border-white/5">
-                        <button 
-                            className={`flex-1 py-2 text-xs md:text-sm font-black uppercase tracking-wider rounded-lg transition-all ${filterPeriod === 'TODAY' ? 'bg-[#4D78FF] text-white shadow-lg' : 'text-content-muted hover:bg-white/5'}`}
-                            onClick={() => setFilterPeriod('TODAY')}
-                        >
-                            Today
-                        </button>
-                        <button 
-                            className={`flex-1 py-2 text-xs md:text-sm font-black uppercase tracking-wider rounded-lg transition-all ${filterPeriod === 'ALL' ? 'bg-[#4D78FF] text-white shadow-lg' : 'text-content-muted hover:bg-white/5'}`}
-                            onClick={() => setFilterPeriod('ALL')}
-                        >
-                            All
-                        </button>
+                    <div className="flex items-center gap-3">
+                        <div className="flex flex-1 bg-white/5 p-1 rounded-full border border-white/10">
+                            {(['RESULTS', 'UPCOMING'] as const).map(tab => (
+                                <button key={tab} type="button" onClick={() => setActiveTab(tab)}
+                                    className={`flex-1 py-2 text-xs font-black uppercase tracking-wider rounded-full transition-all ${activeTab === tab ? 'bg-[#4D78FF] text-white shadow-lg shadow-[#4D78FF]/25' : 'text-white/55 hover:text-white'}`}>
+                                    {tab === 'RESULTS' ? 'Results' : 'Upcoming'} <span className="opacity-70">({tab === 'RESULTS' ? completedMatches.length : upcomingMatches.length})</span>
+                                </button>
+                            ))}
+                        </div>
+                        <div className="flex bg-white/5 p-1 rounded-full border border-white/10">
+                            {(['ALL', 'TODAY'] as const).map(per => (
+                                <button key={per} type="button" onClick={() => setFilterPeriod(per)}
+                                    className={`px-3 py-2 text-[11px] font-black uppercase tracking-wider rounded-full transition-all ${filterPeriod === per ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white'}`}>
+                                    {per === 'ALL' ? 'All' : 'Today'}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     {displayMatches.length > 0 ? (
-                        <div className="space-y-3">
+                        <div className="space-y-2.5">
                             {displayMatches.map((m: Match) => {
-                                const t1 = teams.find(t => t.id === m.team1Id);
-                                const t2 = teams.find(t => t.id === m.team2Id);
-                                const t1Name = t1 ? formatCleanName([getFirstName(t1.player1?.name), getFirstName(t1.player2?.name)].filter(n => n && n.trim()).join(' & ') || t1.name) || 'TBA' : formatCleanName(m.team1Name) || 'TBA';
-                                const t2Name = t2 ? formatCleanName([getFirstName(t2.player1?.name), getFirstName(t2.player2?.name)].filter(n => n && n.trim()).join(' & ') || t2.name) || 'TBA' : formatCleanName(m.team2Name) || 'TBA';
-                                const isT1Team = m.team1Id === teamId;
-                                const isT2Team = m.team2Id === teamId;
-                                
+                                const t1Name = sideName(teams.find(x => x.id === m.team1Id), m.team1Name);
+                                const t2Name = sideName(teams.find(x => x.id === m.team2Id), m.team2Name);
+                                const badge = badgeOf(m);
+                                const started = isDone(m) || isLive(m);
                                 return (
-                                    <div key={m.id} className="bg-[#111111] p-4 rounded-xl border border-white/5 shadow-md">
-                                        <div className="flex justify-between items-center mb-3">
-                                            <span className="text-[10px] text-content-muted font-black uppercase tracking-widest">{m.roundName || 'Match'}</span>
-                                            <div className="flex items-center gap-3">
-                                                {m.scheduledTime && (
-                                                    <span className="text-[10px] text-content-muted/60 font-bold uppercase tracking-widest">
-                                                        {new Date(m.scheduledTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric'})}
-                                                    </span>
-                                                )}
-                                                <span className={`text-[10px] font-black uppercase tracking-widest ${(m.status === 'COMPLETED' || String(m.status).toUpperCase() === 'FINISHED') ? (m.winnerTeamId === teamId ? 'text-[#b4fc57]' : 'text-[#E65C31]') : 'text-[#4D78FF]'}`}>
-                                                    {(m.status === 'COMPLETED' || String(m.status).toUpperCase() === 'FINISHED') ? (m.winnerTeamId === teamId ? 'WON' : 'LOST') : m.status}
-                                                </span>
-                                            </div>
+                                    <div key={m.id} className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3.5">
+                                        <div className="flex items-center justify-between gap-3 mb-2.5">
+                                            <span className="text-[10px] text-white/50 font-black uppercase tracking-widest truncate">
+                                                {[m.roundName || 'Match', m.court, m.scheduledTime ? new Date(m.scheduledTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''].filter(Boolean).join(' · ')}
+                                            </span>
+                                            <span className={`shrink-0 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${badge.cls}`}>{badge.text}</span>
                                         </div>
-                                        <div className="flex justify-between items-center gap-3">
-                                            <div className={`flex-1 text-sm sm:text-base font-bold truncate ${isT1Team ? 'text-white' : 'text-content-secondary'}`}>{t1Name}</div>
-                                            
-                                            {m.status !== 'SCHEDULED' && (
-                                                <div className="flex shrink-0 items-center justify-center font-mono font-black text-sm bg-black/40 px-3 py-1.5 rounded-lg border border-white/10 text-white gap-2">
-                                                    {(m.score?.p1SetScores && m.score?.p1SetScores.length > 0) ? (
-                                                        <div className="flex gap-2 text-xs">
-                                                            {m.score.p1SetScores.map((s1: number, i: number) => {
-                                                                const s2 = (m.score?.p2SetScores && m.score.p2SetScores[i] !== undefined) ? m.score.p2SetScores[i] : 0;
-                                                                return <span key={i} className="bg-white/10 px-1.5 py-0.5 rounded text-content-primary">{s1} - {s2}</span>;
-                                                            })}
-                                                        </div>
-                                                    ) : (m.score?.p1Sets !== undefined && m.score?.p2Sets !== undefined && (m.score.p1Sets > 0 || m.score.p2Sets > 0)) ? (
-                                                        <span>{m.score.p1Sets} - {m.score.p2Sets}</span>
-                                                    ) : (
-                                                        <span>{m.score?.p1Games || 0} - {m.score?.p2Games || 0}</span>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {m.status === 'SCHEDULED' && (
-                                                <div className="flex shrink-0 items-center justify-center font-black text-[10px] uppercase bg-black/40 px-3 py-1.5 rounded-lg border border-white/10 text-content-muted tracking-widest">
-                                                    {tournament?.venue || 'Venue TBD'}
-                                                </div>
-                                            )}
-
-                                            <div className={`flex-1 text-right text-sm sm:text-base font-bold truncate ${isT2Team ? 'text-white' : 'text-content-secondary'}`}>{t2Name}</div>
+                                        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                                            <div className={`text-sm font-bold truncate ${m.team1Id === teamId ? 'text-white' : 'text-white/55'}`}>{t1Name}</div>
+                                            <div className={`font-mono font-black text-sm px-3 py-1.5 rounded-lg border border-white/10 ${started ? 'bg-black/30 text-white' : 'bg-transparent text-white/40'}`}>{started ? scoreOf(m) : 'vs'}</div>
+                                            <div className={`text-sm font-bold truncate text-right ${m.team2Id === teamId ? 'text-white' : 'text-white/55'}`}>{t2Name}</div>
                                         </div>
                                     </div>
                                 );
                             })}
                         </div>
                     ) : (
-                        <div className="text-content-muted text-sm italic py-12 text-center bg-white/5 rounded-2xl">
-                             No matches found for {filterPeriod.toLowerCase()} {activeTab.toLowerCase()}
+                        <div className="text-white/50 text-sm py-12 text-center rounded-2xl border border-dashed border-white/10">
+                            No {activeTab === 'RESULTS' ? 'results' : 'upcoming matches'}{filterPeriod === 'TODAY' ? ' today' : ''} yet.
                         </div>
                     )}
                 </div>
-            </div>
-        </div>
+            </aside>
+        </div>,
+        document.body
     );
 };

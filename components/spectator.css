@@ -141,3 +141,65 @@
 .spx-billboard .spx-hero__shade { z-index: 0; }
 .spx-billboard h1 { text-transform: none !important; letter-spacing: -.045em !important; font-size: clamp(40px, 6vw, 84px) !important; line-height: .92 !important; }
 .spx-billboard .spx-btn { text-transform: none; }
+.spx-btn:disabled { opacity: .45; cursor: not-allowed; transform: none !important; box-shadow: none !important; filter: grayscale(.35); }
+
+/* ==========================================================================
+   Pinktober theme (tournaments with broadcastTheme "pinktober"): the whole
+   spectator page - hero, stats, standings, results, leaderboard, schedule,
+   feed - in the Pink Ribbon palette used on the broadcast screen.
+   ========================================================================== */
+.spx-theme-pinktober {
+  --spx-navy: #3a0a2a;
+  --spx-navy-2: #4a0d35;
+  --spx-card: rgba(107, 16, 72, .6);
+  --spx-card-2: rgba(74, 13, 53, .85);
+  --spx-line: rgba(255, 214, 232, .14);
+  --spx-orange: #e83e8c;
+  --spx-peach: #ff8cc6;
+  --spx-muted: #f3c6dc;
+  --spx-grad: linear-gradient(135deg, #ff8cc6 0%, #e83e8c 50%, #c2185b 100%);
+}
+.spx-root.spx-theme-pinktober {
+  background:
+    radial-gradient(ellipse 55% 45% at 8% 0%, rgba(255, 140, 198, .32), transparent 72%),
+    radial-gradient(ellipse 60% 55% at 100% 100%, rgba(232, 62, 140, .35), transparent 70%),
+    linear-gradient(160deg, #2a0620 0%, #4a0d35 45%, #6b1048 100%);
+}
+/* Ribbon watermark behind the page. */
+.spx-root.spx-theme-pinktober::before {
+  content: ""; position: fixed; right: -4vw; bottom: -6vh; width: 44vh; height: 70vh; pointer-events: none; z-index: 0; opacity: .07;
+  background: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 160'%3E%3Cpath d='M50 8c-14 0-24 11-24 25 0 10 5 19 12 29L14 150l18 6 18-46 18 46 18-6-24-88c7-10 12-19 12-29 0-14-10-25-24-25zm0 14c6 0 10 5 10 11 0 5-4 13-10 21-6-8-10-16-10-21 0-6 4-11 10-11z' fill='%23ff8cc6'/%3E%3C/svg%3E");
+}
+.spx-theme-pinktober .spx-hero__art { background: radial-gradient(circle at 75% 25%, rgba(255, 140, 198, .5), transparent 45%), linear-gradient(140deg, #6b1048, #3a0a2a) !important; }
+.spx-theme-pinktober .spx-hero__shade { background: linear-gradient(180deg, rgba(42, 6, 32, .5) 0%, rgba(42, 6, 32, .1) 30%, rgba(42, 6, 32, .6) 60%, rgba(42, 6, 32, .96) 100%) !important; }
+.spx-theme-pinktober .spx-status, .spx-theme-pinktober .spx-chip, .spx-theme-pinktober .spx-org { background: rgba(58, 10, 42, .6); border-color: rgba(255, 214, 232, .22); }
+.spx-theme-pinktober .spx-status--live { background: rgba(232, 62, 140, .95); }
+.spx-theme-pinktober .spx-btn--primary { box-shadow: 0 14px 36px rgba(232, 62, 140, .4), inset 0 1px 0 rgba(255, 255, 255, .3); }
+.spx-theme-pinktober .spx-btn--ghost:hover { border-color: rgba(255, 140, 198, .55); }
+.spx-theme-pinktober .spx-stats { background: rgba(58, 10, 42, .78); }
+.spx-theme-pinktober .spx-panel { background: linear-gradient(170deg, rgba(120, 20, 80, .55), rgba(58, 10, 42, .8)); border-color: rgba(255, 214, 232, .16); }
+.spx-theme-pinktober .spx-dock { background: rgba(58, 10, 42, .88); border-color: rgba(255, 214, 232, .18); }
+.spx-theme-pinktober .spx-dock__pill { box-shadow: 0 10px 26px rgba(232, 62, 140, .5); }
+.spx-root.spx-theme-pinktober .spx-bar { background: rgba(58, 10, 42, .85) !important; border-color: rgba(255, 140, 198, .2) !important; }
+.spx-root.spx-theme-pinktober .spx-bar input:focus { box-shadow: 0 0 0 4px rgba(232, 62, 140, .18) !important; }
+
+/* Existing views (standings, results, leaderboard, schedule, feed) → plum glass. */
+.spx-theme-pinktober [class*="bg-[#0A0A0A]"], .spx-theme-pinktober [class*="bg-[#0a0a0a]"], .spx-theme-pinktober [class*="bg-[#0d0d10]"],
+.spx-theme-pinktober [class*="bg-[#111111]"], .spx-theme-pinktober [class*="bg-[#111113]"], .spx-theme-pinktober [class*="bg-[#111114]"],
+.spx-theme-pinktober [class*="bg-[#050505]"] { background-color: rgba(58, 10, 42, .78) !important; }
+.spx-theme-pinktober [class*="bg-[#18181b]"], .spx-theme-pinktober [class*="bg-[#1A1A1A]"], .spx-theme-pinktober [class*="bg-[#1a1a1a]"],
+.spx-theme-pinktober [class*="bg-[#1B1B1E]"], .spx-theme-pinktober [class*="bg-[#161616]"], .spx-theme-pinktober [class*="bg-surface-dark"],
+.spx-theme-pinktober [class*="bg-surface-panel"], .spx-theme-pinktober [class*="bg-surface-ground"], .spx-theme-pinktober [class*="bg-card-dark"] { background-color: rgba(107, 16, 72, .5) !important; }
+.spx-theme-pinktober [class*="bg-gradient-to-"][class*="from-[#111113]"], .spx-theme-pinktober [class*="from-[#0A0A0A]"] { --tw-gradient-from: rgba(58, 10, 42, .96) var(--tw-gradient-from-position) !important; }
+.spx-theme-pinktober [class*="border-white/5"], .spx-theme-pinktober [class*="border-white/10"] { border-color: rgba(255, 214, 232, .12) !important; }
+.spx-theme-pinktober [class*="rounded-2xl"][class*="border"]:hover, .spx-theme-pinktober [class*="rounded-3xl"][class*="border"]:hover { border-color: rgba(255, 140, 198, .4) !important; }
+.spx-theme-pinktober [class*="text-[#4D78FF]"], .spx-theme-pinktober [class*="text-brand"] { color: #ff8cc6 !important; }
+.spx-theme-pinktober [class*="bg-[#4D78FF]"], .spx-theme-pinktober [class*="bg-brand"] { background-color: #e83e8c !important; }
+.spx-theme-pinktober [class*="border-[#4D78FF]"] { border-color: rgba(255, 140, 198, .5) !important; }
+.spx-theme-pinktober [class*="from-[#4D78FF]"] { --tw-gradient-from: #ff8cc6 var(--tw-gradient-from-position) !important; }
+.spx-theme-pinktober [class*="text-[#E65C31]"], .spx-theme-pinktober [class*="text-[#E55C30]"] { color: #ff8cc6 !important; }
+.spx-theme-pinktober [class*="bg-[#E65C31]"], .spx-theme-pinktober [class*="bg-[#E55C30]"] { background-color: #e83e8c !important; }
+.spx-theme-pinktober table thead { background: rgba(74, 13, 53, .92) !important; }
+.spx-theme-pinktober table thead th:last-child { color: #ff8cc6 !important; }
+.spx-theme-pinktober table tbody tr:hover { background: rgba(255, 140, 198, .08) !important; }
+.spx-theme-pinktober table tbody tr:nth-child(-n+3) { background: linear-gradient(90deg, rgba(255, 140, 198, .1), transparent 60%); }

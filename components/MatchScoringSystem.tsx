@@ -153,6 +153,14 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
       if (isRecentLocalAction && incScoreLen <= localHistLen) {
         return;
       }
+      // Never move the score backwards: an incoming score with fewer points
+      // than this screen is older data (e.g. a delayed echo on slow venue
+      // internet). Only accept it after a long pause, which is how an undo
+      // made on another device looks.
+      const quietForMs = Date.now() - lastLocalActionTimeRef.current;
+      if (incScoreLen < localHistLen && quietForMs < 20000) {
+        return;
+      }
 
       setMatchState(prev => {
         const externalPointsA = parseInt(score.p1Points || '0');

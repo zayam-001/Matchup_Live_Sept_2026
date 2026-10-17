@@ -229,12 +229,17 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
   }, [activeTournament, tournamentMatches, selectedCategoryId, prevCategory, loadingMatches]);
 
   
-  if (isBroadcastMode && activeTournament) {
+  // Broadcast mode is only for running events: a finished tournament (and no
+  // match still live) never opens it, even when arriving with it switched on.
+  const broadcastEnded = !!activeTournament && !(tournamentMatches || []).some(isMatchLive) && (
+      activeTournament.status === 'COMPLETED' || activeTournament.status === 'RETIRED' ||
+      (!!activeTournament.endDate && new Date(activeTournament.endDate).getTime() < Date.now()));
+  if (isBroadcastMode && activeTournament && !broadcastEnded) {
       return <BroadcastMode tournament={activeTournament} onClose={() => setIsBroadcastMode(false)} />;
   }
   
   return (
-    <div className="spx-root relative min-h-screen">
+    <div className={`spx-root relative min-h-screen ${activeTournament?.broadcastTheme === 'pinktober' ? 'spx-theme-pinktober' : ''}`}>
       {/* Sticky Search & Filter Bar */}
       <div className="spx-bar sticky top-[72px] md:top-[88px] z-40 bg-[#0d0d10]/95 backdrop-blur-2xl border-b border-white/10 py-3.5 px-4 md:px-8 mb-4 shadow-xl transition-all">
           <div className="max-w-7xl mx-auto space-y-2.5">
@@ -1637,6 +1642,8 @@ const PaginationBar = ({ page, totalPages, onChange }: { page: number; totalPage
 const FIP_FONT = "'Barlow Condensed', 'Barlow', 'Inter', sans-serif";
 // Shared by the card header and both team rows so labels line up with values.
 const FIP_COLS = 'minmax(0,1fr) repeat(3, 8.5cqw) 17cqw';
+// Americano formats are a single running points total: no set columns.
+const FIP_COLS_POINTS = 'minmax(0,1fr) 17cqw';
 
 interface BroadcastPalette {
     pageBg: string;
@@ -1912,6 +1919,7 @@ const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClos
     const [selectedMatchId, setSelectedMatchId] = useState<string | 'ALL'>('ALL');
     const [page, setPage] = useState(0);
     const [sponsors, setSponsors] = useState<any[]>([]);
+    const [sponsorsLoaded, setSponsorsLoaded] = useState(false);
     const liveMatches = globalMatches.filter(isMatchLive);
     const theme = getBroadcastPalette(tournament);
 
@@ -1921,8 +1929,8 @@ const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClos
         if (!db || !tournament.id) return;
         const unsub = onSnapshot(
             collection(db, 'tournaments', tournament.id, 'sponsors'),
-            snap => setSponsors(sortSponsors(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)))),
-            err => console.error('Error loading sponsors:', err)
+            snap => { setSponsors(sortSponsors(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)))); setSponsorsLoaded(true); },
+            err => { console.error('Error loading sponsors:', err); setSponsorsLoaded(true); }
         );
         return () => unsub();
     }, [tournament.id]);
@@ -2236,7 +2244,11 @@ const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClos
                 )}
             </main>
 
-            {stripSponsors.length > 0 ? (
+            {!sponsorsLoaded ? (
+                // Hold the strip's space until we know whether there are sponsors,
+                // so the ticker doesn't flash before the logos arrive.
+                <div className="relative z-10 shrink-0 h-[9vh] min-h-[48px]" />
+            ) : stripSponsors.length > 0 ? (
                 <BroadcastSponsorStrip sponsors={stripSponsors} theme={theme} />
             ) : (
                 <BroadcastTicker tournament={tournament} liveMatches={liveMatches} allMatches={globalMatches} theme={theme} />
@@ -2276,15 +2288,20 @@ const BroadcastTicker = ({ tournament, liveMatches, allMatches, theme }: { tourn
         const t = tournament.teams?.find((t: any) => t.id === (side === 1 ? m.team1Id : m.team2Id));
         return t?.name || (side === 1 ? m.team1Name : m.team2Name) || `Team ${side}`;
     };
+    // Americano formats show the points total; padel formats show sets won.
+    const tally = (m: any) => {
+        const s = m.score || {};
+        return isPointsScoredFormat(getActiveFormat(tournament, m.categoryId))
+            ? `${s.p1Games ?? 0}-${s.p2Games ?? 0}`
+            : `${s.p1Sets ?? 0}-${s.p2Sets ?? 0}`;
+    };
     const events: string[] = [];
     liveMatches.forEach((m: any) => {
-        const s = m.score || {};
-        events.push(`${m.courtName || m.court || 'Court'} • ${teamName(m, 1)} ${s.p1Sets ?? 0}-${s.p2Sets ?? 0} ${teamName(m, 2)}`);
+        events.push(`${m.courtName || m.court || 'Court'} • ${teamName(m, 1)} ${tally(m)} ${teamName(m, 2)}`);
     });
     allMatches.filter(isMatchFinished).slice(0, 5).forEach((m: any) => {
         const winner = m.winnerTeamId === m.team1Id ? teamName(m, 1) : m.winnerTeamId === m.team2Id ? teamName(m, 2) : null;
-        const s = m.score || {};
-        events.push(`Result • ${teamName(m, 1)} vs ${teamName(m, 2)}${winner ? ` • Winner: ${winner}` : ''} (${s.p1Sets ?? 0}-${s.p2Sets ?? 0})`);
+        events.push(`Result • ${teamName(m, 1)} vs ${teamName(m, 2)}${winner ? ` • Winner: ${winner}` : ''} (${tally(m)})`);
     });
     if (events.length === 0) {
         events.push(`${tournament.name}${tournament.venue ? ` • Live from ${tournament.venue}` : ''} • Streaming live on Matchup`);
@@ -2368,7 +2385,7 @@ const BroadcastMatchCard = ({ match: initialMatch, tournament, theme }: { match:
     const pointsTotal = (side: 1 | 2) => String((side === 1 ? score.p1Games : score.p2Games) ?? 0);
 
     // S1-S3: finished sets, then the set in progress, then dashes.
-    const setCells = (side: 1 | 2) => isPointsMatch ? [0, 1, 2].map(() => ({ value: '-', state: 'empty' })) : [0, 1, 2].map(i => {
+    const setCells = (side: 1 | 2) => isPointsMatch ? [] : [0, 1, 2].map(i => {
         if (i < doneSets) {
             const mine = side === 1 ? p1SetScores[i] : p2SetScores[i];
             const theirs = side === 1 ? p2SetScores[i] : p1SetScores[i];
@@ -2415,13 +2432,13 @@ const BroadcastMatchCard = ({ match: initialMatch, tournament, theme }: { match:
             )}
             <div
                 className="grid items-center shrink-0 font-bold uppercase tracking-wider"
-                style={{ gridTemplateColumns: FIP_COLS, height: '11cqh', fontSize: 'min(6.4cqh, 2.6cqw)', background: theme.headBg, color: theme.headText }}
+                style={{ gridTemplateColumns: isPointsMatch ? FIP_COLS_POINTS : FIP_COLS, height: '11cqh', fontSize: 'min(6.4cqh, 2.6cqw)', background: theme.headBg, color: theme.headText }}
             >
                 <span className="pl-[3cqw]">Players</span>
-                <span className="text-center">S1</span>
-                <span className="text-center">S2</span>
-                <span className="text-center">S3</span>
-                <span className="text-center pr-[1.6cqw]">Score</span>
+                {!isPointsMatch && <span className="text-center">S1</span>}
+                {!isPointsMatch && <span className="text-center">S2</span>}
+                {!isPointsMatch && <span className="text-center">S3</span>}
+                <span className="text-center pr-[1.6cqw]">{isPointsMatch ? 'Points' : 'Score'}</span>
             </div>
 
             <div className="flex-1 min-h-0 flex flex-col" style={{ padding: '0.8cqh 0.6cqw', background: theme.bodyBg }}>
@@ -2513,7 +2530,7 @@ const BroadcastTeamRow = ({ theme, players, fallback, sets, points, servingIdx, 
     );
     const trophy = <Trophy className="shrink-0 text-amber-500" style={{ width: 'min(8cqh, 3.4cqw)', height: 'min(8cqh, 3.4cqw)' }} />;
     return (
-        <div className="flex-1 min-h-0 grid items-center" style={{ gridTemplateColumns: FIP_COLS }}>
+        <div className="flex-1 min-h-0 grid items-center" style={{ gridTemplateColumns: sets.length ? FIP_COLS : FIP_COLS_POINTS }}>
             <div className="min-w-0 flex flex-col justify-center" style={{ paddingLeft: '2.4cqw', gap: '0.8cqh' }}>
                 {players.length > 0 ? players.map((p, i) => (
                     <div key={i} className="flex items-center min-w-0" style={{ gap: '1.2cqw' }}>

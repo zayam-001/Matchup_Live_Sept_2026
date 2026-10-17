@@ -186,6 +186,8 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
   const startTs = tournament.startDate ? new Date(tournament.startDate).getTime() : 0;
   const endTs = tournament.endDate ? new Date(tournament.endDate).getTime() : 0;
   const heroStatus = liveMatches.length > 0 ? 'live' : (tournament.status === 'COMPLETED' || (endTs && endTs < now)) ? 'done' : (startTs && startTs > now) ? 'soon' : 'on';
+  // Broadcast mode is for running events: off once the tournament is over.
+  const broadcastDisabled = liveMatches.length === 0 && (tournament.status === 'COMPLETED' || tournament.status === 'RETIRED' || (!!endTs && endTs < now));
   const prize = (selectedCategoryId ? (tournament.categories?.find(c => c.id === selectedCategoryId)?.prizeMoney || tournament.prizeMoney) : tournament.prizeMoney) || 0;
   const contentRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
@@ -219,7 +221,7 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
   }, []);
 
   return (
-    <div className="spx pb-32 pt-24 max-w-[1400px] mx-auto w-full animate-in fade-in duration-500 px-4 md:px-8 relative">
+    <div className={`spx pb-32 pt-24 max-w-[1400px] mx-auto w-full animate-in fade-in duration-500 px-4 md:px-8 relative ${tournament.broadcastTheme === 'pinktober' ? 'spx-theme-pinktober' : ''}`}>
       
       {/* ── Cinematic hero: the event's own artwork leads ── */}
       <section ref={heroRef} className="spx-hero">
@@ -244,7 +246,12 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
             <span><Layers size={14} /> {tournament.format ? formatLabel(tournament.format) : 'Standard'}</span>
           </div>
           <div className="spx-hero__actions">
-            {onEnterBroadcastMode && <button type="button" className="spx-btn spx-btn--primary" onClick={onEnterBroadcastMode}><Tv size={16} /> Broadcast mode</button>}
+            {onEnterBroadcastMode && (
+              <button type="button" className="spx-btn spx-btn--primary" onClick={broadcastDisabled ? undefined : onEnterBroadcastMode} disabled={broadcastDisabled}
+                aria-disabled={broadcastDisabled} title={broadcastDisabled ? 'Broadcast mode is off - this tournament has finished' : undefined}>
+                <Tv size={16} /> {broadcastDisabled ? 'Broadcast ended' : 'Broadcast mode'}
+              </button>
+            )}
             <button type="button" className={`spx-btn ${onEnterBroadcastMode ? 'spx-btn--ghost' : 'spx-btn--primary'}`} onClick={watchLive}><Play size={16} /> {liveMatches.length ? 'Watch live' : 'View matches'}</button>
             <button type="button" className="spx-btn spx-btn--icon" onClick={share} aria-label="Share tournament"><Share2 size={16} />{copied && <span className="spx-copied">Link copied</span>}</button>
           </div>
