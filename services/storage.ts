@@ -5,6 +5,7 @@ import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, GoogleAuthProvider, signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword, updatePassword, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';
 import { 
     getFirestore, 
+    getDocFromServer,
     initializeFirestore,
     persistentLocalCache,
     persistentMultipleTabManager,
@@ -1536,7 +1537,7 @@ export const registerTeam = async (tId: string, team: any) => {
     const newTeam = { ...rest, id: genId(), status: 'PENDING', registeredAt: new Date().toISOString(), registeredBy: registeredBy || null };
     if (db) {
         const tRef = doc(db, "tournaments", tId);
-        const snap = await getDoc(tRef);
+        const snap = await getDocFromServer(tRef) /* never a stale offline copy: these write the whole teams array */;
         if (snap.exists()) {
             const tData = snap.data() as Tournament;
             await updateDoc(tRef, cleanData({ teams: [...(tData.teams||[]), newTeam] }));
@@ -1574,7 +1575,7 @@ export const enrollTeamManually = async (tId: string, team: Omit<Team, 'id' | 's
     const newTeam = { ...t, id: genId(), status: 'ACCEPTED', registeredAt: new Date().toISOString() };
     if (db) {
         const tRef = doc(db, "tournaments", tId);
-        const snap = await getDoc(tRef);
+        const snap = await getDocFromServer(tRef) /* never a stale offline copy: these write the whole teams array */;
         if (snap.exists()) {
             const tData = snap.data() as Tournament;
             await updateDoc(tRef, cleanData({ teams: [...(tData.teams||[]), newTeam] }));
@@ -1615,7 +1616,7 @@ export const enrollTeamManually = async (tId: string, team: Omit<Team, 'id' | 's
 export const updateTeamPlayers = async (tId: string, teamId: string, player1: Player, player2: Player) => {
     if (db) {
         const tRef = doc(db, "tournaments", tId);
-        const snap = await getDoc(tRef);
+        const snap = await getDocFromServer(tRef) /* never a stale offline copy: these write the whole teams array */;
         if (snap.exists()) {
             const tData = snap.data() as Tournament;
             const updatedTeams = (tData.teams || []).map(tm => tm.id === teamId ? { ...tm, player1, player2 } : tm);
@@ -1635,7 +1636,7 @@ export const updateTeamPlayers = async (tId: string, teamId: string, player1: Pl
 export const updateTeamStatus = async (tId: string, teamId: string, status: string) => {
     if (db) {
         const tRef = doc(db, "tournaments", tId);
-        const snap = await getDoc(tRef);
+        const snap = await getDocFromServer(tRef) /* never a stale offline copy: these write the whole teams array */;
         if (snap.exists()) {
             const tData = snap.data() as Tournament;
             const updatedTeams = (tData.teams || []).map(tm => {
@@ -1745,7 +1746,7 @@ export const assignTeamGroup = async (tId: string, teamId: string, groupId: stri
 export const updateTournamentTeamsGroups = async (tId: string, updates: Record<string, string>) => {
     if (db) {
         const tRef = doc(db, "tournaments", tId);
-        const snap = await getDoc(tRef);
+        const snap = await getDocFromServer(tRef) /* never a stale offline copy: these write the whole teams array */;
         if (snap.exists()) {
             const tData = snap.data() as Tournament;
             let updatedTeams = [...(tData.teams || [])];
@@ -4138,10 +4139,19 @@ export const syncSingleStandalonePlayerToGlobal = async (...args: any[]) => {};
 export const bulkUploadPendingTeams = async (tId: string, newTeams: Team[]) => {
     if (db) {
         const tRef = doc(db, "tournaments", tId);
-        const snap = await getDoc(tRef);
-        if (snap.exists()) {
-            const tData = snap.data() as Tournament;
-            await updateDoc(tRef, cleanData({ teams: [...(tData.teams||[]), ...newTeams] }));
+        // Append inside a transaction: it always reads the live teams array from the
+        // server (never a device's stale offline copy) and retries on concurrent edits,
+        // so an upload can neither wipe other teams nor be wiped by a parallel write.
+        let tData: Tournament | null = null;
+        await runTransaction(db, async (tx) => {
+            const live = await tx.get(tRef);
+            if (!live.exists()) return;
+            tData = live.data() as Tournament;
+            const existing = new Set((tData.teams || []).map(t => t.id));
+            tx.update(tRef, cleanData({ teams: [...(tData.teams || []), ...newTeams.filter(t => !existing.has(t.id))] }));
+        });
+        if (tData) {
+            const tDataNN = tData as Tournament;
 
             // Also save to onboardedTeams for cross-app visibility/history
             for (const team of newTeams) {
@@ -4149,8 +4159,8 @@ export const bulkUploadPendingTeams = async (tId: string, newTeams: Team[]) => {
                 await setDoc(obRef, cleanData({
                     ...team,
                     tournamentId: tId,
-                    tournamentName: tData.name,
-                    categoryName: tData.categories?.find(c => c.id === team.categoryId)?.name || tData.categories?.find(c => c.name === team.categoryId)?.name || 'Unknown',
+                    tournamentName: tDataNN.name,
+                    categoryName: tDataNN.categories?.find(c => c.id === team.categoryId)?.name || tDataNN.categories?.find(c => c.name === team.categoryId)?.name || 'Unknown',
                     onboardedAt: new Date().toISOString()
                 }), { merge: true });
             }
