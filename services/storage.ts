@@ -2382,6 +2382,34 @@ const teamsNeedUpdate = (current: Team[], computed: Team[]): boolean => {
     return false;
 };
 
+// Team fields that identify a team (never taken from a stats recalculation).
+const TEAM_IDENTITY_FIELDS = ['id', 'name', 'player1', 'player2', 'players', 'status', 'categoryId', 'categoryIds', 'categoryName', 'groupId', 'registeredAt', 'seed'];
+
+/**
+ * Write recalculated team stats without ever adding or removing teams.
+ * Re-reads the live teams array inside a transaction and only updates the
+ * teams it already contains (identity fields from the live copy, stats from
+ * the computation). A stale copy of the array - e.g. read before new teams
+ * were added - can therefore no longer wipe those teams out.
+ */
+const writeTeamStatsSafely = async (tRef: any, computed: Team[]) => {
+    if (!computed.length) return;
+    const byId = new Map(computed.map(t => [t.id, t]));
+    await runTransaction(db, async (tx) => {
+        const snap = await tx.get(tRef);
+        if (!snap.exists()) return;
+        const live: Team[] = (snap.data() as Tournament).teams || [];
+        const merged = live.map(t => {
+            const comp: any = byId.get(t.id);
+            if (!comp) return t;
+            const identity: any = {};
+            TEAM_IDENTITY_FIELDS.forEach(k => { if ((t as any)[k] !== undefined) identity[k] = (t as any)[k]; });
+            return { ...comp, ...identity };
+        });
+        tx.update(tRef, cleanData({ teams: merged }));
+    });
+};
+
 export const checkAndHealTournamentStats = async (tournament: Tournament, matches: Match[], targetCategoryId?: string | null, force: boolean = false) => {
     try {
         const tId = tournament.id;
@@ -2421,8 +2449,6 @@ export const checkAndHealTournamentStats = async (tournament: Tournament, matche
                 });
 
                 const statsBatch = writeBatch(db);
-                statsBatch.update(tRef, cleanData({ teams: updatedTeams }));
-                
                 const standingsCol = collection(db, "tournaments", tId, "standings");
                 computedCategory.forEach(tea => {
                     const sRef = doc(standingsCol, tea.id);
@@ -2433,6 +2459,7 @@ export const checkAndHealTournamentStats = async (tournament: Tournament, matche
                     }
                 });
                 await statsBatch.commit();
+                await writeTeamStatsSafely(tRef, computedCategory);
                 console.log(`Self-healed category stats for ${targetCategoryId} in tournament ${tId}`);
             }
         } else {
@@ -2480,8 +2507,8 @@ export const checkAndHealTournamentStats = async (tournament: Tournament, matche
             }
 
             if (anyUpdated || force) {
-                statsBatch.update(tRef, cleanData({ teams: updatedTeams }));
                 await statsBatch.commit();
+                await writeTeamStatsSafely(tRef, updatedTeams);
                 console.log(`Self-healed all category stats for tournament ${tId}`);
             }
         }
@@ -2512,7 +2539,10 @@ const rankingPointsFor = (t: Team, pointsSystem: ReturnType<typeof getPointsSyst
 export const calculateStatsForTournament = (t: Tournament, teams: Team[], matches: Match[], categoryId?: string | null): Team[] => {
     const statsFor = (catId: string | null | undefined, ts: Team[], ms: Match[]) => {
         const isTA = isTeamAmericanoFormat(getActiveFormat(t, catId));
-        return calculateStats(ts, ms, isTA ? TEAM_AMERICANO as TournamentFormat : t.format, t.categories || [], t.pointsSystem, isTA ? getTeamAmericanoConfig(t, catId) : undefined);
+        // The category's own format decides the rules (the tournament-level format is
+        // often a default like SINGLE_ELIMINATION while categories are groups+knockout).
+        const fmt = (getActiveFormat(t, catId) || t.format) as TournamentFormat;
+        return calculateStats(ts, ms, isTA ? TEAM_AMERICANO as TournamentFormat : fmt, t.categories || [], t.pointsSystem, isTA ? getTeamAmericanoConfig(t, catId) : undefined);
     };
     if (categoryId && categoryId !== 'ALL' && categoryId !== 'all') return statsFor(categoryId, teams, matches);
 
@@ -2665,7 +2695,9 @@ export const calculateStats = (teams: Team[], matches: Match[], format: Tourname
             p2Sets = Number(mScore.p2Sets) || 0;
         }
 
-        const isAmericano = format === TournamentFormat.AMERICANO || format === TournamentFormat.MEXICANO || (format as string) === 'AMERICANO' || (format as string) === 'MEXICANO';
+        // Judge each match by its own category's format (falls back to the passed format).
+        const matchFormat = String((categories || []).find((c: any) => c?.id && c.id === m.categoryId)?.format || format);
+        const isAmericano = matchFormat === TournamentFormat.AMERICANO || matchFormat === TournamentFormat.MEXICANO || matchFormat === 'AMERICANO' || matchFormat === 'MEXICANO';
 
         if (isAmericano) {
             const t1Ids = m.team1PlayerIds || (m.team1Id ? [m.team1Id] : []);
@@ -2780,7 +2812,9 @@ export const calculateStats = (teams: Team[], matches: Match[], format: Tourname
 
             // Knockout results are tracked separately (rank/finalist below) and must not be
             // folded into the group standings wins/losses/games/points.
-            const isPureElimination = format === TournamentFormat.SINGLE_ELIMINATION || format === TournamentFormat.DOUBLE_ELIMINATION;
+            // Only a category that is itself pure elimination counts knockout results as
+            // standings rows; in groups+knockout they never touch the group table.
+            const isPureElimination = matchFormat === TournamentFormat.SINGLE_ELIMINATION || matchFormat === TournamentFormat.DOUBLE_ELIMINATION;
             if (isPureElimination || !isKnockoutMatch(m)) {
                 processTeamStats(m.team1Id, isT1Winner, isT2Winner, p1Sets, p2Sets, p1Games, p2Games, t1Points);
                 processTeamStats(m.team2Id, isT2Winner, isT1Winner, p2Sets, p1Sets, p2Games, p1Games, t2Points);
