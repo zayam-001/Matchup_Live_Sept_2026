@@ -2,7 +2,7 @@ import { firebaseConfig } from "../lib/firebase";
 import { toast } from "../components/Toast";
 import { initializeApp } from "firebase/app";
 
-import { getAuth, signInWithPopup, GoogleAuthProvider, signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword, updatePassword, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';
+import { sendPasswordResetEmail, getAuth, signInWithPopup, GoogleAuthProvider, signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword, updatePassword, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';
 import { 
     getFirestore, 
     getDocFromServer,
@@ -55,7 +55,9 @@ import {
     OnboardedPlayer,
     OnboardedTeam
 } from '../types';
-import { getPointsSystem, getMatchStage, buildKnockoutRoundSizes, loserStage, placementPoints, STAGE_WEIGHT } from '../lib/pointsSystems';
+import { matchPlayer, linkIdFor, slotIdentity, personName, type PersonLike, type PlayerLink } from '../lib/playerIdentity';
+import { generateRedeemCode, normalizeRedeemCode, MIN_REDEEM_POINTS, type Redemption } from '../lib/wallet';
+import { getPointsSystem, getMatchStage, buildKnockoutRoundSizes, isKnockoutMatch, loserStage, placementPoints, STAGE_WEIGHT } from '../lib/pointsSystems';
 import {
     TEAM_AMERICANO,
     isTeamAmericanoFormat,
@@ -654,6 +656,19 @@ export const registerPlayer = async (data: any) => {
 
 export const setPlayerPersistence = async (rememberMe: boolean) => {
     await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
+};
+
+/**
+ * Email a password reset link. An unknown email reports success on purpose, so
+ * this form can't be used to find out who has an account.
+ */
+export const sendPlayerPasswordReset = async (email: string) => {
+    if (!auth) throw new Error("Firebase not initialized");
+    try {
+        await sendPasswordResetEmail(auth, email.trim());
+    } catch (e: any) {
+        if (e?.code !== 'auth/user-not-found') throw e;
+    }
 };
 
 export const loginPlayer = async (email: string, password?: string) => {
@@ -2563,16 +2578,7 @@ export const calculateStatsForTournament = (t: Tournament, teams: Team[], matche
     return out;
 };
 
-// Knockout matches are labelled inconsistently in real data: newer ones carry stage 'KNOCKOUT',
-// older/manual ones have a blank stage and only a roundName like "Round of 16 - 3" or "Quarterfinal 2".
-export const isKnockoutMatch = (m: any): boolean => {
-    const stage = String(m?.stage || '').toUpperCase();
-    if (stage === 'KNOCKOUT' || stage === 'BRACKET' || stage === 'PLAYOFF') return true;
-    if (stage === 'GROUP') return false;
-    const name = String(m?.roundName || '').toUpperCase().trim();
-    if (!name || name.startsWith('GROUP')) return false;
-    return /FINAL|QUARTER|SEMI|ROUND OF|PLAYOFF|KNOCKOUT|\b1\/[248]\b/.test(name);
-};
+export { isKnockoutMatch };
 
 export const calculateStats = (teams: Team[], matches: Match[], format: TournamentFormat, categories?: any[], pointsSystemId?: string, teamAmericanoConfig?: TeamAmericanoConfig): Team[] => {
     if (!teams) return [];
@@ -3669,8 +3675,191 @@ export const getAllRegisteredPlayers = async () => {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 };
 
-export const mergePlayerProfiles = async (sourceId: string, targetId: string) => {
-    console.log('Merging profiles', sourceId, targetId);
+// ── Profile merging ──────────────────────────────────────────────────────────
+// A merge is one record in playerLinks: "this typed-in player is this account".
+// Rankings and the player portal read it, so it takes effect everywhere at once.
+
+// One shared listener for the whole app. If it's refused (e.g. rules not deployed),
+// don't re-open it on every page: repeatedly re-listening to a denied query trips a
+// Firestore SDK assertion that kills every other listener in the tab.
+let linksCache: PlayerLink[] = [];
+let linksUnsub: (() => void) | null = null;
+let linksDenied = false;
+const linkSubscribers = new Set<(links: PlayerLink[]) => void>();
+
+export const subscribeToPlayerLinks = (cb: (links: PlayerLink[]) => void) => {
+    if (!db) return () => {};
+    linkSubscribers.add(cb);
+    cb(linksCache);
+    if (!linksUnsub && !linksDenied) {
+        linksUnsub = onSnapshot(collection(db, 'playerLinks'), snap => {
+            linksCache = snap.docs.map(d => ({ id: d.id, ...d.data() } as PlayerLink));
+            linkSubscribers.forEach(fn => fn(linksCache));
+        }, err => {
+            console.error('Error loading player links:', err);
+            linksDenied = (err as any)?.code === 'permission-denied';
+            linksUnsub = null;
+            linksCache = [];
+            linkSubscribers.forEach(fn => fn(linksCache));
+        });
+    }
+    return () => {
+        linkSubscribers.delete(cb);
+        if (!linkSubscribers.size && linksUnsub) { linksUnsub(); linksUnsub = null; }
+    };
+};
+
+/** Stamp the account id onto matching team entries in one tournament (or remove it). */
+const stampTournamentSlots = async (tId: string, identity: string, patch: (p: any) => any) => {
+    const tRef = doc(db, 'tournaments', tId);
+    await runTransaction(db, async (tx) => {
+        const snap = await tx.get(tRef);
+        if (!snap.exists()) return;
+        let changed = false;
+        const teams = ((snap.data() as Tournament).teams || []).map((team: any) => {
+            const next = { ...team };
+            (['player1', 'player2'] as const).forEach(k => {
+                if (next[k] && slotIdentity(next[k]) === identity) {
+                    next[k] = patch(next[k]);
+                    changed = true;
+                }
+            });
+            return next;
+        });
+        if (changed) tx.update(tRef, cleanData({ teams }));
+    });
+};
+
+/**
+ * Merge a typed-in player into a registered account. tournamentIds are the events
+ * this user may edit; entries there also get the account id. Tournaments the user
+ * can't edit still resolve through the link.
+ */
+export const mergePlayerProfiles = async (
+    slot: PersonLike,
+    account: PersonLike,
+    opts: { method?: PlayerLink['method']; by?: string; tournamentIds?: string[] } = {},
+) => {
+    if (!db) return;
+    if (!account.id) throw new Error('This account has no id');
+    const identity = slotIdentity(slot);
+    await setDoc(doc(db, 'playerLinks', linkIdFor(slot)), {
+        uid: account.id,
+        name: personName(slot),
+        accountName: personName(account),
+        method: opts.method || 'organizer',
+        mergedBy: opts.by || auth?.currentUser?.email || auth?.currentUser?.uid || 'unknown',
+        mergedAt: new Date().toISOString(),
+    });
+    for (const tId of opts.tournamentIds || []) {
+        await stampTournamentSlots(tId, identity, p => ({ ...p, id: account.id, verified: true })).catch(e => console.warn('Could not stamp tournament', tId, e));
+    }
+};
+
+export const unmergePlayerProfile = async (linkId: string, slot?: PersonLike, tournamentIds: string[] = []) => {
+    if (!db) return;
+    await deleteDoc(doc(db, 'playerLinks', linkId));
+    if (slot) {
+        const identity = slotIdentity(slot);
+        for (const tId of tournamentIds) {
+            await stampTournamentSlots(tId, identity, ({ id, ...rest }) => ({ ...rest, verified: false })).catch(e => console.warn('Could not unstamp tournament', tId, e));
+        }
+    }
+};
+
+/** "Not the same person": stop suggesting this entry for this account. */
+export const dismissMergeSuggestion = async (accountId: string, slot: PersonLike) => {
+    if (!db) return;
+    await updateDoc(doc(db, 'players', accountId), { dismissedMergeIds: arrayUnion(linkIdFor(slot)) });
+};
+
+export interface MergeCandidate {
+    linkId: string;
+    slot: PersonLike;
+    reasons: string[];
+    tournaments: { id: string; name: string; teamName: string }[];
+}
+
+/** Scan tournaments for entries matching an account, grouped by typed-in identity. */
+export const findMergeCandidates = (tournaments: Tournament[], account: PersonLike & { dismissedMergeIds?: string[] }, links: PlayerLink[]) => {
+    const linked = new Set(links.map(l => l.id));
+    const dismissed = new Set(account.dismissedMergeIds || []);
+    const exact = new Map<string, MergeCandidate>();
+    const suggested = new Map<string, MergeCandidate>();
+    tournaments.forEach(t => (t.teams || []).forEach((team: any) => {
+        [team.player1, team.player2].forEach((p: any) => {
+            if (!p || p.id === account.id) return;
+            const linkId = linkIdFor(p);
+            if (linked.has(linkId) || (p.id && p.verified)) return;
+            const m = matchPlayer(p, account);
+            if (!m.level) return;
+            if (m.level === 'suggested' && dismissed.has(linkId)) return;
+            const bucket = m.level === 'exact' ? exact : suggested;
+            if (!bucket.has(linkId)) bucket.set(linkId, { linkId, slot: p, reasons: m.reasons, tournaments: [] });
+            bucket.get(linkId)!.tournaments.push({ id: t.id, name: t.name, teamName: team.name });
+        });
+    }));
+    return { exact: [...exact.values()], suggested: [...suggested.values()] };
+};
+
+/** Run when a player opens the portal: phone + email + full name all matching merges itself. */
+export const autoMergeForPlayer = async (tournaments: Tournament[], account: PersonLike, links: PlayerLink[]) => {
+    const { exact } = findMergeCandidates(tournaments, account, links);
+    for (const c of exact) {
+        await mergePlayerProfiles(c.slot, account, { method: 'auto-login', by: account.email || account.id });
+    }
+    return exact.length;
+};
+
+// ── Wallet ───────────────────────────────────────────────────────────────────
+
+export const subscribeToMyRedemptions = (uid: string, cb: (rows: Redemption[]) => void) => {
+    if (!db) return () => {};
+    return onSnapshot(query(collection(db, 'redemptions'), where('uid', '==', uid)), snap => {
+        cb(snap.docs.map(d => d.data() as Redemption).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+    }, err => {
+        console.error('Error loading redemptions:', err);
+        cb([]);
+    });
+};
+
+/** Spend wallet points for a one-time code. Balance and code change together or not at all. */
+export const redeemWalletPoints = async (uid: string, amount: number): Promise<Redemption> => {
+    if (!db) throw new Error('Not connected');
+    if (!Number.isInteger(amount) || amount < MIN_REDEEM_POINTS) throw new Error(`Redeem at least ${MIN_REDEEM_POINTS} points`);
+    const code = generateRedeemCode();
+    const pRef = doc(db, 'players', uid);
+    const rRef = doc(db, 'redemptions', code);
+    return runTransaction(db, async (tx) => {
+        const snap = await tx.get(pRef);
+        if (!snap.exists()) throw new Error('Player profile not found');
+        const p: any = snap.data();
+        const balance = p.walletPoints || 0;
+        if (amount > balance) throw new Error(`You only have ${balance} points`);
+        const row: Redemption = { code, uid, playerName: p.fullName || p.name || '', playerPhone: p.phone || '', amount, status: 'issued', createdAt: new Date().toISOString() };
+        tx.update(pRef, { walletPoints: balance - amount });
+        tx.set(rRef, row);
+        return row;
+    });
+};
+
+/** Staff: look up a code before applying it. */
+export const getRedemption = async (rawCode: string): Promise<Redemption | null> => {
+    if (!db) return null;
+    const snap = await getDocFromServer(doc(db, 'redemptions', normalizeRedeemCode(rawCode)));
+    return snap.exists() ? (snap.data() as Redemption) : null;
+};
+
+/** Staff: apply a code once. A second attempt fails, even from another device. */
+export const markRedemptionUsed = async (rawCode: string, bookingRef?: string) => {
+    if (!db) throw new Error('Not connected');
+    const rRef = doc(db, 'redemptions', normalizeRedeemCode(rawCode));
+    await runTransaction(db, async (tx) => {
+        const snap = await tx.get(rRef);
+        if (!snap.exists()) throw new Error('Code not found');
+        if ((snap.data() as Redemption).status !== 'issued') throw new Error('This code has already been used');
+        tx.update(rRef, cleanData({ status: 'used', usedAt: new Date().toISOString(), usedBy: auth?.currentUser?.email || 'staff', bookingRef: bookingRef || undefined }));
+    });
 };
 
 

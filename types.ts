@@ -389,6 +389,7 @@ export interface Tournament {
   // the original behaviour: player names on broadcast, team name on OBS.
   nameDisplay?: NameDisplayMode;
   pointsSystem?: string; // PointsSystemId from lib/pointsSystems; unset = Matchup Standard
+  rankingTier?: string; // Leaderboard category (PointsSystemId); unset = Local. Doesn't affect in-tournament scoring.
   bannerUrl?: string;
   status: 'DRAFT' | 'ACTIVE' | 'COMPLETED' | 'RETIRED';
   slug?: string;

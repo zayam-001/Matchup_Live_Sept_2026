@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from './ui/Card';
-import { registerPlayer, loginPlayer, loginReferee, loginOrganiser, changeOrganiserPassword, skipOrganiserPasswordChange, loginWithGoogle, completeGoogleSignUp, subscribeToTournaments, setPlayerPersistence } from '../services/storage';
+import { sendPlayerPasswordReset, registerPlayer, loginPlayer, loginReferee, loginOrganiser, changeOrganiserPassword, skipOrganiserPasswordChange, loginWithGoogle, completeGoogleSignUp, subscribeToTournaments, setPlayerPersistence } from '../services/storage';
 import { db, auth } from '../services/storage';
 import { collection, doc, getDoc } from 'firebase/firestore';
 import { motion } from 'motion/react';
@@ -45,6 +45,9 @@ export const Auth: React.FC<{
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const [rememberMe, setRememberMe] = useState(true);
+    const [forgotOpen, setForgotOpen] = useState(false);
+    const [resetEmail, setResetEmail] = useState('');
+    const [resetSentTo, setResetSentTo] = useState('');
 
     // Player Form State
     const [email, setEmail] = useState('');
@@ -440,6 +443,36 @@ export const Auth: React.FC<{
             <button type="button" onClick={toggle} className="auth__eye" aria-label={shown ? 'Hide' : 'Show'}>{shown ? <EyeOff size={18} /> : <Eye size={18} />}</button>
         </div>
     );
+    const openForgot = () => {
+        setResetEmail(email);
+        setResetSentTo('');
+        setError('');
+        setForgotOpen(true);
+    };
+    const closeForgot = () => {
+        setForgotOpen(false);
+        setResetSentTo('');
+        setError('');
+    };
+    const handleResetSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setError('');
+        try {
+            await sendPlayerPasswordReset(resetEmail);
+            setResetSentTo(resetEmail.trim());
+        } catch (err: any) {
+            console.error('Password reset failed:', err);
+            setError(
+                err?.code === 'auth/invalid-email' ? 'Please enter a valid email address.'
+                : err?.code === 'auth/too-many-requests' ? 'Too many attempts. Please wait a few minutes and try again.'
+                : err?.code === 'auth/network-request-failed' ? 'No connection. Check your internet and try again.'
+                : "We couldn't send the email. Please try again."
+            );
+        } finally {
+            setIsLoading(false);
+        }
+    };
     const segIndex = accessMode === 'player' ? 0 : 1;
     const tabIndex = accessMode === 'player' ? (isLogin ? 0 : 1) : (opRole === 'admin' ? 0 : 1);
     const creating = accessMode === 'player' && (!isLogin || !!googleUser);
@@ -496,8 +529,8 @@ export const Auth: React.FC<{
                         <span className="auth__tabs-bar" aria-hidden="true" />
                         {accessMode === 'player' ? (
                             <>
-                                <button type="button" onClick={() => { if (!googleUser) { setIsLogin(true); setError(''); } }} className={isLogin ? 'is-on' : ''}>Sign in</button>
-                                <button type="button" onClick={() => { if (!googleUser) { setIsLogin(false); setError(''); } }} className={!isLogin ? 'is-on' : ''}>Create account</button>
+                                <button type="button" onClick={() => { if (!googleUser) { setIsLogin(true); closeForgot(); } }} className={isLogin ? 'is-on' : ''}>Sign in</button>
+                                <button type="button" onClick={() => { if (!googleUser) { setIsLogin(false); closeForgot(); } }} className={!isLogin ? 'is-on' : ''}>Create account</button>
                             </>
                         ) : (
                             <>
@@ -510,7 +543,31 @@ export const Auth: React.FC<{
                     {error && <div className="auth__alert auth__alert--error">{error}</div>}
 
                     <motion.div key={`${accessMode}-${isLogin}-${opRole}`} initial={{ opacity: 0, x: 18 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}>
-                        {accessMode === 'player' ? (
+                        {accessMode === 'player' && forgotOpen ? (
+                            resetSentTo ? (
+                                <div className="auth__forgot" role="status">
+                                    <h3>Check your email</h3>
+                                    <p>If an account exists for <b>{resetSentTo}</b>, we've sent a link to set a new password. It can take a few minutes, so check spam too.</p>
+                                    <button type="button" onClick={closeForgot} className="auth__submit">Back to sign in</button>
+                                    <button type="button" onClick={() => setResetSentTo('')} className="auth__link">Use a different email</button>
+                                </div>
+                            ) : (
+                                <form onSubmit={handleResetSubmit} className="auth__form auth__forgot">
+                                    <h3>Reset your password</h3>
+                                    <p>Enter your account email and we'll send you a link to set a new password.</p>
+                                    {field('Email address', (
+                                        <div className="auth__input-wrap">
+                                            <Mail size={16} className="auth__input-icon" />
+                                            <input required autoFocus type="email" autoComplete="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} className="auth__input auth__input--icon" placeholder="player@example.com" />
+                                        </div>
+                                    ))}
+                                    <button type="submit" disabled={isLoading} className="auth__submit">
+                                        {isLoading ? <Loader2 size={20} className="animate-spin" /> : 'Send reset link'}
+                                    </button>
+                                    <button type="button" onClick={closeForgot} className="auth__link">Back to sign in</button>
+                                </form>
+                            )
+                        ) : accessMode === 'player' ? (
                             <>
                                 {!googleUser ? (
                                     <>
@@ -561,10 +618,13 @@ export const Auth: React.FC<{
                                         </div>
                                     ), creating)}
                                     {field('Password', passwordInput(password, setPassword, showPassword, () => setShowPassword(!showPassword)), creating)}
-                                    <label className="auth__remember">
-                                        <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
-                                        <span>Remember this device</span>
-                                    </label>
+                                    <div className="auth__row">
+                                        <label className="auth__remember">
+                                            <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
+                                            <span>Remember this device</span>
+                                        </label>
+                                        {isLogin && !googleUser && <button type="button" onClick={openForgot} className="auth__link">Forgot password?</button>}
+                                    </div>
                                     <button type="submit" disabled={isLoading} className="auth__submit">
                                         {isLoading ? <Loader2 size={20} className="animate-spin" /> : <>{isLogin ? 'Enter portal' : 'Create identity'}<ArrowRight size={18} /></>}
                                     </button>

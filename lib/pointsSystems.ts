@@ -7,7 +7,7 @@
 // qualifying-draw points (Q1/Q2/last/bonus qualy) aren't modelled because the
 // app has no qualifying draws.
 
-export type PointsSystemId = 'matchup' | 'fip_platinum' | 'fip_gold' | 'fip_silver' | 'fip_bronze' | 'fip_finals';
+export type PointsSystemId = 'matchup' | 'local' | 'fip_platinum' | 'fip_gold' | 'fip_silver' | 'fip_bronze' | 'fip_finals';
 
 export type KnockoutStage = 'CHAMPION' | 'RUNNER_UP' | 'SEMI_FINALIST' | 'QUARTER_FINALIST' | 'ROUND_OF_16' | 'ROUND_OF_32' | 'ROUND_OF_64';
 
@@ -84,6 +84,8 @@ export const POINTS_SYSTEMS: Record<PointsSystemId, PointsSystem> = {
         perWin: 15,
         perSkillShot: 5,
     },
+    // Small local events: about a third of FIP Bronze at every stage.
+    local: { ...fip('local', 'Local', '#5fa777', [14, 8, 5, 3, 2, 1]), description: 'Local event: about a third of FIP Bronze' },
     fip_platinum: fip('fip_platinum', 'FIP Platinum', '#7aaed4', [300, 180, 90, 50, 25, 14]),
     fip_gold: fip('fip_gold', 'FIP Gold', '#c5a43c', [150, 90, 50, 25, 14, 8]),
     fip_silver: fip('fip_silver', 'FIP Silver', '#b4b4b4', [80, 45, 25, 14, 8, 5]),
@@ -91,7 +93,7 @@ export const POINTS_SYSTEMS: Record<PointsSystemId, PointsSystem> = {
     fip_finals: fip('fip_finals', 'FIP Finals', '#5b2a86', [225]),
 };
 
-export const POINTS_SYSTEM_LIST: PointsSystem[] = ['matchup', 'fip_platinum', 'fip_gold', 'fip_silver', 'fip_bronze', 'fip_finals'].map(id => POINTS_SYSTEMS[id as PointsSystemId]);
+export const POINTS_SYSTEM_LIST: PointsSystem[] = ['local', 'fip_bronze', 'fip_silver', 'fip_gold', 'fip_platinum'].map(id => POINTS_SYSTEMS[id as PointsSystemId]);
 
 export const getPointsSystem = (id?: string | null): PointsSystem =>
     POINTS_SYSTEMS[(id as PointsSystemId) || 'matchup'] || POINTS_SYSTEMS.matchup;
@@ -106,7 +108,7 @@ export const placementPoints = (system: PointsSystem, stage?: string | null): nu
 export type MatchStage = 'F' | 'SF' | 'QF' | 'R16' | 'R32' | 'R64';
 
 const STAGE_BY_MATCH_COUNT: Record<number, MatchStage> = { 1: 'F', 2: 'SF', 4: 'QF', 8: 'R16', 16: 'R32', 32: 'R64' };
-const STAGE_BY_DRAW_SIZE: Record<number, MatchStage> = { 2: 'F', 4: 'SF', 8: 'QF', 16: 'R16', 32: 'R32', 64: 'R64' };
+const STAGE_BY_DRAW_SIZE: Record<number, MatchStage> = { 2: 'F', 4: 'SF', 8: 'QF', 16: 'R16', 32: 'R32', 64: 'R64', 6: 'QF', 12: 'R16', 24: 'R32' };
 
 export const buildKnockoutRoundSizes = (matches: any[], isKnockout: (m: any) => boolean): Map<string, number> => {
     const sizes = new Map<string, number>();
@@ -140,3 +142,31 @@ export const getMatchStage = (m: any, roundSizes?: Map<string, number>, isKnocko
 export const loserStage = (stage: MatchStage): KnockoutStage => ({
     F: 'RUNNER_UP', SF: 'SEMI_FINALIST', QF: 'QUARTER_FINALIST', R16: 'ROUND_OF_16', R32: 'ROUND_OF_32', R64: 'ROUND_OF_64',
 } as Record<MatchStage, KnockoutStage>)[stage];
+
+// The Match Up rankings always use FIP-scale points. A tournament without a tier
+// (or on the old Matchup Standard plan) counts as Local until an organizer picks one.
+export const rankingSystemFor = (id?: string | null): PointsSystem => {
+    const sys = POINTS_SYSTEMS[(id as PointsSystemId)];
+    return sys && sys.id !== 'matchup' ? sys : POINTS_SYSTEMS.local;
+};
+
+/** Short tier name for badges and leaderboard breakdowns. */
+export const tierLabel = (id?: string | null) => rankingSystemFor(id).label.replace(/^FIP /, '');
+
+// A tournament's leaderboard category. Kept in its own field so setting it never
+// changes how teams are scored and ordered inside the tournament (pointsSystem).
+export const tournamentTier = (t: { rankingTier?: string | null; pointsSystem?: string | null }): PointsSystem =>
+    rankingSystemFor(t.rankingTier || t.pointsSystem);
+export const tournamentTierLabel = (t: { rankingTier?: string | null; pointsSystem?: string | null }) =>
+    tournamentTier(t).label.replace(/^FIP /, '');
+
+// Knockout matches are labelled inconsistently in real data: newer ones carry stage 'KNOCKOUT',
+// older/manual ones have a blank stage and only a roundName like "Round of 16 - 3" or "Quarterfinal 2".
+export const isKnockoutMatch = (m: any): boolean => {
+    const stage = String(m?.stage || '').toUpperCase();
+    if (stage === 'KNOCKOUT' || stage === 'BRACKET' || stage === 'PLAYOFF') return true;
+    if (stage === 'GROUP') return false;
+    const name = String(m?.roundName || '').toUpperCase().trim();
+    if (!name || name.startsWith('GROUP')) return false;
+    return /FINAL|QUARTER|SEMI|ROUND OF|PLAYOFF|KNOCKOUT|\b1\/[248]\b/.test(name);
+};

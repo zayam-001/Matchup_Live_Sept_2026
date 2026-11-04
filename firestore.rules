@@ -18,6 +18,40 @@ service cloud.firestore {
         get(/databases/$(database)/documents/players/$(request.auth.uid)).data.role == 'superadmin';
     }
 
+    // Organizers and platform staff.
+    function isStaff() {
+      return isAuthenticated() && (
+        isSuperAdmin() ||
+        exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['organiser', 'superadmin', 'admin'])
+      );
+    }
+
+    // Profile merges: typed-in tournament player -> registered account.
+    match /playerLinks/{linkId} {
+      allow read: if true;
+      allow create, update: if isAuthenticated() && (request.resource.data.uid == request.auth.uid || isStaff());
+      allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isStaff());
+    }
+
+    // Wallet redeem codes. Creating one must lower the player's balance by the same
+    // amount in the same write; staff can only mark an unused code as used.
+    match /redemptions/{code} {
+      allow get, list: if isAuthenticated() && (resource.data.uid == request.auth.uid || isStaff());
+      allow create: if isAuthenticated()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'issued'
+        && request.resource.data.amount > 0
+        && getAfter(/databases/$(database)/documents/players/$(request.auth.uid)).data.walletPoints
+           == get(/databases/$(database)/documents/players/$(request.auth.uid)).data.walletPoints - request.resource.data.amount;
+      allow update: if isStaff()
+        && resource.data.status == 'issued'
+        && request.resource.data.status == 'used'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'usedAt', 'usedBy', 'bookingRef']);
+      allow delete: if false;
+    }
+
     // Users
     match /users/{userId} {
       // Users can read/write their own document
@@ -29,8 +63,13 @@ service cloud.firestore {
     match /players/{userId} {
       // Players can read and write only their own document. Superadmins can read/write all.
       allow read, list: if true;
-      allow create: if isOwner(userId) || isSuperAdmin();
-      allow update: if isAuthenticated(); // Allow referees (authenticated) to update stats
+      allow create: if (isOwner(userId) && request.resource.data.get('walletPoints', 0) == 0) || isSuperAdmin();
+      // Referees (authenticated) update stats. Nobody but a superadmin can raise a
+      // wallet balance, and only the owner can spend it.
+      allow update: if isSuperAdmin() || (isAuthenticated() && (
+        request.resource.data.get('walletPoints', 0) == resource.data.get('walletPoints', 0) ||
+        (isOwner(userId) && request.resource.data.get('walletPoints', 0) < resource.data.get('walletPoints', 0))
+      ));
       allow delete: if isSuperAdmin();
     }
 

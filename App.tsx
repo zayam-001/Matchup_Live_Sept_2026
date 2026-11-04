@@ -283,7 +283,8 @@ const App: React.FC = () => {
           handleTabChange('quick-play'); 
         }
       }} />}
-      {activeTab === 'leaderboard' && <CourtLeaderboard />}
+      {/* Court links carry ?court=...; everything else is the main leaderboard page. */}
+      {activeTab === 'leaderboard' && (window.location.hash.includes('court=') ? <CourtLeaderboard /> : <GlobalLeaderboard />)}
       {activeTab === 'global-leaderboard' && <GlobalLeaderboard />}
       {activeTab === 'tournament-leaderboard' && <TournamentLeaderboard />}
       {activeTab === 'court-dashboard' && <CourtDashboard />}

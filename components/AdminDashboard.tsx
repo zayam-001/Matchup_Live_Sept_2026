@@ -23,7 +23,7 @@ import { TournamentLeaderboardTab } from './TournamentLeaderboardTab';
 import { EditTeamSheet } from './EditTeamSheet';
 import { StandingsOverlayExporter } from './StandingsOverlayExporter';
 import { SponsorLogoCropper } from './SponsorLogoCropper';
-import { POINTS_SYSTEM_LIST, getPointsSystem, STAGE_ORDER, STAGE_LABELS } from '../lib/pointsSystems';
+import { POINTS_SYSTEM_LIST, getPointsSystem, tournamentTier, STAGE_ORDER, STAGE_LABELS } from '../lib/pointsSystems';
 import { formatLabel, getActiveFormat, isTeamAmericanoFormat, summarizeTeamAmericano } from '../lib/teamAmericano';
 import './admin.css';
 import { TeamAmericanoSetup } from './TeamAmericanoSetup';
@@ -37,7 +37,9 @@ import { collection, doc, getDoc, query, where, getDocs } from 'firebase/firesto
 import { onAuthStateChanged, updateProfile } from 'firebase/auth';
 import { db, auth } from '../services/storage';
 
-import { deleteKnockoutMatchCascade, recalculateMatchResult, getAllRegisteredPlayers, mergePlayerProfiles } from '../services/storage';
+import { deleteKnockoutMatchCascade, recalculateMatchResult, getAllRegisteredPlayers, mergePlayerProfiles, unmergePlayerProfile, dismissMergeSuggestion, subscribeToPlayerLinks, getRedemption, markRedemptionUsed } from '../services/storage';
+import { matchPlayer, linkIdFor, type PlayerLink } from '../lib/playerIdentity';
+import { PKR_PER_POINT, type Redemption } from '../lib/wallet';
 
 
 
@@ -349,6 +351,75 @@ const AdminShell: React.FC<{
     );
 };
 
+/** Staff check a player's wallet code and apply it to a Maidan booking. */
+const RedeemCodesPanel: React.FC = () => {
+    const [code, setCode] = useState('');
+    const [ref, setRef] = useState('');
+    const [found, setFound] = useState<Redemption | null>(null);
+    const [busy, setBusy] = useState(false);
+    const [msg, setMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+    const lookup = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setBusy(true); setMsg(null); setFound(null);
+        try {
+            const r = await getRedemption(code);
+            if (r) setFound(r); else setMsg({ tone: 'err', text: 'No code found. Check it and try again.' });
+        } catch (err) {
+            console.error(err);
+            setMsg({ tone: 'err', text: "Couldn't look up that code. Check your connection." });
+        } finally { setBusy(false); }
+    };
+    const apply = async () => {
+        if (!found) return;
+        setBusy(true); setMsg(null);
+        try {
+            await markRedemptionUsed(found.code, ref.trim());
+            setFound({ ...found, status: 'used', usedAt: new Date().toISOString(), bookingRef: ref.trim() });
+            setMsg({ tone: 'ok', text: `Applied. Give ${found.playerName || 'the player'} Rs ${(found.amount * PKR_PER_POINT).toLocaleString()} credit on the booking.` });
+        } catch (err: any) {
+            setMsg({ tone: 'err', text: err?.message || "Couldn't apply the code." });
+        } finally { setBusy(false); }
+    };
+    return (
+        <div className="max-w-xl space-y-5">
+            <div className="adm-head"><div>
+                <h1 className="adm-title">Redeem <span>codes</span></h1>
+                <p className="adm-sub">Check a player's wallet code, then apply it to their Maidan booking. Each code works once.</p>
+            </div></div>
+            <form onSubmit={lookup} className="flex gap-2">
+                <input className="adm-input" placeholder="MU-XXXX-XXXX" value={code} onChange={e => setCode(e.target.value)} aria-label="Redeem code" />
+                <button type="submit" disabled={busy || !code.trim()} className="adm-btn adm-btn--primary shrink-0">Check</button>
+            </form>
+            {found && (
+                <div className="admx-card space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="font-mono font-black text-white text-lg">{found.code}</div>
+                        <span className={`admx-status-pill ${found.status === 'issued' ? 'admx-status-pill--ongoing' : ''}`}>{found.status === 'issued' ? 'Valid' : 'Already used'}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div><div className="adm-label">Player</div><div className="text-white font-bold">{found.playerName || '-'}</div></div>
+                        <div><div className="adm-label">Phone</div><div className="text-white font-bold">{found.playerPhone || '-'}</div></div>
+                        <div><div className="adm-label">Points</div><div className="text-white font-bold">{found.amount}</div></div>
+                        <div><div className="adm-label">Credit</div><div className="text-white font-bold">Rs {(found.amount * PKR_PER_POINT).toLocaleString()}</div></div>
+                    </div>
+                    {found.status === 'issued' ? (
+                        <div className="space-y-3">
+                            <div>
+                                <label className="adm-label" htmlFor="redeem-ref">Booking reference (optional)</label>
+                                <input id="redeem-ref" className="adm-input" value={ref} onChange={e => setRef(e.target.value)} />
+                            </div>
+                            <button type="button" disabled={busy} onClick={apply} className="adm-btn adm-btn--primary w-full justify-center">{busy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Mark as used</button>
+                        </div>
+                    ) : (
+                        <p className="text-sm text-content-muted">Used {found.usedAt ? new Date(found.usedAt).toLocaleString() : ''}{found.usedBy ? ` by ${found.usedBy}` : ''}{found.bookingRef ? ` · Booking ${found.bookingRef}` : ''}</p>
+                    )}
+                </div>
+            )}
+            {msg && <div className={`admx-profile__msg is-${msg.tone}`}>{msg.text}</div>}
+        </div>
+    );
+};
+
 const ProfileModal: React.FC<{ email: string; initialName: string; onClose: () => void; onSaved: (name: string) => void; onLogout?: () => void }> = ({ email, initialName, onClose, onSaved, onLogout }) => {
     const [name, setName] = useState(initialName);
     const [saving, setSaving] = useState(false);
@@ -436,6 +507,8 @@ export const AdminDashboard: React.FC<{ initialAuthenticated?: boolean, onLogout
   const [registeredPlayers, setRegisteredPlayers] = useState<any[]>([]);
   const [loadingPlayers, setLoadingPlayers] = useState<boolean>(false);
   const [mergingId, setMergingId] = useState<string | null>(null);
+  const [playerLinks, setPlayerLinks] = useState<PlayerLink[]>([]);
+  useEffect(() => subscribeToPlayerLinks(setPlayerLinks), []);
 
   const fetchRegisteredPlayers = async () => {
       setLoadingPlayers(true);
@@ -460,28 +533,17 @@ export const AdminDashboard: React.FC<{ initialAuthenticated?: boolean, onLogout
           return [];
       }
 
-      const unauthPlayersMap = new Map<string, { player: any; occurrences: { tournament: Tournament; team: Team; playerIndex: 1 | 2 }[] }>();
+      const linked = new Set(playerLinks.map(l => l.id));
+      const entries = new Map<string, { player: any; occurrences: { tournament: Tournament; team: Team; playerIndex: 1 | 2 }[] }>();
 
       tournaments.forEach(t => {
           (t.teams || []).forEach(team => {
               const checkPlayer = (p: any, playerIndex: 1 | 2) => {
-                  if (!p) return;
-                  const isUnauth = !p.id || p.verified === false;
-                  if (isUnauth && p.name) {
-                      const key = `${p.name.toLowerCase().trim()}|${(p.email || '').toLowerCase().trim()}|${(p.phone || '').replace(/[^0-9]/g, '')}`;
-                      
-                      if (!unauthPlayersMap.has(key)) {
-                          unauthPlayersMap.set(key, {
-                              player: p,
-                              occurrences: []
-                          });
-                      }
-                      unauthPlayersMap.get(key)!.occurrences.push({
-                          tournament: t,
-                          team,
-                          playerIndex
-                      });
-                  }
+                  if (!p || !p.name || p.id) return;
+                  const key = linkIdFor(p);
+                  if (linked.has(key)) return;
+                  if (!entries.has(key)) entries.set(key, { player: p, occurrences: [] });
+                  entries.get(key)!.occurrences.push({ tournament: t, team, playerIndex });
               };
               checkPlayer(team.player1, 1);
               checkPlayer(team.player2, 2);
@@ -490,48 +552,24 @@ export const AdminDashboard: React.FC<{ initialAuthenticated?: boolean, onLogout
 
       const merges: {
           id: string;
+          level: 'exact' | 'suggested';
           unauthPlayer: any;
           authPlayer: any;
           reasons: string[];
           occurrences: { tournament: Tournament; team: Team; playerIndex: 1 | 2 }[];
       }[] = [];
 
-      unauthPlayersMap.forEach((val, key) => {
-          const unauth = val.player;
-          
+      entries.forEach((val, key) => {
           registeredPlayers.forEach(authP => {
-              const normalizeName = (name: string) => (name || '').toLowerCase().trim().replace(/\s+/g, ' ');
-              const normalizeEmail = (e: string) => (e || '').toLowerCase().trim();
-              const normalizePhone = (ph: string) => (ph || '').replace(/[^0-9]/g, '');
-              const normalizeCnic = (cn: string) => (cn || '').replace(/[^0-9xX]/g, '');
-              
-              const nameMatches = normalizeName(unauth.name) === normalizeName(authP.fullName || authP.name);
-              
-              if (!nameMatches) return;
-              
-              const emailMatches = unauth.email && authP.email && normalizeEmail(unauth.email) === normalizeEmail(authP.email);
-              const phoneMatches = unauth.phone && authP.phone && normalizePhone(unauth.phone) === normalizePhone(authP.phone);
-              const cnicMatches = unauth.cnic && authP.cnic && normalizeCnic(unauth.cnic) === normalizeCnic(authP.cnic);
-              
-              if (emailMatches || phoneMatches || cnicMatches) {
-                  const reasons: string[] = ['Name matches (mandatory)'];
-                  if (emailMatches) reasons.push(`Email matches: ${unauth.email}`);
-                  if (phoneMatches) reasons.push(`Phone matches: ${unauth.phone}`);
-                  if (cnicMatches) reasons.push(`CNIC matches: ${unauth.cnic}`);
-                  
-                  merges.push({
-                      id: `${key}|${authP.id}`,
-                      unauthPlayer: unauth,
-                      authPlayer: authP,
-                      reasons,
-                      occurrences: val.occurrences
-                  });
-              }
+              if ((authP.dismissedMergeIds || []).includes(key)) return;
+              const m = matchPlayer(val.player, authP);
+              if (m.level) merges.push({ id: `${key}|${authP.id}`, level: m.level, unauthPlayer: val.player, authPlayer: authP, reasons: m.reasons, occurrences: val.occurrences });
           });
       });
 
-      return merges;
-  }, [tournaments, registeredPlayers]);
+      // Confident matches first.
+      return merges.sort((x, y) => Number(y.level === 'exact') - Number(x.level === 'exact'));
+  }, [tournaments, registeredPlayers, playerLinks]);
 
   const mergeAlertCount = pendingMerges.length;
 
@@ -928,7 +966,7 @@ const getTournamentCredits = (t: any) => {
   ];
   const homeSections: ShellSection[] = [
       { title: 'Workspace', items: [
-          { key: 'dash', label: 'Dashboard', icon: <Grid size={18} />, active: !isCreating && !selectedTournamentId && mainTab !== 'merges', onClick: () => { closeWizard(); setSelectedTournamentId(null); setMainTab('tournaments'); scrollToId('adm-top'); } },
+          { key: 'dash', label: 'Dashboard', icon: <Grid size={18} />, active: !isCreating && !selectedTournamentId && mainTab === 'tournaments', onClick: () => { closeWizard(); setSelectedTournamentId(null); setMainTab('tournaments'); scrollToId('adm-top'); } },
           { key: 'all', label: 'All tournaments', icon: <Trophy size={18} />, onClick: () => { closeWizard(); setSelectedTournamentId(null); setMainTab('tournaments'); scrollToId('adm-tournaments'); } },
           { key: 'merges', label: 'Merge profiles', icon: <Users size={18} />, active: !isCreating && !selectedTournamentId && mainTab === 'merges', badge: mergeAlertCount || undefined, onClick: () => { closeWizard(); setSelectedTournamentId(null); setMainTab('merges'); } },
       ] },
@@ -1007,7 +1045,7 @@ const getTournamentCredits = (t: any) => {
                   </div>
               </div>
 
-              {mainTab !== 'merges' && (
+              {mainTab === 'tournaments' && (
               <div className="admx-bento">
                   {/* Match Pass */}
                   <div className="admx-card admx-pass">
@@ -1082,15 +1120,14 @@ const getTournamentCredits = (t: any) => {
               </div>
               )}
 
-              {mainTab !== 'merges' && <div className="admx-section-head" id="adm-tournaments"><h3>All tournaments</h3><span>{myTournaments.length} total</span></div>}
+              {mainTab === 'tournaments' && <div className="admx-section-head" id="adm-tournaments"><h3>All tournaments</h3><span>{myTournaments.length} total</span></div>}
 
               {mainTab === 'merges' ? (
                   <div className="space-y-6">
                       <div className="bg-surface-panel p-6 rounded-2xl border border-white/5">
                           <h2 className="text-xl font-bold text-white mb-2">Profile Merge Center</h2>
                           <p className="text-content-muted text-sm max-w-3xl">
-                              Review and merge manually onboarded (unauthenticated) players with self-registered platform players. 
-                              The matching algorithm detects overlaps based on a mandatory exact name match plus matching phone numbers, email addresses, or CNICs.
+                              Link players typed into tournaments to their Match Up accounts. Name, phone and email all matching merges by itself when the player logs in; a first name with missing details appears here to confirm.
                           </p>
                       </div>
 
@@ -1111,7 +1148,7 @@ const getTournamentCredits = (t: any) => {
                                   <Card key={merge.id} variant="panel" className="border border-white/10 overflow-hidden relative">
                                       <div className="bg-surface-ground p-4 border-b border-white/5 flex flex-wrap items-center justify-between gap-4">
                                           <div className="flex items-center gap-2">
-                                              <span className="bg-[#E65C31]/15 text-[#E65C31] text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">Potential Duplicate Match</span>
+                                              <span className={`text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${merge.level === 'exact' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-[#E65C31]/15 text-[#E65C31]'}`}>{merge.level === 'exact' ? 'Exact match' : 'Suggested: please check'}</span>
                                           </div>
                                           <div className="flex items-center gap-1.5 flex-wrap">
                                               {merge.reasons.map((reason, idx) => (
@@ -1225,21 +1262,39 @@ const getTournamentCredits = (t: any) => {
                                                    Confirm Profile Association
                                                </h5>
                                                <p className="text-content-muted text-xs leading-relaxed">
-                                                   Merging will permanently update the <strong>{merge.occurrences.length} active registration(s)</strong> and any matching historical match scores to reference <strong>{merge.authPlayer.fullName || merge.authPlayer.name}</strong> as the official participant. This action cannot be undone.
+                                                   Links <strong>{merge.occurrences.length} tournament entr{merge.occurrences.length === 1 ? 'y' : 'ies'}</strong> to <strong>{merge.authPlayer.fullName || merge.authPlayer.name}</strong>, so these results count on their profile and in the rankings. You can undo this below.
                                                </p>
                                            </div>
+                                           <button
+                                               disabled={mergingId !== null}
+                                               onClick={async () => {
+                                                   try {
+                                                       await dismissMergeSuggestion(merge.authPlayer.id, merge.unauthPlayer);
+                                                       await fetchRegisteredPlayers();
+                                                   } catch (err) {
+                                                       console.error(err);
+                                                       toast.error("Couldn't save that", 'Please try again.');
+                                                   }
+                                               }}
+                                               className="w-full md:w-auto shrink-0 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-5 rounded-xl border border-white/10 text-xs uppercase tracking-wider disabled:opacity-50"
+                                           >
+                                               Not the same person
+                                           </button>
                                            <button
                                                disabled={mergingId !== null}
                                                onClick={async () => {
                                                    if (window.confirm(`Are you absolutely sure you want to merge "${merge.unauthPlayer.name}" (manual) into the registered account "${merge.authPlayer.fullName || merge.authPlayer.name}"?\n\nThis will link all existing team enrollments and matches to this official account.`)) {
                                                        setMergingId(merge.id);
                                                        try {
-                                                           await mergePlayerProfiles(merge.unauthPlayer, merge.authPlayer);
-                                                           alert("Profiles successfully merged! Team entries have been permanently updated.");
-                                                           await fetchRegisteredPlayers();
+                                                           await mergePlayerProfiles(merge.unauthPlayer, merge.authPlayer, {
+                                                               method: 'organizer',
+                                                               by: auth.currentUser?.email || undefined,
+                                                               tournamentIds: [...new Set(merge.occurrences.map(o => o.tournament.id))],
+                                                           });
+                                                           toast.success('Profiles merged', `${merge.unauthPlayer.name} is now linked to ${merge.authPlayer.fullName || merge.authPlayer.name}.`);
                                                        } catch (err) {
                                                            console.error("Failed to merge:", err);
-                                                           alert("An error occurred during merging. Please try again.");
+                                                           toast.error("Couldn't merge these profiles", 'Please try again.');
                                                        } finally {
                                                            setMergingId(null);
                                                        }
@@ -1255,7 +1310,7 @@ const getTournamentCredits = (t: any) => {
                                                ) : (
                                                    <>
                                                        <RefreshCcw size={16} />
-                                                       Authenticate & Merge Profiles
+                                                       Merge profiles
                                                    </>
                                                )}
                                            </button>
@@ -1263,6 +1318,35 @@ const getTournamentCredits = (t: any) => {
 
                                   </Card>
                               ))}
+                          </div>
+                      )}
+
+                      {playerLinks.length > 0 && (
+                          <div className="bg-surface-panel rounded-2xl border border-white/5 overflow-hidden">
+                              <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
+                                  <span className="text-white font-bold text-sm">Merged profiles</span>
+                                  <span className="text-xs text-content-muted">{playerLinks.length}</span>
+                              </div>
+                              <div className="divide-y divide-white/5 max-h-96 overflow-y-auto">
+                                  {[...playerLinks].sort((a, b) => String(b.mergedAt || '').localeCompare(String(a.mergedAt || ''))).map(l => (
+                                      <div key={l.id} className="px-5 py-3 flex items-center justify-between gap-3 text-sm">
+                                          <span className="min-w-0 truncate text-white">{l.name || 'Player'} <span className="text-content-muted">→ {(l as any).accountName || 'account'}</span></span>
+                                          <span className="flex items-center gap-3 shrink-0">
+                                              <span className="text-[11px] text-content-muted">{l.method === 'auto-login' ? 'Automatic' : l.method === 'player' ? 'By player' : l.method === 'migration' ? 'Data clean-up' : 'By organizer'}</span>
+                                              <button type="button" className="text-xs font-bold text-amber-300 hover:underline" onClick={async () => {
+                                                  if (!window.confirm(`Undo this merge for ${l.name || 'this player'}?`)) return;
+                                                  try {
+                                                      await unmergePlayerProfile(l.id);
+                                                      toast.success('Merge undone');
+                                                  } catch (err) {
+                                                      console.error(err);
+                                                      toast.error("Couldn't undo the merge", 'Please try again.');
+                                                  }
+                                              }}>Undo</button>
+                                          </span>
+                                      </div>
+                                  ))}
+                              </div>
                           </div>
                       )}
                   </div>
@@ -1693,7 +1777,7 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
         sponsors: [] as Sponsor[],
         showNationFlags: false,
         broadcastTheme: 'matchup' as BroadcastTheme,
-        pointsSystem: 'matchup',
+        pointsSystem: 'local',
         categories: [] as any[],
         isMultiCategory: false,
         multipleVenues: false
@@ -2597,31 +2681,31 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
 
                         <div className="space-y-3">
                             <div className="flex items-end justify-between gap-3">
-                                <label className="block text-content-secondary text-sm font-bold uppercase tracking-wider">Points Table</label>
+                                <label className="block text-content-secondary text-sm font-bold uppercase tracking-wider">Tournament Category</label>
                                 <span className="text-[11px] text-content-muted text-right">How players and teams earn ranking points in this tournament.</span>
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                 {POINTS_SYSTEM_LIST.map(plan => {
-                                    const active = (data.pointsSystem || 'matchup') === plan.id;
+                                    const active = tournamentTier(data).id === plan.id;
                                     return (
                                         <button
                                             key={plan.id}
                                             type="button"
-                                            onClick={() => setData({ ...data, pointsSystem: plan.id })}
+                                            onClick={() => setData({ ...data, rankingTier: plan.id })}
                                             className={`text-left rounded-xl border px-3 py-2.5 transition-all ${active ? 'border-brand ring-2 ring-brand/40 bg-brand/5' : 'border-white/10 hover:border-white/30 bg-surface-panel'}`}
                                         >
                                             <span className="inline-block px-2 py-0.5 rounded text-[11px] font-black italic uppercase tracking-wide text-white" style={{ background: plan.color }}>
                                                 {plan.label}
                                             </span>
                                             <span className="block text-[10px] text-content-muted mt-1.5">
-                                                {plan.id === 'matchup' ? 'Default · current logic' : `Winner ${plan.placement.CHAMPION} pts`}
+                                                {`Winner ${plan.placement.CHAMPION} pts`}
                                             </span>
                                         </button>
                                     );
                                 })}
                             </div>
                             {(() => {
-                                const plan = getPointsSystem(data.pointsSystem);
+                                const plan = tournamentTier(data);
                                 const stages = STAGE_ORDER.filter(st => plan.placement[st] > 0);
                                 return (
                                     <div className="rounded-xl border border-white/10 overflow-x-auto">

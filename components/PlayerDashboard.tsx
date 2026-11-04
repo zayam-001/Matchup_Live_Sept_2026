@@ -1,13 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from './ui/Card';
 import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
 import { Sheet } from './ui/Sheet';
 import { PlayerProfile, Tournament, Squad } from '../types';
 import { toast } from './Toast';
-import { subscribeToTournaments, getPlayerSquads, createSquad, deleteSquad, updatePlayerProfile, rateMatchOpponent, getPlayerById, subscribeToPlayerQuickplaySessions, subscribeToPlayer, subscribeToVenues, uploadProfilePicture } from '../services/storage';
+import { subscribeToTournaments, getPlayerSquads, createSquad, deleteSquad, updatePlayerProfile, rateMatchOpponent, getPlayerById, subscribeToPlayerQuickplaySessions, subscribeToPlayer, subscribeToVenues, uploadProfilePicture, db, findMergeCandidates, autoMergeForPlayer } from '../services/storage';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { useGlobalRankings } from '../hooks/useGlobalRankings';
+import { firstNameOf, linkIdFor, normalizeEmail } from '../lib/playerIdentity';
+import { RankingsTable, ResultsList, TierCounts } from './player/RankingsTable';
+import { MergePrompt } from './player/MergePrompt';
+import './player/player.css';
+import './spectator.css';
 import { GoogleGenAI } from '@google/genai';
-import { Trophy, Calendar, Users, Activity, Settings, LogOut, ChevronRight, MapPin, Plus, Trash2, User, Phone, Mail, Search, Star, Share2, Play, Loader2, Download } from 'lucide-react';
+import { Trophy, Calendar, Users, Activity, Settings, LogOut, ChevronRight, MapPin, Plus, Trash2, User, Phone, Mail, Search, Star, Share2, Play, Loader2, Download , History } from 'lucide-react';
 import { ScorecardTemplate } from './ScorecardTemplate';
 import { toPng } from 'html-to-image';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
@@ -43,7 +50,11 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
     const [aiVenues, setAiVenues] = useState<any[]>([]);
     const [isLoadingAiVenues, setIsLoadingAiVenues] = useState(false);
     const CITIES = ['Karachi', 'Lahore', 'Islamabad', 'Faisalabad'];
-    const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'TEAMS' | 'HISTORY'>('OVERVIEW');
+    const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'RANKINGS' | 'HISTORY' | 'TEAMS'>('OVERVIEW');
+    const { rankings, links, loading: rankingsLoading } = useGlobalRankings();
+    const [linksLoaded, setLinksLoaded] = useState(false);
+    useEffect(() => { if (!rankingsLoading) setLinksLoaded(true); }, [rankingsLoading]);
+    const [matchesByTournament, setMatchesByTournament] = useState<Record<string, any[]>>({});
 
     useEffect(() => {
         const handleNavDashboard = () => {
@@ -324,21 +335,58 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
         setRatingTags([]);
     };
 
-    // Filter tournaments where the player is registered
-    const myTournaments = tournaments.filter(t => 
-        (t.teams || []).some(team => 
-            team?.player1?.email === player?.email || team?.player2?.email === player?.email
-        )
-    );
+    // A team entry is mine if it carries my account id, was merged into my account,
+    // or has my email and first name.
+    const linkMap = React.useMemo(() => Object.fromEntries(links.map(l => [l.id, l.uid])), [links]);
+    const isMe = (p: any) => {
+        if (!p || !player) return false;
+        if (p.id && p.id === player.id) return true;
+        if (linkMap[linkIdFor(p)] === player.id) return true;
+        const email = normalizeEmail(p.email);
+        return !!email && email === normalizeEmail(player.email) && firstNameOf(p.name) === firstNameOf(player.fullName || player.name);
+    };
+    const isMyTeam = (team: any) => isMe(team?.player1) || isMe(team?.player2);
+    const isTournamentOver = (t: any) => ['COMPLETED', 'FINISHED'].includes(String(t.status).toUpperCase()) || (!!t.endDate && new Date(t.endDate).getTime() < Date.now());
 
-    const activeTournaments = myTournaments.filter(t => (t.status !== 'COMPLETED' && String(t.status).toUpperCase() !== 'FINISHED'));
-    const pastTournaments = myTournaments.filter(t => (t.status === 'COMPLETED' || String(t.status).toUpperCase() === 'FINISHED'));
+    // Tournament lists don't include matches, so load them for my events.
+    const myTournamentsRaw = tournaments.filter(t => (t.teams || []).some(isMyTeam));
+    const myTournamentKey = myTournamentsRaw.map(t => t.id).sort().join(',');
+    useEffect(() => {
+        if (!myTournamentKey) return;
+        const unsubs = myTournamentKey.split(',').map(tId => onSnapshot(
+            query(collection(db, 'matches'), where('tournamentId', '==', tId)),
+            snap => setMatchesByTournament(prev => ({ ...prev, [tId]: snap.docs.map(d => ({ id: d.id, ...d.data() } as any)) })),
+            err => console.error('Error loading matches:', err),
+        ));
+        return () => unsubs.forEach(u => u());
+    }, [myTournamentKey]);
+
+    const myTournaments = myTournamentsRaw.map(t => ({ ...t, matches: matchesByTournament[t.id] || t.matches || [] }));
+    const activeTournaments = myTournaments.filter(t => !isTournamentOver(t));
+    const pastTournaments = myTournaments.filter(t => isTournamentOver(t));
+
+    // Merge: exact matches link themselves; first-name matches ask the player.
+    const mergeCandidates = React.useMemo(
+        () => (player?.id && tournaments.length ? findMergeCandidates(tournaments, player, links) : { exact: [], suggested: [] }),
+        [tournaments, links, player?.id, player?.email, player?.phone, player?.fullName, player?.dismissedMergeIds],
+    );
+    const autoMergeRan = useRef(false);
+    useEffect(() => {
+        if (autoMergeRan.current || !linksLoaded || !player?.id || !mergeCandidates.exact.length) return;
+        autoMergeRan.current = true;
+        autoMergeForPlayer(tournaments, player, links)
+            .then(n => { if (n) toast.success('Your past results are linked', `${n} tournament ${n === 1 ? 'entry was' : 'entries were'} added to your profile.`); })
+            .catch(err => console.error('Auto-merge failed:', err));
+    }, [mergeCandidates.exact.length, player?.id, linksLoaded]);
+
+    // My row in the live rankings.
+    const myRanking = React.useMemo(() => player?.id ? rankings.find(r => r.uid === player.id) : undefined, [rankings, player?.id]);
 
     // Compute recent partners
     const recentPartners = pastTournaments.flatMap(t => {
-        const myTeam = t.teams?.find(team => team?.player1?.email === player?.email || team?.player2?.email === player?.email);
+        const myTeam = t.teams?.find(isMyTeam);
         if (!myTeam) return [];
-        const partner = myTeam.player1?.email === player?.email ? myTeam.player2 : myTeam.player1;
+        const partner = isMe(myTeam.player1) ? myTeam.player2 : myTeam.player1;
         return partner;
     }).filter((partner, index, self) => 
         partner && index === self.findIndex((p) => p?.email === partner.email) // Unique by email
@@ -346,20 +394,18 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
 
     // Compute active matches across all active tournaments
     const activeMatches = activeTournaments.flatMap(t => {
-        const myTeam = t.teams?.find(team => team?.player1?.email === player?.email || team?.player2?.email === player?.email);
-        if (!myTeam || !t.matches) return [];
-        return t.matches
-            .filter(m => (m.team1Id === myTeam.id || m.team2Id === myTeam.id) && (m.status !== 'COMPLETED' && String(m.status).toUpperCase() !== 'FINISHED'))
-            .map(m => ({ ...m, tournamentName: t.name, myTeamId: myTeam.id, allTeams: t.teams }));
+        const myTeamIds = (t.teams || []).filter(isMyTeam).map(team => team.id);
+        return (t.matches || [])
+            .filter(m => (myTeamIds.includes(m.team1Id) || myTeamIds.includes(m.team2Id)) && (m.status !== 'COMPLETED' && String(m.status).toUpperCase() !== 'FINISHED'))
+            .map(m => ({ ...m, tournamentName: t.name, myTeamId: myTeamIds.includes(m.team1Id) ? m.team1Id : m.team2Id, allTeams: t.teams }));
     });
 
     // Compute past matches
-    const pastMatches = pastTournaments.flatMap(t => {
-        const myTeam = t.teams?.find(team => team?.player1?.email === player?.email || team?.player2?.email === player?.email);
-        if (!myTeam || !t.matches) return [];
-        return t.matches
-            .filter(m => (m.team1Id === myTeam.id || m.team2Id === myTeam.id) && (m.status === 'COMPLETED' || String(m.status).toUpperCase() === 'FINISHED'))
-            .map(m => ({ ...m, tournamentId: t.id, tournamentName: t.name, myTeamId: myTeam.id, allTeams: t.teams, isTeamAmericano: isTeamAmericanoFormat(getActiveFormat(t, myTeam.categoryId)) }));
+    const pastMatches = myTournaments.flatMap(t => {
+        const myTeamIds = (t.teams || []).filter(isMyTeam).map(team => team.id);
+        return (t.matches || [])
+            .filter(m => (myTeamIds.includes(m.team1Id) || myTeamIds.includes(m.team2Id)) && (m.status === 'COMPLETED' || String(m.status).toUpperCase() === 'FINISHED'))
+            .map(m => ({ ...m, tournamentId: t.id, tournamentName: t.name, myTeamId: myTeamIds.includes(m.team1Id) ? m.team1Id : m.team2Id, allTeams: t.teams, isTeamAmericano: isTeamAmericanoFormat(getActiveFormat(t, m.categoryId)) }));
     });
 
     const calculatedStats = React.useMemo(() => {
@@ -529,7 +575,7 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
 
     const suggestedTournaments = tournaments.filter(t => 
         (t.status !== 'COMPLETED' && String(t.status).toUpperCase() !== 'FINISHED') && 
-        !(t.teams || []).some(team => team?.player1?.email === player?.email || team?.player2?.email === player?.email)
+        !isTournamentOver(t) && !(t.teams || []).some(isMyTeam)
     ).slice(0, 3); // Show up to 3 suggestions
 
     const upcomingAlerts = activeMatches.map(m => {
@@ -632,7 +678,7 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
             {!player ? (
                 <div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 animate-spin" /></div>
             ) : (
-                <div className="min-h-screen pb-20 pt-28 md:pt-36 space-y-8 px-4 md:px-8">
+                <div className="pp spx-root min-h-screen pb-20 pt-24 md:pt-28 space-y-6 px-4 md:px-8 max-w-[1280px] mx-auto w-full">
                     {/* Hidden File Input */}
                     <input 
                         type="file" 
@@ -641,76 +687,62 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
                         accept="image/*" 
                         onChange={handlePhotoChange} 
                     />
-                    {/* NEW PLAYER PROFILE HEADER */}
-                    <div className="relative overflow-hidden rounded-3xl bg-surface-panel border border-white/10 p-8 shadow-2xl backdrop-blur-xl">
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-brand via-[#10B981] to-brand" />
-                        <div className="flex flex-col md:flex-row items-center gap-8 relative z-10">
-                            {/* Avatar with Dynamic Tier Border */}
-                            <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                                <div className="absolute inset-0 bg-brand/20 blur-xl rounded-full opacity-50 group-hover:opacity-100 transition-opacity" />
-                                <div className="relative p-1 rounded-full bg-gradient-to-br from-brand via-brand-light to-transparent">
-                                    <div className="p-1 bg-black rounded-full">
-                                        <Avatar 
-                                            src={player.photoUrl} 
-                                            fallback={player.fullName || player.name || '?'} 
-                                            size="xl"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="absolute -bottom-2 -right-2 bg-brand text-content-inverse text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg border border-black">
-                                    Lvl {player.stats?.eloRating ? Math.floor(player.stats.eloRating / 100) : 10}
-                                </div>
+                    {/* Player hero */}
+                    <section className="pp-hero">
+                        <div className="pp-hero__top">
+                            <button type="button" className="pp-hero__avatar" onClick={() => fileInputRef.current?.click()} aria-label="Change profile photo">
+                                <Avatar src={player.photoUrl} fallback={player.fullName || player.name || '?'} size="xl" />
+                            </button>
+                            <div className="pp-hero__who">
+                                <h1>{player.fullName || player.name}</h1>
+                                <p>{myRanking ? `Ranked #${myRanking.rank} of ${rankings.length} players` : 'Not ranked yet. Play a tournament to get on the board.'}</p>
+                                {myRanking && <TierCounts counts={myRanking.tierCounts} />}
                             </div>
-                            
-                            {/* Profile Info */}
-                            <div className="text-center md:text-left flex-1">
-                                <div className="flex flex-col md:flex-row items-center gap-4 mb-2">
-                                    <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter italic uppercase">{player.fullName || player.name}</h1>
-                                </div>
-                                <p className="text-brand font-black text-xs md:text-sm tracking-[0.2em] uppercase flex items-center justify-center md:justify-start gap-2 mb-6">
-                                    <Trophy size={16} /> Global Rank: #{Math.floor(Math.random() * 100) + 1}
-                                </p>
-                                
-                                {/* Horizontal Stats Grid */}
-                                <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
-                                    <div className="bg-[#111113] border border-white/5 rounded-2xl px-6 py-4 min-w-[120px] shadow-lg">
-                                        <div className="text-[10px] text-content-muted font-black tracking-[0.15em] uppercase mb-1">Win Rate</div>
-                                        <div className="text-2xl md:text-3xl font-black text-white italic">
-                                            {player.stats?.matchesPlayed ? Math.round(((player.stats?.wins || 0) / player.stats.matchesPlayed) * 100) : 0}%
-                                        </div>
-                                    </div>
-                                    <div className="bg-[#111113] border border-white/5 rounded-2xl px-6 py-4 min-w-[120px] shadow-lg">
-                                        <div className="text-[10px] text-content-muted font-black tracking-[0.15em] uppercase mb-1">Matches</div>
-                                        <div className="text-2xl md:text-3xl font-black text-white italic">
-                                            {player.stats?.matchesPlayed || 0}
-                                        </div>
-                                    </div>
-                                    <div className="bg-[#111113] border border-white/5 rounded-2xl px-6 py-4 min-w-[120px] shadow-lg">
-                                        <div className="text-[10px] text-content-muted font-black tracking-[0.15em] uppercase mb-1">Win Streak</div>
-                                        <div className="text-2xl md:text-3xl font-black text-[#10B981] flex items-center gap-1.5 italic">
-                                             {player.stats?.streak || 0} <span className="text-[14px] ml-1 uppercase tracking-widest text-[#10B981]/60">W</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            {/* Actions */}
-                            <div className="flex flex-row md:flex-col gap-3 w-full md:w-auto mt-6 md:mt-0">
-                                <button onClick={() => setShowProfileEdit(true)} className="flex-1 md:flex-none bg-surface-elevated hover:bg-white/10 text-white px-6 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-white/5">
-                                    <Settings size={16} /> Edit Profile
-                                </button>
-                                <button onClick={handleShareStats} className="flex-1 md:flex-none bg-brand hover:bg-brand-light text-content-inverse px-6 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-brand/20 flex items-center justify-center gap-2">
-                                    <Share2 size={16} /> Share Stats
-                                </button>
+                            <div className="pp-hero__actions">
+                                <button type="button" onClick={() => setShowProfileEdit(true)} className="pp-btn pp-btn--ghost"><Settings size={16} /> Edit profile</button>
+                                <button type="button" onClick={handleShareStats} className="pp-btn pp-btn--primary"><Share2 size={16} /> Share</button>
                             </div>
                         </div>
-                    </div>
+                        <div className="pp-kpis pp-kpis--3">
+                            <button type="button" className="pp-kpi pp-kpi--accent" onClick={() => setActiveTab('RANKINGS')}>
+                                <strong>{myRanking ? myRanking.points : 0}</strong><span>Ranking points</span>
+                            </button>
+                            <button type="button" className="pp-kpi" onClick={() => setActiveTab('RANKINGS')}>
+                                <strong>{myRanking ? `#${myRanking.rank}` : '-'}</strong><span>Rank</span>
+                            </button>
+                            <div className="pp-kpi">
+                                <strong>{myRanking?.matchesPlayed ? `${Math.round((myRanking.wins / myRanking.matchesPlayed) * 100)}%` : '-'}</strong>
+                                <span>{myRanking ? `${myRanking.wins}W ${myRanking.losses}L` : 'Win rate'}</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <MergePrompt candidates={mergeCandidates.suggested} account={player} />
+
                 {/* Navigation Tabs */}
-            <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar border-b border-white/5">
-                <TabButton active={activeTab === 'OVERVIEW'} onClick={() => setActiveTab('OVERVIEW')} label="Dashboard" icon={<Activity size={16}/>} />
-                <TabButton active={activeTab === 'TEAMS'} onClick={() => setActiveTab('TEAMS')} label="Team Presets" icon={<Users size={16}/>} />
-                <TabButton active={activeTab === 'HISTORY'} onClick={() => setActiveTab('HISTORY')} label="Tournament History" icon={<Trophy size={16}/>} />
+            <div className="pp-tabs" role="tablist">
+                {([
+                    ['OVERVIEW', 'Home', <Activity size={16} key="i" />],
+                    ['RANKINGS', 'Rankings', <Trophy size={16} key="i" />],
+                    ['HISTORY', 'Match history', <History size={16} key="i" />],
+                    ['TEAMS', 'Partners', <Users size={16} key="i" />],
+                ] as const).map(([id, label, icon]) => (
+                    <button key={id} type="button" role="tab" aria-selected={activeTab === id} className={`pp-tab ${activeTab === id ? 'is-on' : ''}`} onClick={() => setActiveTab(id)}>{icon} {label}</button>
+                ))}
             </div>
+
+            {activeTab === 'RANKINGS' && (
+                <div className="space-y-4">
+                    {myRanking && (
+                        <section className="pp-card">
+                            <h3>Your results</h3>
+                            <p className="pp-muted">Points you earned at each tournament.</p>
+                            <ResultsList player={myRanking} />
+                        </section>
+                    )}
+                    {rankingsLoading ? <div className="pp-empty"><Loader2 className="animate-spin" size={22} /></div> : <RankingsTable rows={rankings} meKey={myRanking?.key} />}
+                </div>
+            )}
 
             {/* Tab Content */}
             {activeTab === 'OVERVIEW' && (
@@ -743,7 +775,7 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
                         {/* Team Americano: my team, next match & court, byes */}
                         {(() => {
                             const taEntries = activeTournaments.flatMap(t => {
-                                const myTeam = t.teams?.find(team => (team?.player1?.email === player?.email || team?.player2?.email === player?.email) && team.status === 'ACCEPTED');
+                                const myTeam = t.teams?.find(team => (isMyTeam(team)) && team.status === 'ACCEPTED');
                                 return myTeam && isTeamAmericanoFormat(getActiveFormat(t, myTeam.categoryId)) ? [{ t, myTeam }] : [];
                             });
                             if (taEntries.length === 0) return null;
@@ -842,7 +874,7 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
                             {activeTournaments.length > 0 ? (
                                 <div className="grid gap-4">
                                     {activeTournaments.map(t => {
-                                        const myTeam = t.teams.find(team => team?.player1?.email === player?.email || team?.player2?.email === player?.email);
+                                        const myTeam = t.teams.find(isMyTeam);
                                         return (
                                             <Card key={t.id} variant="panel" className="p-0 overflow-hidden group hover:border-brand/50 transition-all cursor-pointer" onClick={() => onNavigate('live')}>
                                                 {t.bannerUrl && (

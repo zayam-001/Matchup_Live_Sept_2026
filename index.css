@@ -195,14 +195,6 @@ input, select, textarea, button {
   background-image: linear-gradient(to right, var(--color-primary), var(--color-accent));
 }
 
-/* User Design Overrides */
-div#root:nth-of-type(1) > div:nth-of-type(1) > main:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > span:nth-of-type(1) {
-  display: none !important;
-}
-
-div#root:nth-of-type(1) > div:nth-of-type(1) > main:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > button:nth-of-type(1) {
-  display: none !important;
-}
 .fade-edges {
   mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
 }

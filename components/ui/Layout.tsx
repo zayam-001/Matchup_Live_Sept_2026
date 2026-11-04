@@ -5,7 +5,6 @@ import { Sheet } from './Sheet';
 import { Logo } from './Logo';
 import { auth, subscribeToTournaments } from '../../services/storage';
 import { NavigationMenu } from './NavigationMenu';
-import { CinematicFooter } from './motion-footer';
 import { AppleSpotlight, SearchResult, Shortcut } from './apple-spotlight';
 import { Tournament } from '../../types';
 
@@ -60,6 +59,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
     const items = [
       { label: 'Home', id: 'landing', icon: <Home /> },
       { label: 'Spectator', id: 'live', icon: <Trophy /> },
+      { label: 'Leaderboard', id: 'leaderboard', icon: <Trophy /> },
       { label: 'Tournaments', id: 'register', icon: <Users /> },
     ];
     if (isAuthenticated) {
@@ -106,11 +106,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
       },
       {
         icon: <Compass className="text-purple-400" />,
-        label: 'Global Player Leaderboard',
-        description: 'Check national ELO rankings, player stats, and win ratios',
+        label: 'Leaderboard',
+        description: 'Player rankings, points, and results across every tournament',
         category: 'Rankings',
         onClick: () => {
-          onTabChange('global-leaderboard');
+          onTabChange('leaderboard');
           setIsSpotlightOpen(false);
         }
       },
@@ -199,7 +199,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
       label: 'Rankings',
       icon: <Compass />,
       onClick: () => {
-        onTabChange('global-leaderboard');
+        onTabChange('leaderboard');
         setIsSpotlightOpen(false);
       }
     }
@@ -249,11 +249,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
         <div className="min-h-screen">
           {children}
         </div>
-        
-        {/* Render Footer only for public/player pages. Not admin/referee if preferred, but let's do it globally for now or only if activeTab is landing */}
-        {(activeTab === 'quick-play' || activeTab === 'leaderboard') && (
-            <CinematicFooter />
-        )}
       </main>
 
       {/* Organizer Form Sheet */}

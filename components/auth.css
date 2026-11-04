@@ -141,3 +141,11 @@
 /* Leave room so the submit button never sits under the panel's bottom edge. */
 .auth__panel { padding-bottom: 32px; }
 @media (max-height: 860px) { .auth__side { padding-top: 88px; } .auth__panel { max-height: calc(100svh - 108px); } }
+.auth__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; grid-column: 1 / -1; }
+.auth__row .auth__remember { margin-top: 0; }
+.auth__link { min-height: 32px; padding: 0 2px; background: none; border: 0; color: #FF9A70; font-size: 13px; font-weight: 700; text-align: center; cursor: pointer; }
+.auth__link:hover { color: #FFC0A6; text-decoration: underline; }
+.auth__forgot { display: flex; flex-direction: column; gap: 14px; }
+.auth__forgot h3 { margin: 0; color: #fff; font-size: 22px; font-weight: 800; letter-spacing: -.02em; text-transform: none; }
+.auth__forgot p { margin: 0; color: rgba(255, 255, 255, .72); font-size: 14px; line-height: 1.5; }
+.auth__forgot p b { color: #fff; overflow-wrap: anywhere; }

@@ -248,11 +248,12 @@ export const PublicLanding: React.FC<{ onNavigate: (tab: string) => void }> = ({
       <nav className="h-nav">
         <a className="h-nav__logo" href="#top" onClick={e => scrollTo(e, 'top')} aria-label="Match Up home"><MatchupLogo className="h-6 w-auto" /></a>
         <div className="h-nav__links">
-          <a href="#rankings" onClick={e => scrollTo(e, 'rankings')}>Rankings</a>
+          <a href="#top" onClick={e => scrollTo(e, 'top')}>Home</a>
           <a href="#tournaments" onClick={e => scrollTo(e, 'tournaments')}>Tournaments</a>
+          <button type="button" onClick={() => onNavigate('leaderboard')}>Leaderboard</button>
+          <button type="button" onClick={() => onNavigate('live')}>Spectator Mode</button>
           <a href="#clubs" onClick={e => scrollTo(e, 'clubs')}>Clubs</a>
           <a href="#community" onClick={e => scrollTo(e, 'community')}>Community</a>
-          <button type="button" onClick={() => onNavigate('live')}>Spectator Mode</button>
         </div>
         <div className="h-nav__actions">
           <button type="button" className="h-nav__login" onClick={() => onNavigate('auth-player')}>Log in</button>
@@ -260,11 +261,12 @@ export const PublicLanding: React.FC<{ onNavigate: (tab: string) => void }> = ({
         </div>
         <div className="h-nav__mobile">
           <MobilePillMenu items={[
-            { label: 'Rankings', href: '#rankings' },
+            { label: 'Home', href: '#top' },
             { label: 'Tournaments', href: '#tournaments' },
+            { label: 'Leaderboard', onClick: () => onNavigate('leaderboard') },
+            { label: 'Spectator Mode', onClick: () => onNavigate('live') },
             { label: 'Clubs', href: '#clubs' },
             { label: 'Community', href: '#community' },
-            { label: 'Spectator Mode', onClick: () => onNavigate('live') },
             { label: 'Log In', onClick: () => onNavigate('auth-player') },
             { label: 'Play Now', onClick: () => goSignup() },
           ]} />
@@ -424,7 +426,7 @@ export const PublicLanding: React.FC<{ onNavigate: (tab: string) => void }> = ({
                 ))}
                 {rows.length === 0 && <div className="h-board__empty">{leaderboard.length ? 'No players match that search.' : 'Rankings are loading…'}</div>}
               </div>
-              <div className="h-board__foot"><span>Ranking logic remains controlled by the MatchUp backend.</span><button type="button" onClick={() => onNavigate('live')}>Enter Spectator Arena →</button></div>
+              <div className="h-board__foot"><span>Ranking logic remains controlled by the MatchUp backend.</span><button type="button" onClick={() => onNavigate('leaderboard')}>View full leaderboard →</button></div>
             </div>
           </div>
         </section>
