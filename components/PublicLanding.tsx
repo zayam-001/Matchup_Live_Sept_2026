@@ -267,8 +267,8 @@ export const PublicLanding: React.FC<{ onNavigate: (tab: string) => void }> = ({
             { label: 'Spectator Mode', onClick: () => onNavigate('live') },
             { label: 'Clubs', href: '#clubs' },
             { label: 'Community', href: '#community' },
-            { label: 'Log In', onClick: () => onNavigate('auth-player') },
-            { label: 'Play Now', onClick: () => goSignup() },
+            { label: 'Log in', onClick: () => onNavigate('auth-player'), variant: 'ghost' },
+            { label: 'Start playing', onClick: () => goSignup(), variant: 'primary' },
           ]} />
         </div>
       </nav>
