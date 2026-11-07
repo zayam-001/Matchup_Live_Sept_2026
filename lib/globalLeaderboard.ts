@@ -4,7 +4,7 @@
 import type { Team, Tournament } from '../types';
 import { buildKnockoutRoundSizes, getMatchStage, isKnockoutMatch, loserStage, placementPoints, STAGE_WEIGHT, tournamentTier, tournamentTierLabel, type KnockoutStage } from './pointsSystems';
 import type { Match } from '../types';
-import { isPlaceholderName, firstNameOf, linkIdFor, normalizeEmail, normalizeName, normalizePhone, personName, type PersonLike } from './playerIdentity';
+import { isPlaceholderName, linkIdFor, normalizeEmail, normalizeName, normalizePhone, personName, type PersonLike } from './playerIdentity';
 
 export type Division = 'Men' | 'Women' | 'Kids' | 'Mixed';
 
@@ -15,6 +15,14 @@ export const divisionOf = (categoryName?: string, tournamentName?: string): Divi
     if (/\bmixed\b/.test(n)) return 'Mixed';
     if (/\b(women|woman|ladies|lady|female)('?s)?\b/.test(n)) return 'Women';
     return 'Men';
+};
+
+// "Muhammad" and "Syed" start half the names in a draw, so the first name that
+// tells people apart is the one after them ("Muhammad Eizer" -> eizer).
+const PREFIXES = new Set(['muhammad', 'mohammad', 'muhammed', 'mohammed', 'mohd', 'muhamad', 'm', 'syed', 'syeda', 'sayed']);
+const givenName = (name: string) => {
+    const parts = normalizeName(name).split(' ');
+    return parts.find(x => !PREFIXES.has(x)) || parts[0] || '';
 };
 
 export interface TournamentResult {
@@ -178,77 +186,103 @@ export const computeGlobalLeaderboard = (
         if (pa && pa === normalizePhone(b.phone)) sharedContacts.add(pa);
         if (ea && ea === normalizeEmail(b.email)) sharedContacts.add(ea);
     }));
-    const keysOf = (p: PersonLike) => {
-        const first = firstNameOf(personName(p));
+    // An organiser's or club's contact typed in for a whole draw (one email on 300+
+    // entries) belongs to no one: three or more first names on it makes it shared too.
+    const bulkContacts = new Set<string>();
+    const firstNamesByContact = new Map<string, Set<string>>();
+    tournaments.forEach(t => (t.teams || []).forEach(team => [team.player1, team.player2].forEach(p => {
+        const first = p && givenName(personName(p));
+        if (!first) return;
+        [normalizePhone(p.phone), normalizeEmail(p.email)].filter(Boolean).forEach(c => {
+            if (!firstNamesByContact.has(c)) firstNamesByContact.set(c, new Set());
+            firstNamesByContact.get(c)!.add(first);
+        });
+    })));
+    firstNamesByContact.forEach((names, c) => { if (names.size >= 3) { sharedContacts.add(c); bulkContacts.add(c); } });
+
+    // Junior and senior rankings are kept apart, like FIP's: a kids' result and a
+    // men's or women's result never land on the same row, even with the same contact.
+    const keysOf = (p: PersonLike, pool: string) => {
+        const first = givenName(personName(p));
         const full = normalizeName(personName(p));
         const out: string[] = [];
         const uid = uidOf(p);
-        if (uid) out.push(`u:${uid}`);
+        if (uid) out.push(`${pool}|u:${uid}`);
         const phone = normalizePhone(p.phone), email = normalizeEmail(p.email);
-        if (phone) out.push(`p:${phone}:${sharedContacts.has(phone) ? full : first}`);
-        if (email) out.push(`e:${email}:${sharedContacts.has(email) ? full : first}`);
+        // On a shared contact a lone first name ("Hassan") could be anyone on it.
+        const keyed = (c: string) => !sharedContacts.has(c) || full.includes(' ');
+        if (phone && keyed(phone)) out.push(`${pool}|p:${phone}:${sharedContacts.has(phone) ? full : first}`);
+        if (email && keyed(email)) out.push(`${pool}|e:${email}:${sharedContacts.has(email) ? full : first}`);
         return out;
     };
 
-    type Slot = { p: PersonLike; team: Team; t: Tournament };
+    type Slot = { p: PersonLike; team: Team; t: Tournament; pool: string };
     const slots: Slot[] = [];
     tournaments.filter(countsForRankings).forEach(t => (t.teams || []).forEach(team => {
         if (team.status && !['ACCEPTED', 'APPROVED'].includes(String(team.status).toUpperCase())) return;
+        const category = t.categories?.find(c => c.id === team.categoryId)?.name;
+        const pool = divisionOf(category, t.name) === 'Kids' ? 'kids' : 'open';
         [team.player1, team.player2].forEach(p => {
-            if (p && !isPlaceholderName(personName(p))) slots.push({ p, team, t });
+            if (p && !isPlaceholderName(personName(p))) slots.push({ p, team, t, pool });
         });
     }));
 
     const fullNameToRoot = new Map<string, Set<string>>();
-    slots.forEach(({ p }) => {
-        const keys = keysOf(p);
+    slots.forEach(({ p, pool }) => {
+        const keys = keysOf(p, pool);
         keys.slice(1).forEach(k => union(keys[0], k));
     });
     // Same full name with no contact detail that disagrees: one person whose entries
     // were typed with different details ("Rayyan Faizan" with a phone, then an email).
     const contactsByName = new Map<string, Map<string, { phones: Set<string>; emails: Set<string> }>>();
-    slots.forEach(({ p }) => {
-        const keys = keysOf(p);
-        const n = normalizeName(personName(p));
-        if (!keys.length || !n.includes(' ')) return;
+    slots.forEach(({ p, pool }) => {
+        const keys = keysOf(p, pool);
+        const name = normalizeName(personName(p));
+        if (!keys.length || !name.includes(' ')) return;
+        const n = `${pool}|${name}`;
         const root = find(keys[0]);
         if (!contactsByName.has(n)) contactsByName.set(n, new Map());
         const group = contactsByName.get(n)!;
         if (!group.has(root)) group.set(root, { phones: new Set(), emails: new Set() });
+        // An organiser's contact says nothing about who this is, so it can't disagree either.
         const phone = normalizePhone(p.phone), email = normalizeEmail(p.email);
-        if (phone) group.get(root)!.phones.add(phone);
-        if (email) group.get(root)!.emails.add(email);
+        if (phone && !bulkContacts.has(phone)) group.get(root)!.phones.add(phone);
+        if (email && !bulkContacts.has(email)) group.get(root)!.emails.add(email);
     });
     const disagree = (a: Set<string>, b: Set<string>) => a.size > 0 && b.size > 0 && ![...a].some(x => b.has(x));
+    const bare = (c: { phones: Set<string>; emails: Set<string> }) => !c.phones.size && !c.emails.size;
     contactsByName.forEach(group => {
         const roots = [...group.entries()];
+        // Entries with only an organiser's contact join a known player only when the name is unambiguous.
+        const known = roots.filter(([, c]) => !bare(c)).length;
         for (let i = 0; i < roots.length; i++) for (let j = i + 1; j < roots.length; j++) {
             const [ra, a] = roots[i], [rb, b] = roots[j];
+            if ((bare(a) || bare(b)) && known > 1) continue;
             if (!disagree(a.phones, b.phones) && !disagree(a.emails, b.emails)) union(ra, rb);
         }
     });
-    slots.forEach(({ p }) => {
-        const keys = keysOf(p);
+    slots.forEach(({ p, pool }) => {
+        const keys = keysOf(p, pool);
         if (!keys.length) return;
-        const n = normalizeName(personName(p));
+        const n = `${pool}|${normalizeName(personName(p))}`;
         if (!fullNameToRoot.has(n)) fullNameToRoot.set(n, new Set());
         fullNameToRoot.get(n)!.add(find(keys[0]));
     });
 
     const rows = new Map<string, RankedPlayer>();
     const seenTeams = new Set<string>();
-    slots.forEach(({ p, team, t }) => {
-        const keys = keysOf(p);
+    slots.forEach(({ p, team, t, pool }) => {
+        const keys = keysOf(p, pool);
         const n = normalizeName(personName(p));
         let root: string;
         if (keys.length) root = find(keys[0]);
         else {
             // No contact details: join a known player only if that full name is unambiguous.
-            const roots = fullNameToRoot.get(n);
+            const roots = fullNameToRoot.get(`${pool}|${n}`);
             // A lone first name ("Danish") with no details can't be told apart from other
             // Danishes, so it stays one entry per team until it's merged into an account.
-            if (!n.includes(' ')) root = `n:${n}:${team.id}`;
-            else root = roots && roots.size === 1 ? [...roots][0] : `n:${n}`;
+            if (!n.includes(' ')) root = `${pool}|n:${n}:${team.id}`;
+            else root = roots && roots.size === 1 ? [...roots][0] : `${pool}|n:${n}`;
         }
         const system = tournamentTier(t);
         const records = recordsByTournament.get(t.id);

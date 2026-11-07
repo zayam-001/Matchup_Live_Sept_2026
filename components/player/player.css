@@ -327,6 +327,9 @@ main:has(.lb), main:has(.lb) > div { background: transparent !important; box-sha
 .lb-row__avatar { width: 46px !important; height: 46px !important; flex: 0 0 auto; border: 2px solid rgba(255, 255, 255, .25); }
 .lb-row__name { min-width: 0; line-height: 1.08; text-transform: uppercase; }
 .lb-row__name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(255, 255, 255, .78); font-size: 12px; font-weight: 600; letter-spacing: .04em; }
+.lb-row__name small:has(.lb-row__tag) { display: flex; align-items: center; gap: 6px; }
+.lb-row__name small > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lb-row__tag { flex: 0 0 auto; padding: 1px 6px; border-radius: 999px; background: rgba(255, 138, 91, .18); color: #FF8A5B; font-size: 10px; font-style: normal; font-weight: 800; letter-spacing: .08em; vertical-align: 1px; }
 .lb-row__name b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'Barlow Condensed', var(--font-display, Poppins), sans-serif; font-size: 23px; font-weight: 800; letter-spacing: .01em; }
 .lb-row__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 44px)) minmax(0, 1fr); gap: 6px; align-items: center; text-align: center; }
 .lb-row__stats > span { min-width: 0; font-size: 17px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }

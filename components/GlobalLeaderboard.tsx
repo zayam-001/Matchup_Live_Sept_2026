@@ -334,6 +334,8 @@ export const GlobalLeaderboard: React.FC = () => {
                             {rows.slice(0, shown).map(r => {
                                 const parts = r.name.trim().split(/\s+/);
                                 const last = parts.length > 1 ? parts.pop() : '';
+                                // Junior rows rank separately, so name them when the list mixes divisions.
+                                const junior = division !== 'Kids' && r.results.every(x => x.division === 'Kids');
                                 return (
                                     <li key={r.key}>
                                         <button type="button" className={`lb-row ${r.rank === 1 ? 'is-first' : r.rank <= 3 ? 'is-podium' : ''} ${r.points === 0 ? 'is-zero' : ''}`} onClick={() => setSelected(r)} aria-label={`${r.name}, rank ${r.rank}, ${r.points} points. View results`}>
@@ -341,7 +343,8 @@ export const GlobalLeaderboard: React.FC = () => {
                                             <span className="lb-row__rank">{r.rank === 1 ? <Trophy size={20} /> : null}{r.rank}</span>
                                             <Avatar src={r.photoUrl} fallback={r.name} size="md" className="lb-row__avatar" />
                                             <span className="lb-row__name">
-                                                {last ? <><small>{parts.join(' ')}</small><b>{last}</b></> : <b>{parts[0]}</b>}
+                                                {(last || junior) && <small>{last && <span>{parts.join(' ')}</span>}{junior && <i className="lb-row__tag">Kids</i>}</small>}
+                                                <b>{last || parts[0]}</b>
                                             </span>
                                             <span className="lb-row__stats">
                                                 <span><i>Won</i>{r.wins}</span>
