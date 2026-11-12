@@ -104,11 +104,13 @@ const formatFullDateOnly = (time: any) => {
   }
 };
 
+const FutsalSpectatorDetail = React.lazy(() => import('../futsal/ui/FutsalSpectatorDetail'));
+
 export const formatCleanName = (name: string | undefined | null): string => { if (!name) return ''; return name.replace(/^&\s*/, '').replace(/\s*&$/, '').trim(); };
 export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCategoryId?: string }> = ({ initialTournamentId, initialCategoryId }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'upcoming'>('all');
-  const [sportFilter, setSportFilter] = useState<'all' | 'padel'>('all');
+  const [sportFilter, setSportFilter] = useState<'all' | 'padel' | 'futsal' | 'football'>('all');
   const [isDateFilterOpen, setIsDateFilterOpen] = useState(false);
   const [isSportFilterOpen, setIsSportFilterOpen] = useState(false);
 
@@ -146,8 +148,10 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
   const [selectedTeam, setSelectedTeam] = useState<any | null>(null);
 
   // New Phase 2 Hooks
+  // Futsal competitions live in their own collections and open their own detail view.
+  const futsalSelectedId = selectedTournamentId?.startsWith('futsal:') ? selectedTournamentId.slice(7) : null;
   const resolvedId = React.useMemo(() => {
-    if (!selectedTournamentId) return null;
+    if (!selectedTournamentId || selectedTournamentId.startsWith('futsal:')) return null;
     if (tournaments.length === 0) return selectedTournamentId;
     const t = tournaments.find(x => x.id === selectedTournamentId || (x.slug && x.slug === selectedTournamentId) || x.name === selectedTournamentId);
     return t ? t.id : selectedTournamentId;
@@ -193,6 +197,49 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
     const unsubscribe = subscribeToTournaments((data: Tournament[]) => setTournaments(data));
     return () => unsubscribe();
   }, []);
+
+  // Futsal and football competitions join the same list, shaped like padel ones (id prefixed "futsal:").
+  const [futsalTournaments, setFutsalTournaments] = useState<Tournament[]>([]);
+  useEffect(() => {
+    let live = true;
+    let unsubs: (() => void)[] = [];
+    import('../futsal/store').then(m => {
+      if (!live) return;
+      let ts: any[] = [], teams: any[] = [], matches: any[] = [];
+      const push = () => setFutsalTournaments(ts.filter(t => t.status !== 'DRAFT').map(t => ({
+        id: `futsal:${t.id}`, name: t.name, sport: t.sport === 'football' ? 'football' : 'futsal', venue: t.venue, city: t.city, organizer: t.organizerName,
+        startDate: t.startDate, endDate: t.endDate, bannerUrl: t.bannerUrl, currency: t.currency,
+        status: t.status === 'COMPLETED' ? 'COMPLETED' : 'ACTIVE',
+        teams: teams.filter(x => x.tournamentId === t.id && x.status === 'ACCEPTED'),
+        matches: matches.filter(x => x.tournamentId === t.id).map(x => ({ id: x.id, status: x.status })),
+        categories: (t.categories || []).map((c: any) => ({ id: c.id, name: c.name })),
+      }) as unknown as Tournament));
+      // Teams and matches per listed competition, not the whole collections.
+      const perT = new Map<string, (() => void)[]>();
+      const byT = { teams: new Map<string, any[]>(), matches: new Map<string, any[]>() };
+      const flat = () => { teams = [...byT.teams.values()].flat(); matches = [...byT.matches.values()].flat(); push(); };
+      unsubs = [
+        m.subscribeFutsalTournaments(r => {
+          ts = r;
+          const ids = new Set(r.filter(t => t.status !== 'DRAFT').map(t => t.id));
+          perT.forEach((u, id) => { if (!ids.has(id)) { u.forEach(f => f()); perT.delete(id); byT.teams.delete(id); byT.matches.delete(id); } });
+          ids.forEach(id => {
+            if (perT.has(id)) return;
+            perT.set(id, [
+              m.subscribeFutsalTeams(id, rows => { byT.teams.set(id, rows); flat(); }),
+              m.subscribeFutsalMatches(id, rows => { byT.matches.set(id, rows); flat(); }),
+            ]);
+          });
+          push();
+        }),
+        () => perT.forEach(u => u.forEach(f => f())),
+      ];
+    });
+    return () => { live = false; unsubs.forEach(u => u()); };
+  }, []);
+  const allTournaments = React.useMemo(() => [...tournaments, ...futsalTournaments], [tournaments, futsalTournaments]);
+  // The open futsal competition, for the header's "back to tournaments" breadcrumb.
+  const selectedFutsal = futsalSelectedId ? futsalTournaments.find(t => t.id === `futsal:${futsalSelectedId}`) : undefined;
 
 
 
@@ -246,7 +293,7 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
               <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
                   {/* Left Column: Context indicator or Back button */}
                   <div className="flex items-center gap-3 shrink-0">
-                      {selectedTournamentId && activeTournament ? (
+                      {selectedTournamentId && (activeTournament || selectedFutsal) ? (
                           <div className="flex items-center gap-2.5">
                               <button 
                                   onClick={() => handleSelectTournament(null)}
@@ -256,7 +303,7 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
                                   <span>Tournaments</span>
                               </button>
                               <span className="text-sm font-black uppercase text-white tracking-wide truncate max-w-[200px] sm:max-w-xs md:max-w-sm">
-                                  {activeTournament.name}
+                                  {(activeTournament || selectedFutsal)!.name}
                               </span>
                           </div>
                       ) : (
@@ -265,9 +312,9 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
                               <span className="text-xs font-black uppercase tracking-[0.2em] text-white/90">
                                   Live Arena & Tournaments
                               </span>
-                              {tournaments.length > 0 && (
+                              {allTournaments.length > 0 && (
                                   <span className="text-[10px] font-mono font-bold bg-white/10 text-zinc-400 px-2 py-0.5 rounded-full">
-                                      {tournaments.length} Events
+                                      {allTournaments.length} Events
                                   </span>
                               )}
                           </div>
@@ -384,7 +431,7 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
                                       title="Filter by sport"
                                   >
                                       <Activity size={13} className={sportFilter !== 'all' ? 'text-black' : 'text-emerald-400'} />
-                                      <span>{sportFilter === 'all' ? 'Sports' : 'Padel'}</span>
+                                      <span>{sportFilter === 'all' ? 'Sports' : sportFilter === 'padel' ? 'Padel' : sportFilter === 'futsal' ? 'Futsal' : 'Football'}</span>
                                       <ChevronDown size={13} className={`transition-transform duration-200 ${isSportFilterOpen ? 'rotate-180' : ''}`} />
                                   </button>
                                   <AnimatePresence>
@@ -417,6 +464,18 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
                                                   <span>Padel</span>
                                                   {sportFilter === 'padel' && <Check size={14} className="stroke-[3]" />}
                                               </button>
+                                              {(['futsal', 'football'] as const).map(sp => (
+                                              <button
+                                                  key={sp}
+                                                  onClick={() => { setSportFilter(sp); setIsSportFilterOpen(false); }}
+                                                  className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                                                      sportFilter === sp ? 'bg-emerald-400 text-black font-black' : 'text-zinc-300 hover:bg-white/10 hover:text-white'
+                                                  }`}
+                                              >
+                                                  <span>{sp === 'futsal' ? 'Futsal' : 'Football'}</span>
+                                                  {sportFilter === sp && <Check size={14} className="stroke-[3]" />}
+                                              </button>
+                                              ))}
                                           </motion.div>
                                       )}
                                   </AnimatePresence>
@@ -473,13 +532,17 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
 
       {!selectedTournamentId ? (
           <TournamentList 
-            tournaments={tournaments} 
+            tournaments={allTournaments} 
             onSelect={handleSelectTournament} 
             searchQuery={searchQuery} 
             dateFilter={dateFilter} 
             sportFilter={sportFilter} 
             onResetFilters={handleResetAllFilters}
           />
+      ) : futsalSelectedId ? (
+          <React.Suspense fallback={<div className="text-center p-10 text-gray-500">Loading...</div>}>
+            <FutsalSpectatorDetail tournamentId={futsalSelectedId} onBack={() => handleSelectTournament(null)} searchQuery={searchQuery} />
+          </React.Suspense>
       ) : loadingTournament ? (
           <div className="text-center p-10 text-gray-500">Loading...</div>
       ) : !activeTournament ? (
@@ -793,7 +856,7 @@ const TournamentList = ({ tournaments, onSelect, searchQuery = '', dateFilter = 
 
                         <p className="text-gray-300 text-sm md:text-base font-normal max-w-lg leading-relaxed drop-shadow-md">
                             {(featuredTournament as any).description || 
-                                `Experience the ultimate padel clash at ${featuredTournament.venue || 'Global Arena'}. ${(featuredTournament.teams || []).length} elite teams battle for the crown starting ${formatMonthYear(featuredTournament.startDate)}.`}
+                                `Experience the ultimate ${(featuredTournament as any).sport || 'padel'} clash at ${featuredTournament.venue || 'Global Arena'}. ${(featuredTournament.teams || []).length} elite teams battle for the crown starting ${formatMonthYear(featuredTournament.startDate)}.`}
                         </p>
 
                         <div className="flex flex-wrap gap-3 pt-2">
@@ -805,7 +868,8 @@ const TournamentList = ({ tournaments, onSelect, searchQuery = '', dateFilter = 
                                 <span>Watch Live Arena</span>
                             </button>
                             <a 
-                                href={`#register/${featuredTournament.slug || featuredTournament.id}`}
+                                // Futsal events have no padel registration page; their details live in spectator mode.
+                                href={String(featuredTournament.id).startsWith('futsal:') ? `#live/${featuredTournament.id}` : `#register/${featuredTournament.slug || featuredTournament.id}`}
                                 className="spx-btn spx-btn--ghost"
                             >
                                 <Info size={14} />

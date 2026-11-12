@@ -1,4 +1,6 @@
 import { firebaseConfig } from "../lib/firebase";
+import { compressImage, PRESET_FOR_FOLDER } from '../lib/imageCompress';
+import { buildPadelBracket, groupSources, isKnockoutMatch as isKoMatch, resolveBracket, sortStandings, type BracketSource, type GroupRanker } from '../lib/padelBracket';
 import { toast } from "../components/Toast";
 import { initializeApp } from "firebase/app";
 
@@ -98,7 +100,7 @@ try {
     try {
         db = initializeFirestore(app, {
           localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-          experimentalForceLongPolling: true
+          experimentalAutoDetectLongPolling: true
         }, (firebaseConfig as any).firestoreDatabaseId);
     } catch (e: any) {
         if (e.message && e.message.includes('already been called')) {
@@ -108,7 +110,7 @@ try {
             try {
                 db = initializeFirestore(app, {
                     localCache: memoryLocalCache(),
-                    experimentalForceLongPolling: true
+                    experimentalAutoDetectLongPolling: true
                 }, (firebaseConfig as any).firestoreDatabaseId);
             } catch (err: any) {
                 if (err.message && err.message.includes('already been called')) {
@@ -155,6 +157,86 @@ export const advanceBracket = (allMatches: Match[], completedMatch: Match, winne
 };
 
 
+
+// ==================================================================
+// AUTO BRACKET PROMOTION (padel)
+// ==================================================================
+const rankerFor = (t: Tournament): GroupRanker => (group, categoryId, groupMatches) => {
+    const inGroup = (t.teams || []).filter(x => x.status === 'ACCEPTED' && (x.groupId || 'A') === group && (!categoryId || x.categoryId === categoryId));
+    return sortStandings(calculateStatsForTournament(t, inGroup, groupMatches, categoryId) as any[]).map(x => x.id);
+};
+
+/**
+ * Fills every not-yet-started knockout slot from its source (match winner/loser
+ * or group finishing position) and writes the changes to both match
+ * collections, so referee, spectator and OBS screens see the promoted team.
+ * `override` is a result that's being saved at the same moment.
+ */
+export const promoteBracket = async (tId: string, override?: Partial<Match> & { id: string }): Promise<number> => {
+    if (!db) return 0;
+    const [tSnap, mSnap] = await Promise.all([getDoc(doc(db, "tournaments", tId)), getDocs(query(collection(db, "matches"), where("tournamentId", "==", tId)))]);
+    if (!tSnap.exists()) return 0;
+    const t = { ...(tSnap.data() as Tournament), id: tId };
+    let matches = mSnap.docs.map(d => ({ ...d.data(), id: d.id } as Match));
+    if (override) matches = matches.map(m => (m.id === override.id ? { ...m, ...override } : m));
+    const changed = resolveBracket(t, matches, rankerFor(t));
+    if (!changed.length) return 0;
+    const batch = writeBatch(db);
+    changed.forEach(m => {
+        const fields = {
+            team1Id: m.team1Id || '', team1Name: m.team1Name || '', team1PlayerNames: m.team1PlayerNames || '',
+            team2Id: m.team2Id || '', team2Name: m.team2Name || '', team2PlayerNames: m.team2PlayerNames || '',
+        };
+        batch.set(doc(db, "tournaments", tId, "matches", m.id), fields, { merge: true });
+        batch.set(doc(db, "matches", m.id), { ...fields, tournamentId: tId, id: m.id }, { merge: true });
+    });
+    await batch.commit();
+    return changed.length;
+};
+
+/**
+ * Builds the whole knockout bracket for a category in one go (first round to the
+ * final, linked), replacing knockout matches that haven't started. From group
+ * standings it uses the top `perGroup` of each group; otherwise the top `size`
+ * teams of the category table (or registration order).
+ */
+export const generateKnockoutBracket = async (
+    tId: string, categoryId: string | null | undefined,
+    opts: { mode: 'groups' | 'seeds'; perGroup?: number; size?: number; thirdPlace?: boolean },
+): Promise<number> => {
+    if (!db) return 0;
+    const [tSnap, mSnap] = await Promise.all([getDoc(doc(db, "tournaments", tId)), getDocs(query(collection(db, "matches"), where("tournamentId", "==", tId)))]);
+    if (!tSnap.exists()) throw new Error('Tournament not found');
+    const t = { ...(tSnap.data() as Tournament), id: tId };
+    const catId = categoryId && categoryId !== 'ALL' && categoryId !== 'all' ? categoryId : undefined;
+    const all = mSnap.docs.map(d => ({ ...d.data(), id: d.id } as Match));
+    const inCat = all.filter(m => isMatchInCategory(m, catId, t));
+    const oldKo = inCat.filter(isKoMatch);
+    if (oldKo.some(m => String(m.status).toUpperCase() !== 'SCHEDULED')) throw new Error('A knockout match has already started, so the bracket can’t be rebuilt. Reset it first.');
+    const teams = (t.teams || []).filter(x => x.status === 'ACCEPTED' && (!catId || x.categoryId === catId));
+    let sources: BracketSource[];
+    if (opts.mode === 'groups') {
+        const groups = [...new Set(teams.map(x => x.groupId || 'A'))].sort();
+        sources = groupSources(groups, Math.max(1, opts.perGroup || 2));
+    } else {
+        const played = inCat.filter(m => !isKoMatch(m));
+        const table = played.length ? sortStandings(calculateStatsForTournament(t, teams, played, catId) as any[]) : teams;
+        sources = table.slice(0, Math.max(2, opts.size || table.length)).map(x => ({ teamId: x.id }));
+    }
+    if (sources.length < 2) throw new Error('A bracket needs at least two teams.');
+    const firstRound = Math.max(0, ...inCat.filter(m => !isKoMatch(m)).map(m => m.round || 0)) + 1;
+    const built = buildPadelBracket(t, catId, sources, { firstRound, thirdPlace: opts.thirdPlace });
+    const batch = writeBatch(db);
+    oldKo.forEach(m => { batch.delete(doc(db, "tournaments", tId, "matches", m.id)); batch.delete(doc(db, "matches", m.id)); });
+    built.forEach(m => {
+        batch.set(doc(db, "tournaments", tId, "matches", m.id), cleanData(m));
+        batch.set(doc(db, "matches", m.id), cleanData({ ...m, tournamentId: tId }));
+    });
+    await batch.commit();
+    // Groups that are already finished fill their slots straight away.
+    await promoteBracket(tId);
+    return built.length;
+};
 
 // ==================================================================
 // PLAYER HISTORY SYNC
@@ -982,22 +1064,25 @@ export const subscribeToPlayer = (playerId: string, cb: (data: any) => void) => 
     });
 };
 
+// Every upload is compressed first (scaled for its use, re-encoded), and since
+// file names are unique per upload, browsers may cache them for a year.
+const IMAGE_CACHE = 'public, max-age=31536000, immutable';
+const safeName = (name: string) => name.replace(/[^\w.-]+/g, '_').slice(-80);
+
 export const uploadProfilePicture = async (userId: string, file: File): Promise<string> => {
     if (!storage) throw new Error("Firebase Storage not initialized");
-    const timestamp = Date.now();
-    const storageRef = ref(storage, `profilePictures/${userId}_${timestamp}_${file.name}`);
-    await uploadBytes(storageRef, file);
-    const downloadURL = await getDownloadURL(storageRef);
-    return downloadURL;
+    const small = await compressImage(file, PRESET_FOR_FOLDER('profilePictures'));
+    const storageRef = ref(storage, `profilePictures/${userId}_${Date.now()}_${safeName(small.name)}`);
+    await uploadBytes(storageRef, small, { contentType: small.type, cacheControl: IMAGE_CACHE });
+    return getDownloadURL(storageRef);
 };
 
 export const uploadSystemImage = async (folder: string, file: File): Promise<string> => {
     if (!storage) throw new Error("Firebase Storage not initialized");
-    const timestamp = Date.now();
-    const storageRef = ref(storage, `${folder}/${timestamp}_${file.name}`);
-    await uploadBytes(storageRef, file);
-    const downloadURL = await getDownloadURL(storageRef);
-    return downloadURL;
+    const small = await compressImage(file, PRESET_FOR_FOLDER(folder));
+    const storageRef = ref(storage, `${folder}/${Date.now()}_${safeName(small.name)}`);
+    await uploadBytes(storageRef, small, { contentType: small.type, cacheControl: IMAGE_CACHE });
+    return getDownloadURL(storageRef);
 };
 
 export const updatePlayerProfile = async (playerId: string, updates: any) => {
@@ -2974,6 +3059,8 @@ export const generateSchedule = async (tId: string, knockoutConfig?: any[], auto
 
             await batch.commit();
             await updateDoc(tRef, { matches: [] }); // Clear array so that subs are used
+            // Byes in a fresh bracket pass their team straight into the next round.
+            await promoteBracket(tId).catch(e => console.error('Bracket fill after scheduling failed', e));
         }
     } else {
         const t = mockTournaments.find(x => x.id === tId);
@@ -3283,14 +3370,8 @@ export const updateMatchDetails = async (tId: any, mId: any, updates: any, ...ar
                     }
                     const winnerName = (match.team1Id === updates.winnerTeamId) ? match.team1Name : (match.team2Id === updates.winnerTeamId ? match.team2Name : "TBD");
                     const updatedMatches = advanceBracket(allMatches, match, updates.winnerTeamId, winnerName || "TBD");
-                    const batch = writeBatch(db);
-                    updatedMatches.forEach(m => {
-                        if (m.id !== mId) {
-                            const mRef = doc(db, "tournaments", tId, "matches", m.id);
-                            batch.set(mRef, cleanData(m), { merge: true });
-                        }
-                    });
-                    await batch.commit();
+                    // Promote the winner into the next knockout match, in both match collections.
+                    await promoteBracket(tId, { ...updates, id: mId });
 
                     await runTransaction(db, async (transaction) => {
                         const tRefStats = doc(db, "tournaments", tId);
@@ -3400,6 +3481,7 @@ export const updateMatchScore = async (tId: string, mId: string, newScore: Score
                        const tournament = tSnap.data() as Tournament;
                        await checkAndHealTournamentStats(tournament, [], null, true);
                    }
+                   await promoteBracket(tId);
                } catch (err) {
                    console.error("Auto-heal failed after updateMatchScore", err);
                }
@@ -3632,15 +3714,8 @@ export const recalculateMatchResult = async (tId: string, mId: string, sets: any
                 const winnerName = winnerTeam?.name || (winnerId === currentMatch.team1Id ? currentMatch.team1Name : currentMatch.team2Name) || 'Winner';
                 
                 const updatedMatches = advanceBracket(allMatches, currentMatch, winnerId, winnerName);
-                
-                // Update matches that were changed by advanceBracket
-                const mBatch = writeBatch(db);
-                updatedMatches.forEach(m => {
-                    if (m.id !== mId) {
-                        mBatch.set(doc(db, "tournaments", tId, "matches", m.id), cleanData(m), { merge: true });
-                    }
-                });
-                await mBatch.commit();
+                // Re-promote from the corrected result (a changed winner replaces the old one downstream).
+                await promoteBracket(tId, { id: mId, score: newScore, status: MatchStatus.COMPLETED, winnerTeamId: winnerId });
 
                 // Atomically update standings and tournament doc
                 await runTransaction(db, async (transaction) => {
@@ -4155,6 +4230,8 @@ export const resetMatchToScheduled = async (tId: string, mId: string, by?: strin
     batch.set(doc(db, "matches", mId), { ...updates, tournamentId: tId, id: mId }, { mergeFields: [...Object.keys(updates), 'tournamentId', 'id'] });
     batch.delete(doc(db, "obsIndex", mId));
     await batch.commit();
+    // A reset result un-promotes its winner from the next round (if that hasn't started).
+    promoteBracket(tId).catch(e => console.error('Bracket update after reset failed', e));
 };
 
 export const resumeMatch = async (tId: string, mId: string) => {

@@ -3,6 +3,7 @@ import { Team, Tournament } from '../types';
 import { Sheet } from './ui/Sheet';
 import { Edit3, Loader2 } from 'lucide-react';
 import { CountrySelect } from './CountrySelect';
+import { toast } from './Toast';
 
 function Input({ label, value, onChange, type="text", placeholder }: any) {
     return (
@@ -55,18 +56,18 @@ export const EditTeamSheet: React.FC<EditTeamSheetProps> = ({
     const handleSave = async () => {
         if (isAmericanoMode) {
             if (!player1Name.trim()) {
-                alert("Player name cannot be empty.");
+                toast.error("Player name cannot be empty.");
                 return;
             }
         } else {
             if (!teamName.trim() || !player1Name.trim()) {
-                alert("Team Name and Player 1 Name cannot be empty.");
+                toast.error("Team Name and Player 1 Name cannot be empty.");
                 return;
             }
         }
 
         if (askCountry && (!player1Country || (!isAmericanoMode && !player2Country))) {
-            alert("Please select the country for each player.");
+            toast.error("Please select the country for each player.");
             return;
         }
 
@@ -82,7 +83,7 @@ export const EditTeamSheet: React.FC<EditTeamSheetProps> = ({
             onClose();
         } catch (e) {
             console.error(e);
-            alert("Failed to update team details.");
+            toast.error("Failed to update team details.");
         } finally {
             setIsSubmitting(false);
         }

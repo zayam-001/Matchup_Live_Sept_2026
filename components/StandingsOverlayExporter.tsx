@@ -7,6 +7,7 @@ import gifshot from 'gifshot';
 import JSZip from 'jszip';
 import { Card } from './ui/Card';
 import { Match, Team, Tournament } from '../types';
+import { toast } from './Toast';
 
 interface StandingsOverlayExporterProps {
     isOpen: boolean;
@@ -222,7 +223,7 @@ export const StandingsOverlayExporter: React.FC<StandingsOverlayExporterProps> =
                     setProgress(100);
                 } else {
                     console.error('GIF compilation error:', obj.error);
-                    alert('Could not compile animated GIF: ' + obj.error);
+                    toast.error('Could not compile animated GIF: ' + obj.error);
                 }
                 setGenerating(false);
                 setSelectedPageIndex(0);
@@ -231,7 +232,7 @@ export const StandingsOverlayExporter: React.FC<StandingsOverlayExporterProps> =
 
         } catch (err) {
             console.error('Failed to capture overlay broadcast frames:', err);
-            alert('Frame capture failed. Please try again.');
+            toast.error('Frame capture failed. Please try again.');
             setGenerating(false);
             setSelectedPageIndex(0);
             setProgress(0);
@@ -308,7 +309,7 @@ export const StandingsOverlayExporter: React.FC<StandingsOverlayExporterProps> =
 
         } catch (err) {
             console.error('Failed to capture overlay broadcast frames for ZIP:', err);
-            alert('Frame capture failed. Please try again.');
+            toast.error('Frame capture failed. Please try again.');
             setGenerating(false);
             setSelectedPageIndex(0);
             setProgress(0);

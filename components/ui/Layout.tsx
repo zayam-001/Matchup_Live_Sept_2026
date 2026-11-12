@@ -1,6 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Trophy, Video, Activity, Users, LogOut, MessageCircle, ClipboardList, Lock, ExternalLink, Eye, Menu, X, ChevronRight, Search, Bell, User, ChevronDown, Home, Key, Zap, Compass, Shield } from 'lucide-react';
-import { Badge } from './Badge';
+import React, { useState, useEffect } from 'react';
+import { Trophy, Activity, Users, ClipboardList, Home, Zap, Compass, Shield } from 'lucide-react';
 import { Sheet } from './Sheet';
 import { Logo } from './Logo';
 import { auth, subscribeToTournaments } from '../../services/storage';
@@ -51,7 +50,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
     } else if (refereeAuthenticated) {
       return [
         { label: 'Dashboard', id: 'referee', icon: <ClipboardList /> },
-        { label: 'Tournaments', id: 'register', icon: <Users /> },
       ];
     }
     
@@ -219,7 +217,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
       
       {/* Top Navigation - Minimal for Desktop/Mobile since we use Fullscreen Menu */}
       {/* The admin portal has its own sidebar + top bar. */}
-      {activeTab !== 'landing' && activeTab !== 'admin' && (
+      {activeTab !== 'landing' && activeTab !== 'admin' && activeTab !== 'player' && activeTab !== 'player-futsal' && (
         <header className="fixed top-0 w-full h-16 md:h-24 flex items-center justify-between px-4 md:px-8 z-[10000] bg-transparent pointer-events-none border-none">
           <div className="flex items-center gap-4 pointer-events-auto">
             {/* Logo Area */}

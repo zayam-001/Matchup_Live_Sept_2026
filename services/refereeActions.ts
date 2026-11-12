@@ -1,5 +1,7 @@
-import { runTransaction, writeBatch, doc, collection, serverTimestamp, increment, getDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { writeBatch, doc, collection, serverTimestamp, increment, getDoc, getDocs, query, orderBy, limit, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './storage';
+
+const isRegistered = (id?: string) => !!id && !['unknown', 'p1', 'p2', 'p3', 'p4'].includes(id);
 
 /**
  * The Data Cascade: Records a point (e.g. a Smash) and fans out the update.
@@ -20,39 +22,27 @@ export const recordAtomicPoint = async (
     return;
   }
 
-  try {
-    await runTransaction(db, async (transaction) => {
-        // 1. Atomic event (append-only)
-        const eventsRef = collection(db, `matches/${matchId}/events`);
-        const eventDocRef = doc(eventsRef);
-        transaction.set(eventDocRef, {
-            type: 'point',
-            scoringTeam,
-            scoringPlayerId,
-            shotType,
-            setNum: currentSet,
-            scoreAfter: { A: newScoreA, B: newScoreB },
-            refereeId,
-            timestamp: serverTimestamp(),
-        });
+  // Plain writes, not a transaction: they apply to the local cache at once and queue
+  // while the venue Wi-Fi is down, where a transaction needs the server on every point.
+  const eventRef = doc(collection(db, `matches/${matchId}/events`));
+  setDoc(eventRef, {
+    type: 'point',
+    scoringTeam,
+    scoringPlayerId,
+    shotType,
+    setNum: currentSet,
+    scoreAfter: { A: newScoreA, B: newScoreB },
+    refereeId,
+    at: Date.now(), // client time: orders points that haven't reached the server yet
+    timestamp: serverTimestamp(),
+  }).catch(error => console.error("Failed to record point event:", error));
 
-        // 3. Player stat increment (only if registered player exists)
-        if (scoringPlayerId && scoringPlayerId !== 'unknown' && scoringPlayerId !== 'p1' && scoringPlayerId !== 'p2' && scoringPlayerId !== 'p3' && scoringPlayerId !== 'p4') {
-            const playerDocRef = doc(db, `players/${scoringPlayerId}`);
-            const playerSnap = await transaction.get(playerDocRef);
-            if (playerSnap.exists()) {
-                const playerUpdates: any = {
-                    'stats.totalPointsWon': increment(1),
-                };
-                if (shotType === 'smash') playerUpdates['stats.totalSmashes'] = increment(1);
-                if (shotType === 'vibora') playerUpdates['stats.totalViboras'] = increment(1);
-                
-                transaction.update(playerDocRef, playerUpdates);
-            }
-        }
-    });
-  } catch (error) {
-      console.error("Failed to record atomic point transactionally:", error);
+  // Player stat increment (only for registered players; a missing profile just isn't counted).
+  if (isRegistered(scoringPlayerId)) {
+    const playerUpdates: any = { 'stats.totalPointsWon': increment(1) };
+    if (shotType === 'smash') playerUpdates['stats.totalSmashes'] = increment(1);
+    if (shotType === 'vibora') playerUpdates['stats.totalViboras'] = increment(1);
+    updateDoc(doc(db, `players/${scoringPlayerId}`), playerUpdates).catch(() => { /* no profile */ });
   }
 };
 
@@ -64,8 +54,9 @@ export const undoLastAtomicPoint = async (matchId: string) => {
 
   try {
     const eventsRef = collection(db, `matches/${matchId}/events`);
-    const q = query(eventsRef, orderBy('timestamp', 'desc'), limit(1));
-    const snap = await getDocs(q);
+    // Newest point first: by client time (also covers points still waiting to sync), else server time for older events.
+    let snap = await getDocs(query(eventsRef, orderBy('at', 'desc'), limit(1)));
+    if (snap.empty) snap = await getDocs(query(eventsRef, orderBy('timestamp', 'desc'), limit(1)));
     
     if (snap.empty) return;
     
@@ -78,7 +69,7 @@ export const undoLastAtomicPoint = async (matchId: string) => {
     const scoringPlayerId = eventData.scoringPlayerId;
     const shotType = eventData.shotType;
     
-    if (scoringPlayerId && scoringPlayerId !== 'unknown' && scoringPlayerId !== 'p1' && scoringPlayerId !== 'p2' && scoringPlayerId !== 'p3' && scoringPlayerId !== 'p4') {
+    if (isRegistered(scoringPlayerId)) {
       const playerDocRef = doc(db, `players/${scoringPlayerId}`);
       const playerSnap = await getDoc(playerDocRef);
       if (playerSnap.exists()) {

@@ -300,7 +300,7 @@ export const PublicLanding: React.FC<{ onNavigate: (tab: string) => void }> = ({
             </div>
 
             <div className="h-hero__copy h-container">
-              <p className="h-kicker"><span className="h-dot" /> Pakistan's competitive padel operating system</p>
+              <p className="h-kicker"><span className="h-dot" /> Pakistan's competitive padel &amp; futsal operating system</p>
               <h1 className="h-hero__title">
                 <span className="h-line"><Words text="Where competition" /></span>
                 <span className="h-line h-accent"><Words text="meets technology." /></span>
@@ -347,7 +347,7 @@ export const PublicLanding: React.FC<{ onNavigate: (tab: string) => void }> = ({
               <span className="h-line"><Words text="One platform." className="h-scrub" /></span>
               <span className="h-line h-accent"><Words text="Every point." className="h-scrub" /></span>
             </h2>
-            <p className="h-manifesto__copy">MatchUp connects players, clubs, scores, tournaments, rankings, and community into one high-performance system built for the pace of modern padel.</p>
+            <p className="h-manifesto__copy">MatchUp connects players, clubs, scores, tournaments, rankings, and community into one high-performance system built for the pace of modern padel and futsal.</p>
           </div>
         </section>
 
@@ -492,7 +492,96 @@ export const PublicLanding: React.FC<{ onNavigate: (tab: string) => void }> = ({
           </div>
         </section>
 
-        {/* ── Chapter 6 · The momentum ───────────────────────────────────── */}
+        {/* ── Chapter 6 · New pitch: futsal joins the platform ──────────────── */}
+        <section className="h-futsal" id="new-pitch" data-format="5">
+          <div className="h-futsal__stage h-container">
+            <div className="h-futsal__copy">
+              <p className="h-eyebrow">✦ Now on the pitch</p>
+              <h2><span className="h-line">Same platform.</span><span className="h-line h-accent">New pitch.</span></h2>
+              <p>Futsal runs on MatchUp too. Squads, fixtures, live scores, group tables and the Golden Boot, in the same place as your padel.</p>
+              <div className="h-futsal__formats" role="list" aria-label="Formats">
+                {[['5', '5v5', 'FIFA or casual'], ['6', '6v6', 'Six a side'], ['7', '7v7', 'Seven a side'], ['c', 'Custom', 'Your rules']].map(([k, label, sub]) => (
+                  <span key={k} role="listitem" className="h-futsal__format" data-k={k}><b>{label}</b><small>{sub}</small></span>
+                ))}
+              </div>
+            </div>
+            <div className="h-futsal__pitch-wrap" aria-hidden="true">
+              <div className="h-pitch">
+                <svg className="h-pitch__lines" viewBox="0 0 400 200" preserveAspectRatio="none">
+                  <rect x="6" y="6" width="388" height="188" rx="2" />
+                  <line x1="200" y1="6" x2="200" y2="194" />
+                  <circle cx="200" cy="100" r="30" />
+                  <circle cx="200" cy="100" r="2.5" className="h-pitch__spot" />
+                  <path d="M6 52 Q66 52 66 84 L66 116 Q66 148 6 148" />
+                  <path d="M394 52 Q334 52 334 84 L334 116 Q334 148 394 148" />
+                  <circle cx="66" cy="100" r="2.5" className="h-pitch__spot" />
+                  <circle cx="334" cy="100" r="2.5" className="h-pitch__spot" />
+                  <circle cx="106" cy="100" r="2" className="h-pitch__spot" />
+                  <circle cx="294" cy="100" r="2" className="h-pitch__spot" />
+                </svg>
+                <span className="h-pitch__goal h-pitch__goal--l" />
+                <span className="h-pitch__goal h-pitch__goal--r" />
+                {/* Orange attack left to right; the sixth and seventh players join for 6v6 and 7v7. */}
+                {[[6, 50, 'gk'], [26, 28, 'r1'], [26, 72, 'r2'], [46, 20, 'r3'], [64, 50, 'r4'], [40, 50, 'x6'], [52, 80, 'x7']].map(([x, y, k]) => (
+                  <span key={`o${k}`} className={`h-pitch__p h-pitch__p--home h-pitch__p--${k}`} style={{ left: `${x}%`, top: `${y}%` }} />
+                ))}
+                {[[94, 50, 'gk'], [76, 32, 'a1'], [78, 68, 'a2'], [58, 36, 'a3'], [42, 66, 'a4'], [62, 82, 'x6'], [70, 14, 'x7']].map(([x, y, k]) => (
+                  <span key={`w${k}`} className={`h-pitch__p h-pitch__p--away h-pitch__p--${k}`} style={{ left: `${x}%`, top: `${y}%` }} />
+                ))}
+                <span className="h-pitch__run"><span className="h-pitch__ball" /></span>
+              </div>
+              <div className="h-pitch__goal-pop"><span className="h-dot" /> Goal · 1–0</div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Chapter 7 · Match night: a futsal game plays out on the scroll ── */}
+        <section className="h-matchnight" data-beat="4" data-goals="2">
+          <div className="h-matchnight__stage h-container">
+            <div className="h-matchnight__copy">
+              <p className="h-eyebrow">ϟ Futsal match night</p>
+              <h2><span className="h-line">Every goal.</span><span className="h-line h-accent">Every foul. Live.</span></h2>
+              <p>Referees score from their phone. Fans follow the clock, the fouls and every goal, and the table moves the moment the whistle goes.</p>
+              <ol className="h-beats">
+                {['Kick-off', 'Fouls tracked', 'Goal', 'Table updates'].map((s, i) => <li key={s} className="h-beat" data-beat={i + 1}><span>0{i + 1}</span>{s}</li>)}
+              </ol>
+            </div>
+            <div className="h-matchnight__board">
+              <div className="h-scorebug h-card">
+                <div className="h-scorebug__top"><span><span className="h-dot" /> Live · Group A</span><span>Pitch 1</span></div>
+                <div className="h-scorebug__main">
+                  <span className="h-scorebug__team"><i style={{ background: '#E55C30' }}>DHA</i>DHA Dynamos</span>
+                  <span className="h-scorebug__score"><b className="h-scorebug__h">2</b><em>–</em><b className="h-scorebug__a">0</b></span>
+                  <span className="h-scorebug__team h-scorebug__team--away"><i style={{ background: '#F6EDDC', color: '#020D45' }}>CLC</i>Clifton Comets</span>
+                </div>
+                <div className="h-scorebug__clock"><span className="h-scorebug__time">31:42</span><small className="h-scorebug__half">2nd half</small></div>
+                <div className="h-scorebug__fouls">
+                  <span>Fouls<span className="h-fouls" data-side="h">{[1, 2, 3, 4, 5].map(n => <i key={n} data-n={n} />)}</span></span>
+                  <span className="h-scorebug__warn">Next foul: 10 m kick</span>
+                  <span><span className="h-fouls" data-side="a">{[1, 2, 3, 4, 5].map(n => <i key={n} data-n={n} />)}</span>Fouls</span>
+                </div>
+              </div>
+              <div className="h-matchnight__row">
+                <ul className="h-events h-card">
+                  <li data-at="1"><b>2&apos;</b><span>Kick-off</span></li>
+                  <li data-at="2"><b>14&apos;</b><span className="h-card-y" /> <span>Yellow · S. Qureshi</span></li>
+                  <li data-g="1"><b>23&apos;</b><span className="h-events__goal" /> <span>Goal · H. Ahmed</span></li>
+                  <li data-g="2"><b>31&apos;</b><span className="h-events__goal" /> <span>Goal · B. Abbasi</span></li>
+                </ul>
+                <div className="h-mini h-card">
+                  <div className="h-mini__head"><span>Group A</span><span>P</span><span>Pts</span></div>
+                  {[['DHA Dynamos', 3, 7, 'up'], ['Clifton Comets', 3, 6, 'down'], ['Gulshan Gladiators', 3, 4, ''], ['PECHS Phoenix', 3, 0, '']].map(([n, p, pts, mv], i) => (
+                    <div key={n as string} className="h-mini__row" data-move={mv as string} style={{ '--i': i } as React.CSSProperties}>
+                      <span><em>{i + 1}</em>{n}</span><span>{p}</span><b>{pts}</b>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Chapter 8 · The momentum ───────────────────────────────────── */}
         <section className="h-momentum" id="clubs">
           <div className="h-momentum__stage">
             <div className="h-momentum__word" aria-hidden="true">Momentum · Momentum · Momentum ·</div>
@@ -540,7 +629,7 @@ export const PublicLanding: React.FC<{ onNavigate: (tab: string) => void }> = ({
           </div>
         </section>
 
-        {/* ── Chapter 7 · The people ─────────────────────────────────────── */}
+        {/* ── Chapter 9 · The people ─────────────────────────────────────── */}
         <section className="h-community" id="community">
           <div className="h-community__stage h-container">
             <div className="h-heading">
@@ -569,7 +658,7 @@ export const PublicLanding: React.FC<{ onNavigate: (tab: string) => void }> = ({
           </div>
         </section>
 
-        {/* ── Chapter 8 · In your pocket ─────────────────────────────────── */}
+        {/* ── Chapter 10 · In your pocket ─────────────────────────────────── */}
         <section className="h-app">
           <div className="h-app__stage h-container">
             <div className="h-app__phone-wrap">
@@ -599,7 +688,7 @@ export const PublicLanding: React.FC<{ onNavigate: (tab: string) => void }> = ({
           </div>
         </section>
 
-        {/* ── Chapter 9 · Your move ──────────────────────────────────────── */}
+        {/* ── Chapter 11 · Your move ──────────────────────────────────────── */}
         <section className="h-final">
           <div className="h-final__glow" aria-hidden="true" />
           <div className="h-rig h-rig--final" aria-hidden="true">
@@ -610,7 +699,7 @@ export const PublicLanding: React.FC<{ onNavigate: (tab: string) => void }> = ({
             <MatchupLogo className="h-10 w-auto h-final__logo" />
             <p className="h-eyebrow">The next point starts here</p>
             <h2><span className="h-line">Play more.</span><span className="h-line h-accent">Become harder to beat.</span></h2>
-            <p>Create your MatchUp profile and step into Pakistan's fastest-growing competitive padel network.</p>
+            <p>Create your MatchUp profile and step into Pakistan's fastest-growing padel and futsal network.</p>
             <button type="button" className="h-btn h-btn--primary h-btn--lg h-magnetic" onClick={goSignup}>Start playing now →</button>
           </div>
         </section>
@@ -618,7 +707,7 @@ export const PublicLanding: React.FC<{ onNavigate: (tab: string) => void }> = ({
 
       <footer className="h-footer">
         <div className="h-container h-footer__top">
-          <div className="h-footer__brand"><MatchupLogo className="h-6 w-auto" /><p>The operating system for modern padel competition.</p><div className="h-footer__socials"><a>Instagram</a><a>Facebook</a><a>LinkedIn</a></div></div>
+          <div className="h-footer__brand"><MatchupLogo className="h-6 w-auto" /><p>The operating system for modern padel and futsal competition.</p><div className="h-footer__socials"><a>Instagram</a><a>Facebook</a><a>LinkedIn</a></div></div>
           <div className="h-footer__links">
             <div><strong>Compete</strong><button type="button" onClick={() => onNavigate('leaderboard')}>Leaderboards</button><button type="button" onClick={() => onNavigate('landing')}>Tournaments</button><button type="button" onClick={() => onNavigate('live')}>Live matches</button><button type="button" onClick={() => onNavigate('auth-admin')}>Clubs</button></div>
             <div><strong>Platform</strong><button type="button" onClick={() => onNavigate('auth-player')}>Players</button><button type="button" onClick={() => onNavigate('auth-admin')}>Organizers</button><a>Club management</a><a>Support</a></div>

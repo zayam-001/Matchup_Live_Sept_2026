@@ -5,6 +5,7 @@ import { db } from '../services/storage';
 import { useAuth } from '../hooks/useAuth';
 import { Tournament } from '../types';
 import { Card } from './ui/Card';
+import { toast } from './Toast';
 
 export const CloneTournamentModal = ({ 
     tournaments, 
@@ -98,7 +99,7 @@ export const CloneTournamentModal = ({
             onClose();
         } catch (e) {
             console.error("Error cloning tournament:", e);
-            alert("Failed to clone tournament.");
+            toast.error("Failed to clone tournament.");
         } finally {
             setIsSubmitting(false);
         }

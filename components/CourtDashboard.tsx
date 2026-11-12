@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { getCourtByToken, getVenueById, subscribeToVenueQuickplayStats } from '../services/storage';
 import { Activity, Users, TrendingUp, Loader2, AlertTriangle, MessageSquare } from 'lucide-react';
 import { Logo } from './ui/Logo';
+import { toast } from './Toast';
 
 export const CourtDashboard: React.FC = () => {
   const [court, setCourt] = useState<any>(null);
@@ -234,7 +235,7 @@ export const CourtDashboard: React.FC = () => {
                                             const { updateDoc, doc } = await import('firebase/firestore');
                                             const { db } = await import('../services/storage');
                                             await updateDoc(doc(db as any, 'scoreChangeRequests', req.id), { status: 'approved' });
-                                            alert("Request approved. Please ensure the score is manually corrected using a master PIN.");
+                                            toast.success("Request approved. Please ensure the score is manually corrected using a master PIN.");
                                         }}
                                         className="flex-1 md:flex-none bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors"
                                     >

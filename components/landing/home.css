@@ -6,6 +6,8 @@
    ========================================================================== */
 
 .home {
+  /* The landing page keeps Poppins for its headlines (the rest of the platform uses Barlow Condensed). */
+  --font-display: 'Poppins', sans-serif;
   --navy-950: #01082E;
   --navy-900: #020D45;
   --navy-850: #041358;
@@ -739,3 +741,150 @@
   .h-metric__chart { height: 70px; }
 }
 @media (prefers-reduced-motion: reduce) { .h-metric__orbit { animation: none; } }
+
+/* ── Futsal: new pitch ────────────────────────────────────────────────────── */
+.h-futsal { position: relative; }
+.h-futsal__stage { min-height: 100svh; display: grid; grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr); gap: 40px; align-items: center; padding: 110px 0 60px; }
+.h-futsal__copy h2, .h-matchnight__copy h2 { margin-top: 18px !important; font-size: clamp(44px, 6.2vw, 92px) !important; font-weight: 900; letter-spacing: -.055em !important; text-transform: none !important; line-height: .93 !important; }
+.h-futsal__copy > p:not(.h-eyebrow), .h-matchnight__copy > p:not(.h-eyebrow) { margin-top: 22px !important; max-width: 440px; color: var(--muted); font-size: 16px; line-height: 1.7; }
+.h-futsal__formats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 34px; max-width: 470px; }
+.h-futsal__format { display: grid; gap: 3px; padding: 14px 12px; border: 1px solid var(--line); border-radius: 16px; color: var(--muted-2); transition: color .4s ease, border-color .4s ease, background .4s ease, transform .4s var(--ease); }
+.h-futsal__format b { font-size: 20px; font-weight: 900; letter-spacing: -.03em; }
+.h-futsal__format small { font-size: 11px; }
+.h-futsal[data-format="5"] [data-k="5"], .h-futsal[data-format="6"] [data-k="6"], .h-futsal[data-format="7"] [data-k="7"], .h-futsal[data-format="c"] [data-k="c"] { color: var(--cream); border-color: rgba(229, 92, 48, .55); background: rgba(229, 92, 48, .1); transform: translateY(-4px); }
+
+.h-futsal__pitch-wrap { position: relative; height: 540px; }
+.h-pitch { position: absolute; inset: 8% 2%; border-radius: 22px; border: 2px solid rgba(229, 92, 48, .4); background: radial-gradient(ellipse 60% 60% at 50% 50%, rgba(77, 110, 255, .18), transparent 70%), repeating-linear-gradient(90deg, rgba(14, 34, 122, .95) 0 10%, rgba(11, 29, 110, .95) 10% 20%); box-shadow: inset 0 0 90px rgba(0, 0, 0, .45), 0 0 120px rgba(229, 92, 48, .1); transform: perspective(1100px) rotateX(52deg) rotateZ(14deg); transform-origin: center; }
+.h-pitch__lines { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: rgba(246, 237, 220, .45); stroke-width: 1.6; }
+.h-pitch__spot { fill: rgba(246, 237, 220, .6); stroke: none; }
+.h-pitch__goal { position: absolute; top: 41%; width: 3.2%; height: 18%; border: 2px solid rgba(246, 237, 220, .75); background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .14) 0 2px, transparent 2px 6px), repeating-linear-gradient(-45deg, rgba(255, 255, 255, .14) 0 2px, transparent 2px 6px); }
+.h-pitch__goal--l { left: -2.4%; border-right: 0; border-radius: 4px 0 0 4px; }
+.h-pitch__goal--r { right: -2.4%; border-left: 0; border-radius: 0 4px 4px 0; }
+.h-pitch__p { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; transition: opacity .5s ease, transform .5s var(--ease); }
+.h-pitch__p--home { background: var(--orange); box-shadow: 0 0 0 3px rgba(229, 92, 48, .25), 0 0 18px rgba(229, 92, 48, .8); }
+.h-pitch__p--away { background: var(--cream); box-shadow: 0 0 0 3px rgba(246, 237, 220, .18), 0 0 18px rgba(255, 255, 255, .7); }
+.h-pitch__p--x6, .h-pitch__p--x7 { opacity: 0; transform: scale(.3); }
+.h-futsal[data-format="6"] .h-pitch__p--x6, .h-futsal[data-format="7"] .h-pitch__p--x6, .h-futsal[data-format="7"] .h-pitch__p--x7, .h-futsal[data-format="c"] .h-pitch__p--x6, .h-futsal[data-format="c"] .h-pitch__p--x7 { opacity: 1; transform: none; }
+.h-pitch__run { position: absolute; left: 6%; top: 50%; width: 0; height: 0; z-index: 2; }
+.h-pitch__ball { position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff 0 35%, #FFD9C8 36% 60%, #E55C30 61%); box-shadow: 0 0 14px rgba(255, 255, 255, .9), 0 0 30px rgba(229, 92, 48, .6); }
+.h-pitch__goal-pop { position: absolute; right: 4%; top: 6%; display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 999px; background: var(--grad-btn); color: var(--navy-900); font-size: 13px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; box-shadow: 0 14px 40px rgba(229, 92, 48, .4); opacity: 0; transform: translateY(10px) scale(.9); }
+.h-pitch__goal-pop .h-dot { background: var(--navy-900); }
+/* One move on a 7s loop: keeper rolls it out, it's worked up the pitch, shot, goal. */
+.home--motion .h-pitch__run { animation: h-move 7s cubic-bezier(.45, 0, .4, 1) infinite; }
+.home--motion .h-pitch__ball { animation: h-roll .6s linear infinite; }
+.home--motion .h-pitch__goal--r { animation: h-net 7s ease-out infinite; }
+.home--motion .h-pitch__goal-pop { animation: h-goal-pop 7s var(--ease) infinite; }
+.home--motion .h-pitch__p--home.h-pitch__p--gk { animation: h-touch 7s ease-out infinite; }
+.home--motion .h-pitch__p--r2 { animation: h-touch 7s ease-out infinite 1.05s; }
+.home--motion .h-pitch__p--r3 { animation: h-touch 7s ease-out infinite 2.25s; }
+.home--motion .h-pitch__p--r4 { animation: h-touch 7s ease-out infinite 3.5s; }
+.home--motion .h-pitch__p--away.h-pitch__p--a3 { animation: h-press 7s ease-in-out infinite; }
+.home--motion .h-pitch__p--away.h-pitch__p--gk { animation: h-dive 7s ease-in-out infinite; }
+@keyframes h-move {
+  0%, 4% { left: 6%; top: 50%; opacity: 1; }
+  15% { left: 26%; top: 72%; }
+  32% { left: 46%; top: 20%; }
+  50% { left: 64%; top: 50%; }
+  56% { left: 66%; top: 48%; }
+  66% { left: 99%; top: 44%; }
+  84% { left: 99%; top: 44%; opacity: 1; }
+  88% { left: 99%; top: 44%; opacity: 0; }
+  96% { left: 6%; top: 50%; opacity: 0; }
+  100% { left: 6%; top: 50%; opacity: 1; }
+}
+@keyframes h-roll { to { transform: rotate(360deg); } }
+@keyframes h-touch {
+  0% { transform: scale(1.6); box-shadow: 0 0 0 7px rgba(229, 92, 48, .3), 0 0 34px #fff; }
+  10%, 100% { transform: none; }
+}
+@keyframes h-press { 0%, 30% { left: 58%; top: 36%; } 50%, 70% { left: 61%; top: 44%; } 100% { left: 58%; top: 36%; } }
+@keyframes h-dive { 0%, 58% { top: 50%; } 66%, 80% { top: 60%; } 100% { top: 50%; } }
+@keyframes h-net {
+  0%, 64% { box-shadow: none; border-color: rgba(246, 237, 220, .75); }
+  67% { box-shadow: 0 0 0 6px rgba(229, 92, 48, .35), 0 0 50px rgba(229, 92, 48, .9); border-color: #FF8A5B; }
+  86%, 100% { box-shadow: none; border-color: rgba(246, 237, 220, .75); }
+}
+@keyframes h-goal-pop {
+  0%, 65% { opacity: 0; transform: translateY(10px) scale(.9); }
+  69%, 86% { opacity: 1; transform: none; }
+  92%, 100% { opacity: 0; transform: translateY(-8px); }
+}
+
+/* ── Futsal: match night ──────────────────────────────────────────────────── */
+.h-matchnight { position: relative; }
+.h-matchnight__stage { min-height: 100svh; display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 56px; align-items: center; padding: 100px 0 60px; }
+.h-matchnight__copy, .h-matchnight__board, .h-futsal__copy { min-width: 0; }
+.h-beats { list-style: none; margin: 34px 0 0; padding: 0; display: grid; gap: 10px; max-width: 440px; }
+.h-beat { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border: 1px solid var(--line); border-radius: 16px; color: var(--muted-2); font-size: 14px; font-weight: 700; transition: color .4s ease, border-color .4s ease, background .4s ease, transform .4s var(--ease); }
+.h-beat span { font-size: 11px; letter-spacing: .12em; color: inherit; }
+.h-matchnight[data-beat="1"] .h-beat[data-beat="1"], .h-matchnight[data-beat="2"] .h-beat[data-beat="2"], .h-matchnight[data-beat="3"] .h-beat[data-beat="3"], .h-matchnight[data-beat="4"] .h-beat[data-beat="4"] { color: var(--cream); border-color: rgba(229, 92, 48, .5); background: rgba(229, 92, 48, .08); transform: translateX(8px); }
+.h-matchnight__board { display: grid; gap: 16px; }
+.h-scorebug { padding: 22px 24px; border: 1px solid var(--line); border-radius: 26px; background: radial-gradient(circle at 50% 0%, rgba(229, 92, 48, .2), transparent 55%), linear-gradient(160deg, rgba(20, 40, 130, .7), rgba(6, 19, 79, .7)); }
+.h-scorebug__top { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.h-scorebug__top span:first-child { display: inline-flex; align-items: center; gap: 8px; color: var(--peach); }
+.h-scorebug__main { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px; margin-top: 18px; }
+.h-scorebug__team { display: flex; align-items: center; gap: 12px; min-width: 0; font-size: 16px; font-weight: 800; line-height: 1.15; }
+.h-scorebug__team i { display: grid; place-items: center; width: 46px; height: 46px; flex: 0 0 auto; border-radius: 14px; color: #fff; font-size: 12px; font-style: normal; font-weight: 900; letter-spacing: .04em; }
+.h-scorebug__team--away { flex-direction: row-reverse; text-align: right; }
+.h-scorebug__score { display: flex; align-items: center; gap: 10px; font-size: clamp(54px, 6vw, 84px); font-weight: 900; letter-spacing: -.05em; line-height: 1; font-variant-numeric: tabular-nums; }
+.h-scorebug__score em { font-style: normal; color: var(--muted-2); font-size: .6em; }
+.h-scorebug__score b { display: inline-block; transition: transform .5s var(--ease), color .5s ease; }
+.h-scorebug__score b.is-bump { transform: scale(1.25); color: var(--peach); }
+.h-scorebug__clock { display: flex; justify-content: center; align-items: baseline; gap: 10px; margin-top: 10px; }
+.h-scorebug__time { padding: 6px 14px; border-radius: 10px; background: var(--grad-btn); color: var(--navy-900); font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.h-scorebug__clock small { color: var(--muted); font-size: 12px; font-weight: 700; }
+.h-scorebug__fouls { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.h-scorebug__fouls > span:not(.h-scorebug__warn) { display: inline-flex; align-items: center; gap: 10px; }
+.h-fouls { display: inline-flex; gap: 5px; }
+.h-fouls i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255, 255, 255, .1); transition: background .3s ease, box-shadow .3s ease; }
+.h-fouls i.on { background: var(--peach); box-shadow: 0 0 8px rgba(229, 92, 48, .7); }
+.h-scorebug__warn { padding: 5px 10px; border-radius: 999px; background: rgba(229, 92, 48, .16); color: var(--peach); letter-spacing: .04em; opacity: 0; transform: scale(.9); transition: opacity .4s ease, transform .4s var(--ease); }
+.h-matchnight[data-beat="2"] .h-scorebug__warn, .h-matchnight[data-beat="3"] .h-scorebug__warn, .h-matchnight[data-beat="4"] .h-scorebug__warn { opacity: 1; transform: none; }
+.h-matchnight__row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.h-events { margin: 0; padding: 14px 18px; list-style: none; border: 1px solid var(--line); border-radius: 22px; background: linear-gradient(160deg, rgba(20, 40, 130, .5), rgba(6, 19, 79, .5)); }
+.h-events li { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid rgba(255, 255, 255, .05); font-size: 13px; transition: opacity .45s ease, transform .45s var(--ease); }
+.h-events li:last-child { border-bottom: 0; }
+.h-events b { width: 34px; color: var(--peach); font-weight: 900; }
+.h-events__goal { width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff 0 35%, #FFD9C8 36% 60%, #E55C30 61%); box-shadow: 0 0 10px rgba(229, 92, 48, .6); }
+.h-card-y { width: 10px; height: 13px; border-radius: 2px; background: #FFD43B; }
+.h-matchnight[data-beat="1"] .h-events li[data-at="2"], .h-matchnight[data-goals="0"] .h-events li[data-g], .h-matchnight[data-goals="1"] .h-events li[data-g="2"] { opacity: 0; transform: translateY(10px); }
+.h-mini { padding: 14px 18px; border: 1px solid var(--line); border-radius: 22px; background: linear-gradient(160deg, rgba(20, 40, 130, .5), rgba(6, 19, 79, .5)); }
+.h-mini__head, .h-mini__row { display: grid; grid-template-columns: 1fr 28px 34px; align-items: center; gap: 8px; }
+.h-mini__head { padding-bottom: 8px; color: var(--muted-2); font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.h-mini__head span:not(:first-child), .h-mini__row > span:nth-child(2), .h-mini__row b { text-align: center; }
+.h-mini__row { position: relative; height: 38px; font-size: 13px; font-weight: 700; transition: transform .7s var(--ease), background .4s ease; border-radius: 10px; }
+.h-mini__row > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h-mini__row em { display: inline-block; width: 20px; color: var(--muted-2); font-style: normal; font-weight: 900; }
+.h-mini__row b { font-weight: 900; }
+.h-mini__row[data-move="up"] { background: rgba(229, 92, 48, .1); }
+/* Before the goal, the top two sit the other way round. */
+.h-matchnight:is([data-beat="1"], [data-beat="2"], [data-beat="3"]) .h-mini__row[data-move="up"] { transform: translateY(38px); background: transparent; }
+.h-matchnight:is([data-beat="1"], [data-beat="2"], [data-beat="3"]) .h-mini__row[data-move="down"] { transform: translateY(-38px); }
+
+@media (max-width: 1180px) {
+  .h-matchnight__stage { grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr); gap: 36px; }
+  .h-matchnight__copy h2 { font-size: clamp(40px, 5vw, 64px) !important; }
+  .h-scorebug__team i { width: 38px; height: 38px; }
+}
+@media (max-width: 1000px) {
+  .h-futsal__stage, .h-matchnight__stage { grid-template-columns: 1fr; gap: 30px; padding: 90px 0 40px; min-height: 0; }
+  .h-futsal__pitch-wrap { height: min(70vw, 440px); }
+  .h-futsal__formats { max-width: none; }
+}
+@media (max-width: 560px) {
+  .h-futsal__formats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .h-pitch { inset: 10% 0; transform: perspective(900px) rotateX(48deg) rotateZ(8deg); }
+  .h-pitch__p { width: 10px; height: 10px; margin: -5px 0 0 -5px; }
+  .h-matchnight__row { grid-template-columns: 1fr; }
+  .h-scorebug { padding: 18px 16px; }
+  .h-scorebug__team { flex-direction: column; text-align: center; gap: 8px; font-size: 13px; }
+  .h-scorebug__team--away { flex-direction: column; text-align: center; }
+  .h-scorebug__fouls { flex-wrap: wrap; justify-content: center; }
+  .h-scorebug__warn { order: 3; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .h-pitch__run, .h-pitch__ball, .h-pitch__goal--r, .h-pitch__goal-pop, .h-pitch__p { animation: none !important; }
+}
+/* Finished state (and no-motion state): five home fouls, two away. Beat 2 fills them in from script. */
+.h-matchnight:is([data-beat="3"], [data-beat="4"]) .h-fouls[data-side="h"] i,
+.h-matchnight:is([data-beat="3"], [data-beat="4"]) .h-fouls[data-side="a"] i:is([data-n="1"], [data-n="2"]) { background: var(--peach); box-shadow: 0 0 8px rgba(229, 92, 48, .7); }

@@ -4,7 +4,7 @@ import { TournamentLiveBadge } from "./TournamentLiveBadge";
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { TournamentFormat, SkillLevel, Tournament, MatchStatus, RoundRobinType, Team, Match, SponsorTier, Sponsor, Venue, BroadcastTheme } from '../types';
 import { createTournament, deleteTournament, updateTournament, subscribeToTournaments, subscribeToTournament, updateTeamStatus, generateSchedule, assignTeamGroup, updateTournamentTeamsGroups, updateMatchDetails, addKnockoutMatch, subscribeToVenues, uploadSystemImage, getOrganiserCredits, deductOrganiserCredits, enrollTeamManually, subscribeToStandings, searchGlobalTeams, refundOrganiserCredits, retireTournament, appendNewMexicanoRound, deleteMatch, replaceTeamInTournament, editTeamInTournament, syncAllDataToGlobal, getTournamentSponsors, resetMatchToScheduled, checkAndHealTournamentStats, bulkUploadPendingTeams, isTeamInCategory, isMatchInCategory } from '../services/storage';
-import { Check, X, Calendar, Users, Trophy, PlayCircle, Lock, RefreshCcw, ChevronLeft, Plus, ChevronRight, Grid, ArrowRight, Settings, Edit3, ArrowUpRight, MapPin, DollarSign, Database, Trash2, Mail, Phone, Hash, AlertTriangle, Loader2, LogOut, Camera, Image as ImageIcon, Medal, Activity, Clock, PlusCircle, Download, Share2, Copy, QrCode, ExternalLink, List, Archive, ChevronDown, History, RotateCcw } from 'lucide-react';
+import { Check, X, Calendar, Users, Trophy, PlayCircle, Lock, RefreshCcw, ChevronLeft, Plus, ChevronRight, Grid, ArrowRight, Settings, Edit3, ArrowUpRight, MapPin, DollarSign, Database, Trash2, Mail, Phone, Hash, AlertTriangle, Loader2, LogOut, Camera, Image as ImageIcon, Medal, Activity, Clock, PlusCircle, Download, Share2, Copy, QrCode, ExternalLink, List, Archive, ChevronDown, History, RotateCcw, Upload } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useTournamentMatches } from '../hooks/useTournamentMatches';
@@ -32,14 +32,22 @@ import { TeamAmericanoPanel } from './TeamAmericanoPanel';
 import { TeamAmericanoStandings } from './TeamAmericanoStandings';
 import { Tv } from 'lucide-react';
 import { Logo } from './ui/Logo';
+import { FutsalCreateWizard, FutsalWorkspace, type FutsalView } from '../futsal/ui/AdminFutsal';
+import { GLOBAL_ADMINS as FUTSAL_ADMINS, SECTIONS as FUTSAL_SECTIONS, STATUS_LABEL as FUTSAL_STATUS } from '../futsal/ui/Admin';
+import { subscribeFutsalTournaments } from '../futsal/store';
+import type { FutsalTournament } from '../futsal/types';
+import { SPORT_LABEL, sportOf } from '../futsal/sport';
 
 import { collection, doc, getDoc, query, where, getDocs } from 'firebase/firestore';
 import { onAuthStateChanged, updateProfile } from 'firebase/auth';
 import { db, auth } from '../services/storage';
 
-import { deleteKnockoutMatchCascade, recalculateMatchResult, getAllRegisteredPlayers, mergePlayerProfiles, unmergePlayerProfile, dismissMergeSuggestion, subscribeToPlayerLinks, getRedemption, markRedemptionUsed } from '../services/storage';
+import { calculateStatsForTournament, generateKnockoutBracket, deleteKnockoutMatchCascade, recalculateMatchResult, getAllRegisteredPlayers, mergePlayerProfiles, unmergePlayerProfile, dismissMergeSuggestion, subscribeToPlayerLinks, getRedemption, markRedemptionUsed } from '../services/storage';
 import { matchPlayer, linkIdFor, type PlayerLink } from '../lib/playerIdentity';
 import { PKR_PER_POINT, type Redemption } from '../lib/wallet';
+import { confirmDialog } from './ui/ConfirmDialog';
+import { RefereeCodeStat } from './RefereeCodeStat';
+import { isKnockoutMatch as isPadelKo, sortStandings } from '../lib/padelBracket';
 
 
 
@@ -492,6 +500,7 @@ export const AdminDashboard: React.FC<{ initialAuthenticated?: boolean, onLogout
   const [adminData, setAdminData] = useState<any>(null);
   const [mainTab, setMainTab] = useState<'tournaments' | 'analytics' | 'merges'>('tournaments');
   const [tournamentStatusFilter, setTournamentStatusFilter] = useState<string>('All');
+  const [sportFilter, setSportFilter] = useState<'all' | 'padel' | 'futsal' | 'football'>('all');
 
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
@@ -579,10 +588,23 @@ export const AdminDashboard: React.FC<{ initialAuthenticated?: boolean, onLogout
   const [editingId, setEditingId] = useState<string | null>(null);
   const [view, setView] = useState<'OVERVIEW' | 'TEAMS' | 'GROUPS' | 'SCHEDULE' | 'KNOCKOUT' | 'STANDINGS' | 'RESULTS' | 'LEADERBOARD'>('OVERVIEW');
 
+  // Futsal and football live in the same portal: same wizard, same workspace layout.
+  const [createSport, setCreateSport] = useState<'padel' | 'futsal' | 'football'>('padel');
+  const [futsalEdit, setFutsalEdit] = useState<FutsalTournament | null>(null);
+  const [futsalId, setFutsalId] = useState<string | null>(null);
+  const [futsalView, setFutsalView] = useState<FutsalView>('overview');
+  const [futsalList, setFutsalList] = useState<FutsalTournament[]>([]);
+  useEffect(() => subscribeFutsalTournaments(setFutsalList), []);
+
   const closeWizard = () => {
       setIsCreating(false);
       setEditingId(null);
+      setFutsalEdit(null);
+      setCreateSport('padel');
   };
+  const startCreate = (sport: 'padel' | 'futsal' | 'football') => { setEditingId(null); setFutsalEdit(null); setCreateSport(sport); setIsCreating(true); };
+  const openFutsal = (id: string | null, view: FutsalView = 'overview') => { setSelectedTournamentId(null); setFutsalId(id); setFutsalView(view); };
+  const editFutsal = (t: FutsalTournament) => { setFutsalEdit(t); setCreateSport(sportOf(t)); setIsCreating(true); };
 
   // The create/edit module is a full page: start it (and the page after it) at the top.
   useEffect(() => {
@@ -903,7 +925,21 @@ const getTournamentCredits = (t: any) => {
   };
   const matchesStatusFilter = (t: Tournament, filter: string) => filter === 'All' || lifecycleOf(t) === filter;
   const myTournaments = (tournaments || []).filter(t => !!isMine(t));
-  const visibleTournaments = myTournaments.filter(t => matchesStatusFilter(t, tournamentStatusFilter));
+  const myFutsal = futsalList.filter(t => t.organizerId === currentUser?.uid || FUTSAL_ADMINS.includes(String(currentUser?.email || '').toLowerCase()) || (t.organizerEmail && t.organizerEmail.toLowerCase() === currentUser?.email?.toLowerCase()))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const futsalLifecycle = (t: FutsalTournament): 'Ongoing' | 'Upcoming' | 'Completed' | 'Draft' => {
+      if (t.status === 'DRAFT') return 'Draft';
+      if (t.status === 'COMPLETED') return 'Completed';
+      const today = new Date().toISOString().slice(0, 10);
+      if (t.endDate && t.endDate < today) return 'Completed';
+      if (t.startDate && t.startDate > today) return 'Upcoming';
+      return 'Ongoing';
+  };
+  // Sport first, then status: padel lives in `tournaments`, futsal and football in the futsal collections.
+  const sportPadel = sportFilter === 'all' || sportFilter === 'padel' ? myTournaments : [];
+  const sportFutsal = sportFilter === 'padel' ? [] : myFutsal.filter(t => sportFilter === 'all' || sportOf(t) === sportFilter);
+  const visibleFutsal = sportFutsal.filter(t => tournamentStatusFilter === 'All' || futsalLifecycle(t) === tournamentStatusFilter);
+  const visibleTournaments = sportPadel.filter(t => matchesStatusFilter(t, tournamentStatusFilter));
   const creditsLeft = dashboardCredits?.matchCreditsRemaining ?? null;
   const creditsTotal = dashboardCredits ? (dashboardCredits.matchCreditsRemaining || 0) + (dashboardCredits.matchCreditsUsed || 0) : 0;
   const creditsPct = creditsTotal ? Math.round(((creditsLeft || 0) / creditsTotal) * 100) : 0;
@@ -959,27 +995,31 @@ const getTournamentCredits = (t: any) => {
   const footerNav: ShellItem[] = [
       { key: 'spectator', label: 'Spectator view', icon: <ExternalLink size={18} />, onClick: () => window.open('#live', '_blank') },
       { key: 'sync', label: 'Sync data', icon: <RefreshCcw size={18} />, onClick: async () => {
-          try { alert('Starting sync...'); await syncAllDataToGlobal(); alert('Sync complete!'); } catch (e: any) { alert('Sync failed: ' + e.message); }
+          try { toast.info('Syncing player and team directories…'); await syncAllDataToGlobal(); toast.success('Sync complete'); } catch (e: any) { toast.error('Sync failed', e.message); }
       } },
       { key: 'profile', label: 'Profile & account', icon: <Settings size={18} />, onClick: () => setProfileOpen(true) },
       ...(onLogout ? [{ key: 'logout', label: 'Log out', icon: <LogOut size={18} />, onClick: onLogout, tone: 'danger' as const }] : []),
   ];
   const homeSections: ShellSection[] = [
       { title: 'Workspace', items: [
-          { key: 'dash', label: 'Dashboard', icon: <Grid size={18} />, active: !isCreating && !selectedTournamentId && mainTab === 'tournaments', onClick: () => { closeWizard(); setSelectedTournamentId(null); setMainTab('tournaments'); scrollToId('adm-top'); } },
-          { key: 'all', label: 'All tournaments', icon: <Trophy size={18} />, onClick: () => { closeWizard(); setSelectedTournamentId(null); setMainTab('tournaments'); scrollToId('adm-tournaments'); } },
-          { key: 'merges', label: 'Merge profiles', icon: <Users size={18} />, active: !isCreating && !selectedTournamentId && mainTab === 'merges', badge: mergeAlertCount || undefined, onClick: () => { closeWizard(); setSelectedTournamentId(null); setMainTab('merges'); } },
+          { key: 'dash', label: 'Dashboard', icon: <Grid size={18} />, active: !isCreating && !selectedTournamentId && mainTab === 'tournaments', onClick: () => { closeWizard(); setSelectedTournamentId(null); setFutsalId(null); setMainTab('tournaments'); scrollToId('adm-top'); } },
+          { key: 'all', label: 'All tournaments', icon: <Trophy size={18} />, onClick: () => { closeWizard(); setSelectedTournamentId(null); setFutsalId(null); setMainTab('tournaments'); scrollToId('adm-tournaments'); } },
+          { key: 'merges', label: 'Merge profiles', icon: <Users size={18} />, active: !isCreating && !selectedTournamentId && mainTab === 'merges', badge: mergeAlertCount || undefined, onClick: () => { closeWizard(); setSelectedTournamentId(null); setFutsalId(null); setMainTab('merges'); } },
       ] },
       { title: 'Create', items: [
-          { key: 'new', label: 'New tournament', icon: <Plus size={18} />, active: isCreating && !editingId, onClick: () => { setEditingId(null); setIsCreating(true); } },
+          { key: 'new', label: 'New padel tournament', icon: <Plus size={18} />, active: isCreating && !editingId && !futsalEdit && createSport === 'padel', onClick: () => startCreate('padel') },
+          { key: 'new-futsal', label: 'New futsal tournament', icon: <Plus size={18} />, active: isCreating && !futsalEdit && createSport === 'futsal', onClick: () => startCreate('futsal') },
+          { key: 'new-football', label: 'New football tournament', icon: <Plus size={18} />, active: isCreating && !futsalEdit && createSport === 'football', onClick: () => startCreate('football') },
           { key: 'clone', label: 'Clone tournament', icon: <Copy size={18} />, onClick: () => setIsCloning(true) },
       ] },
   ];
 
   // ── Create / edit tournament: a full module inside the portal (not a popup) ──
   if (isCreating) {
-      const editingName = editingId ? (activeTournament?.id === editingId ? activeTournament?.name : tournaments.find(t => t.id === editingId)?.name) : null;
-      const backLabel = selectedTournamentId ? 'Back to tournament' : 'Back to dashboard';
+      const futsal = createSport !== 'padel';
+      const editingName = futsal ? futsalEdit?.name || null : editingId ? (activeTournament?.id === editingId ? activeTournament?.name : tournaments.find(t => t.id === editingId)?.name) : null;
+      const editing = futsal ? !!futsalEdit : !!editingId;
+      const backLabel = selectedTournamentId || futsalId ? 'Back to tournament' : 'Back to dashboard';
       return (
           <AdminShell
               collapsed={navCollapsed}
@@ -988,7 +1028,7 @@ const getTournamentCredits = (t: any) => {
               setMobileOpen={setNavMobileOpen}
               sections={homeSections}
               footer={footerNav}
-              crumbs={['Organizer', 'Tournaments', editingId ? `Edit · ${editingName || 'Tournament'}` : 'New tournament']}
+              crumbs={['Organizer', 'Tournaments', editing ? `Edit · ${editingName || 'Tournament'}` : `New ${createSport} tournament`]}
               userEmail={currentUser?.email}
               userName={displayName}
               onProfile={() => setProfileOpen(true)}
@@ -998,14 +1038,30 @@ const getTournamentCredits = (t: any) => {
                   <div className="admx-module__head">
                       <button type="button" className="admx-module__back" onClick={closeWizard}><ChevronLeft size={16} /> {backLabel}</button>
                       <div className="admx-module__title">
-                          <span className="admx-module__icon">{editingId ? <Edit3 size={22} /> : <Trophy size={22} />}</span>
+                          <span className="admx-module__icon">{editing ? <Edit3 size={22} /> : <Trophy size={22} />}</span>
                           <div>
-                              <h1 className="adm-title">{editingId ? <>Edit <span>{editingName || 'tournament'}</span></> : <>Create a <span>tournament</span></>}</h1>
-                              <p className="adm-sub">{editingId ? 'Update tournament details and settings. Changes apply when you save on the last step.' : 'Four steps from idea to live: details, format, pricing and branding.'}</p>
+                              <h1 className="adm-title">{editing ? <>Edit <span>{editingName || 'tournament'}</span></> : <>Create a {createSport} <span>tournament</span></>}</h1>
+                              <p className="adm-sub">{editing ? 'Update tournament details and settings. Changes apply when you save on the last step.' : 'Four steps from idea to live: details, format, pricing and branding.'}</p>
                           </div>
                       </div>
                   </div>
+                  {!editing && (
+                      <div className="adm-filters" role="tablist" aria-label="Sport" style={{ marginBottom: 14 }}>
+                          {(['padel', 'futsal', 'football'] as const).map(sp => (
+                              <button key={sp} type="button" role="tab" aria-selected={createSport === sp} className={`adm-chip ${createSport === sp ? 'is-on' : ''}`} onClick={() => setCreateSport(sp)}>{sp === 'padel' ? 'Padel' : SPORT_LABEL[sp]}</button>
+                          ))}
+                      </div>
+                  )}
                   <div className="admx-module__card">
+                      {futsal ? (
+                      <FutsalCreateWizard
+                          key={futsalEdit?.id || `new-${createSport}`}
+                          initial={futsalEdit}
+                          sport={createSport === 'football' ? 'football' : 'futsal'}
+                          onCancel={closeWizard}
+                          onCreate={(id: string) => { closeWizard(); openFutsal(id); }}
+                      />
+                      ) : (
                       <CreateTournamentWizardWrapper
                           initialData={editingId ? activeTournament : null}
                           tournamentId={editingId}
@@ -1015,9 +1071,40 @@ const getTournamentCredits = (t: any) => {
                               setSelectedTournamentId(id);
                           }}
                       />
+                      )}
                   </div>
               </div>
           {profileModal}
+          </AdminShell>
+      );
+  }
+
+  if (futsalId && !selectedTournamentId) {
+      const ft = futsalList.find(t => t.id === futsalId);
+      return (
+          <AdminShell
+              collapsed={navCollapsed}
+              onToggle={toggleNav}
+              mobileOpen={navMobileOpen}
+              setMobileOpen={setNavMobileOpen}
+              sections={[
+                  { items: [{ key: 'back', label: 'All tournaments', icon: <ChevronLeft size={18} />, onClick: () => { openFutsal(null); setMainTab('tournaments'); } }] },
+                  { title: ft?.name || SPORT_LABEL[sportOf(ft)], items: FUTSAL_SECTIONS.map(s => ({ key: s.id, label: s.label, icon: <s.icon size={18} />, active: futsalView === s.id, onClick: () => setFutsalView(s.id) })) },
+              ]}
+              footer={[]}
+              crumbs={['Organizer', 'Tournaments', ft?.name || SPORT_LABEL[sportOf(ft)]]}
+              userEmail={currentUser?.email}
+              userName={displayName}
+              onProfile={() => setProfileOpen(true)}
+          >
+              <FutsalWorkspace
+                  id={futsalId}
+                  view={futsalView}
+                  setView={setFutsalView}
+                  onBack={() => openFutsal(null)}
+                  onEdit={editFutsal}
+              />
+              {profileModal}
           </AdminShell>
       );
   }
@@ -1035,7 +1122,7 @@ const getTournamentCredits = (t: any) => {
               userEmail={currentUser?.email}
               userName={displayName}
               onProfile={() => setProfileOpen(true)}
-              topActions={<button onClick={() => setIsCreating(true)} className="adm-btn adm-btn--primary admx-top__cta"><Plus size={16} /> New tournament</button>}
+              topActions={<button onClick={() => startCreate('padel')} className="adm-btn adm-btn--primary admx-top__cta"><Plus size={16} /> New tournament</button>}
           >
           <div className="adm" id="adm-top">
               <div className="adm-head">
@@ -1120,7 +1207,7 @@ const getTournamentCredits = (t: any) => {
               </div>
               )}
 
-              {mainTab === 'tournaments' && <div className="admx-section-head" id="adm-tournaments"><h3>All tournaments</h3><span>{myTournaments.length} total</span></div>}
+              {mainTab === 'tournaments' && <div className="admx-section-head" id="adm-tournaments"><h3>All tournaments</h3><span>{myTournaments.length + myFutsal.length} total</span></div>}
 
               {mainTab === 'merges' ? (
                   <div className="space-y-6">
@@ -1283,7 +1370,7 @@ const getTournamentCredits = (t: any) => {
                                            <button
                                                disabled={mergingId !== null}
                                                onClick={async () => {
-                                                   if (window.confirm(`Are you absolutely sure you want to merge "${merge.unauthPlayer.name}" (manual) into the registered account "${merge.authPlayer.fullName || merge.authPlayer.name}"?\n\nThis will link all existing team enrollments and matches to this official account.`)) {
+                                                   if (await confirmDialog({ title: 'Merge these profiles?', body: <>Merge <b>{merge.unauthPlayer.name}</b> (added manually) into the registered account <b>{merge.authPlayer.fullName || merge.authPlayer.name}</b>. All their team entries and matches will be linked to that account.</>, confirmLabel: 'Merge profiles' })) {
                                                        setMergingId(merge.id);
                                                        try {
                                                            await mergePlayerProfiles(merge.unauthPlayer, merge.authPlayer, {
@@ -1334,7 +1421,7 @@ const getTournamentCredits = (t: any) => {
                                           <span className="flex items-center gap-3 shrink-0">
                                               <span className="text-[11px] text-content-muted">{l.method === 'auto-login' ? 'Automatic' : l.method === 'player' ? 'By player' : l.method === 'migration' ? 'Data clean-up' : 'By organizer'}</span>
                                               <button type="button" className="text-xs font-bold text-amber-300 hover:underline" onClick={async () => {
-                                                  if (!window.confirm(`Undo this merge for ${l.name || 'this player'}?`)) return;
+                                                  if (!(await confirmDialog({ title: `Undo the merge for ${l.name || 'this player'}?`, body: 'Their tournament history goes back to the separate manual profile.', confirmLabel: 'Undo merge', danger: true }))) return;
                                                   try {
                                                       await unmergePlayerProfile(l.id);
                                                       toast.success('Merge undone');
@@ -1353,8 +1440,13 @@ const getTournamentCredits = (t: any) => {
               ) : (
                 <div className="flex flex-col gap-5">
                   <div className="adm-filters">
+                    {([['all', 'All sports', myTournaments.length + myFutsal.length], ['padel', 'Padel', myTournaments.length], ['futsal', 'Futsal', myFutsal.filter(t => sportOf(t) === 'futsal').length], ['football', 'Football', myFutsal.filter(t => sportOf(t) === 'football').length]] as const).map(([k, label, n]) => (
+                        <button key={k} type="button" onClick={() => setSportFilter(k)} className={`adm-chip adm-chip--sport ${sportFilter === k ? 'is-on' : ''}`} aria-pressed={sportFilter === k}>{label}<span>{n}</span></button>
+                    ))}
+                  </div>
+                  <div className="adm-filters">
                     {['All', 'Ongoing', 'Upcoming', 'Completed', 'Draft', 'Retired'].map(filter => {
-                        const count = myTournaments.filter(t => matchesStatusFilter(t, filter)).length;
+                        const count = sportPadel.filter(t => matchesStatusFilter(t, filter)).length + sportFutsal.filter(t => filter === 'All' || futsalLifecycle(t) === filter).length;
                         return (
                             <button
                               key={filter}
@@ -1376,7 +1468,7 @@ const getTournamentCredits = (t: any) => {
                           <div className="adm-tcard__body">
                               <h3>{t.name}</h3>
                               <div className="adm-tcard__meta">
-                                  <span className="adm-tag">{formatLabel(t.format)}</span>
+                                  <span className="adm-tag">Padel · {formatLabel(t.format)}</span>
                                   <span><Users size={13} /> {(t.teams || []).length} teams</span>
                                   <span className="adm-tcard__venue"><MapPin size={13} /> {t.venue || 'TBD'} · {t.city || 'Karachi'}</span>
                               </div>
@@ -1392,13 +1484,34 @@ const getTournamentCredits = (t: any) => {
                           </div>
                       </div>
                   ))}
+                  {visibleFutsal.map((t, i) => (
+                      <div key={t.id} className="adm-tcard" style={{ '--i': visibleTournaments.length + i } as React.CSSProperties} onClick={() => openFutsal(t.id)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') openFutsal(t.id); }}>
+                          <div className="adm-tcard__media">
+                              {t.bannerUrl ? <img src={t.bannerUrl} alt="" loading="lazy" /> : <div className="adm-tcard__art"><span>{t.name.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()}</span></div>}
+                              <div className="adm-tcard__badge"><span className={`admx-status-pill admx-status-pill--${futsalLifecycle(t).toLowerCase()}`}>{futsalLifecycle(t)}</span></div>
+                          </div>
+                          <div className="adm-tcard__body">
+                              <h3>{t.name}</h3>
+                              <div className="adm-tcard__meta">
+                                  <span className="adm-tag">{SPORT_LABEL[sportOf(t)]} · {FUTSAL_STATUS[t.status]}</span>
+                                  <span><Trophy size={13} /> {t.categories.length} {t.categories.length === 1 ? 'category' : 'categories'}</span>
+                                  <span className="adm-tcard__venue"><MapPin size={13} /> {t.venue || 'TBD'} · {t.city || 'Karachi'}</span>
+                              </div>
+                          </div>
+                          <div className="adm-tcard__foot" onClick={(e) => e.stopPropagation()}>
+                              <button onClick={() => editFutsal(t)} className="adm-mini" title="Edit"><Edit3 size={15}/></button>
+                              <button onClick={() => openFutsal(t.id, 'settings')} className="adm-mini adm-mini--warn" title="Status & delete"><Archive size={15}/></button>
+                              <button onClick={() => openFutsal(t.id)} className="adm-open">Manage <ChevronRight size={15}/></button>
+                          </div>
+                      </div>
+                  ))}
                   </div>
-                  {visibleTournaments.length === 0 && (
+                  {visibleTournaments.length === 0 && visibleFutsal.length === 0 && (
                       <div className="adm-empty">
                           <Trophy size={44} />
-                          <h3>{myTournaments.length ? 'Nothing in this filter' : 'No tournaments yet'}</h3>
-                          <p>{myTournaments.length ? 'Try another status filter.' : 'Create your first tournament to get started.'}</p>
-                          {!myTournaments.length && <button onClick={() => setIsCreating(true)} className="adm-btn adm-btn--primary"><Plus size={16} /> Create tournament</button>}
+                          <h3>{myTournaments.length + myFutsal.length ? 'Nothing in this filter' : 'No tournaments yet'}</h3>
+                          <p>{myTournaments.length + myFutsal.length ? 'Try another status filter.' : 'Create your first tournament to get started.'}</p>
+                          {!(myTournaments.length + myFutsal.length) && <button onClick={() => startCreate('padel')} className="adm-btn adm-btn--primary"><Plus size={16} /> Create tournament</button>}
                       </div>
                   )}
                 </div>
@@ -1450,7 +1563,7 @@ const getTournamentCredits = (t: any) => {
           mobileOpen={navMobileOpen}
           setMobileOpen={setNavMobileOpen}
           sections={[
-              { items: [{ key: 'back', label: 'All tournaments', icon: <ChevronLeft size={18} />, onClick: () => { closeWizard(); setSelectedTournamentId(null); setMainTab('tournaments'); } }] },
+              { items: [{ key: 'back', label: 'All tournaments', icon: <ChevronLeft size={18} />, onClick: () => { closeWizard(); setSelectedTournamentId(null); setFutsalId(null); setMainTab('tournaments'); } }] },
               { title: activeTournament.name, items: workspaceNav },
           ]}
           footer={[]}
@@ -1458,7 +1571,6 @@ const getTournamentCredits = (t: any) => {
           userEmail={currentUser?.email}
           userName={displayName}
           onProfile={() => setProfileOpen(true)}
-          topActions={<button onClick={(e) => handleEditTournament(e as any, activeTournament)} className="adm-btn adm-btn--ghost admx-top__cta"><Edit3 size={16} /> Edit</button>}
       >
       <div className="adm">
           {/* Context Header */}
@@ -1490,6 +1602,7 @@ const getTournamentCredits = (t: any) => {
                           <div><strong>{pending}</strong><span>Pending requests</span></div>
                           <div><strong>{activeTournament.maxTeams || '—'}</strong><span>Team cap</span></div>
                           <div><strong>{(activeTournament.courts || []).length || '—'}</strong><span>Courts</span></div>
+                          <RefereeCodeStat value={activeTournament.refereePasscode} onSave={async code => { await updateTournament(activeTournament.id, { refereePasscode: code }); }} />
                       </div>
                   </div>
               );
@@ -1535,6 +1648,7 @@ const getTournamentCredits = (t: any) => {
           )}
 
           {view === 'OVERVIEW' && <OverviewTab tournament={activeTournament} categoryId={selectedCategoryId} venues={allVenues} onEdit={() => handleEditTournament({ stopPropagation: () => {} } as any, activeTournament)} />}
+          {view === 'OVERVIEW' && <CourtObsLinks tournament={activeTournament} />}
           {view === 'TEAMS' && <TeamsTab tournament={activeTournament} categoryId={selectedCategoryId} setView={setView} />}
           {view === 'GROUPS' && <GroupAssignmentTab tournament={activeTournament} categoryId={selectedCategoryId} />}
           {view === 'SCHEDULE' && <ScheduleTab tournament={activeTournament} categoryId={selectedCategoryId} />}
@@ -1648,6 +1762,55 @@ function DeleteConfirmationModal({ target, onCancel, onConfirm }: any) {
                 </div>
             </Card>
         </div>
+    );
+};
+
+const cleanCourt = (v: any) => (v ? String(v).replace(/^"|"$/g, '').trim() : '');
+const courtKeyOf = (m: Match) => [m.actualCourtId, m.courtId, m.scheduledCourtId].map(cleanCourt).find(v => v && v !== 'TBD') || [m.court, m.courtName].map(cleanCourt).find(v => v && v !== 'TBD') || '';
+/** The court's OBS link when the match has a court (it follows whatever is live there), otherwise the match's own. */
+const obsLinkFor = (tId: string, m: Match) => {
+    const court = courtKeyOf(m);
+    return court ? `${window.location.origin}/#obs/${tId}/court/${encodeURIComponent(court)}` : `${window.location.origin}/#obs/${tId}/${m.id}`;
+};
+
+/** One OBS browser source per court: it switches to each new match on that court by itself. */
+const CourtObsLinks = ({ tournament }: { tournament: Tournament }) => {
+    const [courts, setCourts] = useState<{ id: string; name: string }[]>([]);
+    const venueIds = ((tournament as any).venueIds?.length ? (tournament as any).venueIds : [(tournament as any).venueId]).filter(Boolean) as string[];
+    useEffect(() => {
+        let live = true;
+        const fallback = (tournament.courts || []).map(n => ({ id: n, name: n }));
+        if (!venueIds.length) { setCourts(fallback); return; }
+        import('../services/storage').then(({ getCourtsByVenueIds }) => getCourtsByVenueIds(venueIds)).then((res: any[]) => {
+            if (!live) return;
+            const list = res.map(c => ({ id: c.id, name: c.courtName || c.name || c.id }))
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+            setCourts(list.length ? list : fallback);
+        }).catch(() => live && setCourts(fallback));
+        return () => { live = false; };
+    }, [venueIds.join('|'), (tournament.courts || []).join('|')]);
+    const link = (c: { id: string }) => `${window.location.origin}/#obs/${tournament.id}/court/${encodeURIComponent(c.id)}`;
+    return (
+        <Card variant="panel" className="p-5 mt-6">
+            <div className="flex items-start justify-between gap-4 mb-4">
+                <div>
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-accent-live animate-pulse"></span> OBS links per court</h3>
+                    <p className="text-content-secondary text-sm mt-1">Add one browser source per court in OBS. It shows the live match on that court and switches by itself when the referee starts the next one.</p>
+                </div>
+            </div>
+            {courts.length ? (
+                <div className="grid gap-2">
+                    {courts.map(c => (
+                        <div key={c.id} className="flex items-center gap-2">
+                            <span className="w-32 shrink-0 text-sm font-bold text-white truncate">{c.name}</span>
+                            <input readOnly value={link(c)} className="flex-1 min-w-0 bg-surface-dark border border-white/10 rounded-lg p-2 text-xs text-content-secondary font-mono outline-none" onFocus={e => e.currentTarget.select()} />
+                            <button onClick={() => { navigator.clipboard.writeText(link(c)); toast.success('OBS link copied', c.name); }} className="p-2 bg-brand/20 text-brand rounded-lg hover:bg-brand/30 transition-colors" title={`Copy ${c.name} OBS link`}><Copy size={16} /></button>
+                            <a href={link(c)} target="_blank" rel="noopener noreferrer" className="p-2 bg-white/5 text-white rounded-lg hover:bg-white/10 text-xs font-bold">Open</a>
+                        </div>
+                    ))}
+                </div>
+            ) : <p className="text-content-muted text-sm">Add courts to this tournament's venue to get a link per court.</p>}
+        </Card>
     );
 };
 
@@ -1854,7 +2017,7 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
 
         const validation = validateAmericanoMultipleOf4();
         if (!validation.isValid) {
-            alert(validation.message);
+            toast.error(validation.message);
             return;
         }
 
@@ -1948,7 +2111,7 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
             setSponsorFileToCrop(null);
         } catch (error) {
             console.error("Upload error:", error);
-            alert("Failed to upload sponsor image.");
+            toast.error("Failed to upload sponsor image.");
         }
     };
 
@@ -2646,7 +2809,7 @@ function CreateTournamentWizard({ initialData, onCancel, onCreate }: any) {
                             onClick={() => {
                                 const validation = validateAmericanoMultipleOf4();
                                 if (!validation.isValid) {
-                                    alert(validation.message);
+                                    toast.error(validation.message);
                                     return;
                                 }
                                 setStep(4);
@@ -2927,11 +3090,12 @@ const PlayerEditModal = ({ player, playerIndex, team, tId, onClose }: { player: 
 
         // Validation
         if (!file.type.startsWith('image/')) {
-            alert('Please select an image file');
+            toast.error('Please select an image file');
             return;
         }
-        if (file.size > 2 * 1024 * 1024) {
-            alert('Images must be smaller than 2MB');
+        // Uploads are compressed before saving, so only absurd files are refused.
+        if (file.size > 15 * 1024 * 1024) {
+            toast.error('Images must be smaller than 15MB');
             return;
         }
 
@@ -2941,7 +3105,7 @@ const PlayerEditModal = ({ player, playerIndex, team, tId, onClose }: { player: 
             setPhotoUrl(url);
         } catch (error) {
             console.error('Failed to upload image:', error);
-            alert('Upload failed');
+            toast.error('Upload failed');
         } finally {
             setIsUploading(false);
         }
@@ -3012,7 +3176,7 @@ const PlayerEditModal = ({ player, playerIndex, team, tId, onClose }: { player: 
                                         Remove Image
                                     </button>
                                 )}
-                                <p className="text-[10px] text-content-muted">Max 2MB. JPG, PNG</p>
+                                <p className="text-[10px] text-content-muted">JPG, PNG or WebP. Resized automatically.</p>
                                 <input
                                     type="file"
                                     accept="image/*"
@@ -3127,6 +3291,9 @@ const TeamsTab = ({ tournament, categoryId, setView }: { tournament: Tournament;
     
     const [showManualEnrollment, setShowManualEnrollment] = useState(false);
     const [showBulkUpload, setShowBulkUpload] = useState(false);
+    const [showPending, setShowPending] = useState<boolean | null>(null);
+    // Opens by itself while there are requests waiting, until the organiser folds it.
+    const pendingOpen = showPending ?? pending.length > 0;
     const [replaceTeamModal, setReplaceTeamModal] = useState<Team | null>(null);
     const [editingTeam, setEditingTeam] = useState<Team | null>(null);
     const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
@@ -3138,34 +3305,37 @@ const TeamsTab = ({ tournament, categoryId, setView }: { tournament: Tournament;
 
     const handleAcceptTeam = async (tId: string) => {
         if (acceptedOnly.length >= (maxTeams || 0)) {
-            alert(`Maximum limit of ${maxTeams} ${isAmericanoMode ? 'players' : 'teams'} reached.`);
+            toast.warning(`Maximum limit of ${maxTeams} ${isAmericanoMode ? 'players' : 'teams'} reached.`);
             return;
         }
         await updateTeamStatus(tournament.id, tId, 'ACCEPTED');
     };
 
     const handleDeleteAcceptedTeam = async (tId: string) => {
-        if (window.confirm(`Are you sure you want to remove this ${isAmericanoMode ? 'player' : 'team'}?`)) {
+        if (await confirmDialog({ title: `Remove this ${isAmericanoMode ? 'player' : 'team'}?`, body: 'It frees up a slot. You can approve them again later.', confirmLabel: 'Remove', danger: true })) {
             await updateTeamStatus(tournament.id, tId, 'REJECTED');
         }
     };
     
     return (
         <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <Card variant="panel">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="font-bold text-white">{isAmericanoMode ? "Pending Players" : "Pending Requests"}</h3>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setShowBulkUpload(true)}
-                                className="bg-surface-ground hover:bg-white/10 text-white px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-bold transition-colors flex items-center gap-1 border border-white/10"
-                            >
-                                <Plus size={12} /> Bulk Upload
-                            </button>
+            <div className="flex flex-col gap-4">
+                {/* Pending requests: a slim bar that opens when there's something to review. */}
+                <div className={`rounded-2xl border ${pending.length ? 'border-amber-400/30 bg-amber-400/[.04]' : 'border-white/10 bg-white/[.02]'}`}>
+                    <button type="button" onClick={() => setShowPending(v => !v)} disabled={!pending.length} aria-expanded={pendingOpen}
+                        className="w-full flex items-center justify-between gap-3 px-5 py-3 text-left disabled:cursor-default">
+                        <span className="flex items-center gap-3">
+                            <span className={`w-2 h-2 rounded-full ${pending.length ? 'bg-amber-400 animate-pulse' : 'bg-white/20'}`} />
+                            <span className="font-bold text-white text-sm">{isAmericanoMode ? 'Pending players' : 'Pending requests'}</span>
                             <Badge variant="warning">{pending.length}</Badge>
-                        </div>
-                    </div>
+                        </span>
+                        <span className="flex items-center gap-1 text-xs font-bold text-content-secondary">
+                            {pending.length ? (pendingOpen ? 'Hide' : 'Review') : 'Nothing to review'}
+                            {pending.length > 0 && <ChevronDown size={16} className={`transition-transform ${pendingOpen ? 'rotate-180' : ''}`} />}
+                        </span>
+                    </button>
+                    {pendingOpen && pending.length > 0 && (
+                        <div className="px-5 pb-4 grid grid-cols-1 lg:grid-cols-2 gap-x-4">
                     {pending.map(t => (
                         <TeamDetailCard 
                             key={t.id}
@@ -3179,8 +3349,9 @@ const TeamsTab = ({ tournament, categoryId, setView }: { tournament: Tournament;
                             } 
                         />
                     ))}
-                    {pending.length === 0 && <p className="text-content-muted text-sm text-center py-4">No pending registrations.</p>}
-                </Card>
+                        </div>
+                    )}
+                </div>
                 <div className="space-y-4">
                     <Card variant="panel">
                         <div className="flex justify-between items-center mb-4">
@@ -3188,6 +3359,12 @@ const TeamsTab = ({ tournament, categoryId, setView }: { tournament: Tournament;
                                 <List size={16} className="text-brand"/> {isAmericanoMode ? "Registered Players" : "Registered Teams"}
                             </h3>
                             <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setShowBulkUpload(true)}
+                                    className="bg-surface-ground hover:bg-white/10 text-white px-3 py-1 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-white/10"
+                                >
+                                    <Upload size={13} /> Bulk upload
+                                </button>
                                 <button 
                                     disabled={acceptedOnly.length >= (maxTeams || 0)}
                                     onClick={() => setShowManualEnrollment(true)} 
@@ -3370,7 +3547,7 @@ const OverviewTab = ({ tournament, categoryId, onEdit, venues = [] }: { tourname
 
     const handleCopy = (text: string) => {
         navigator.clipboard.writeText(text);
-        alert("Link copied to clipboard!");
+        toast.success("Link copied to clipboard!");
     };
 
     const downloadQRCode = () => {
@@ -3388,14 +3565,14 @@ const OverviewTab = ({ tournament, categoryId, onEdit, venues = [] }: { tourname
 
     const handleAcceptTeam = async (tId: string) => {
         if (accepted.length >= (maxTeams || 0)) {
-            alert(`Maximum limit of ${maxTeams} teams reached for this ${category ? 'category' : 'tournament'}.`);
+            toast.warning(`Maximum limit of ${maxTeams} teams reached for this ${category ? 'category' : 'tournament'}.`);
             return;
         }
         await updateTeamStatus(tournament.id, tId, 'ACCEPTED');
     };
 
     const handleDeleteAcceptedTeam = async (tId: string) => {
-        if (window.confirm("Are you sure you want to remove this team? This will open up a slot.")) {
+        if (await confirmDialog({ title: 'Remove this team?', body: 'This opens up a slot. You can approve them again later.', confirmLabel: 'Remove team', danger: true })) {
             // we remove the team by setting status to REJECTED or CANCELLED, or we can use updateTeamStatus
             await updateTeamStatus(tournament.id, tId, 'REJECTED');
         }
@@ -3668,21 +3845,21 @@ const StandingsTab = ({ tournament, categoryId }: any) => {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                    <List size={24} className="text-brand"/> {isAmericano ? "Tournament Leaderboard" : "Tournament Standings"}
-                </h3>
-                
-                <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold uppercase tracking-wider py-2.5 px-4 rounded-xl shadow-sm">
-                        <span className="relative flex h-2.5 w-2.5">
+            {/* One toolbar: title and live status on the left, group filter and export on the right. */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[.02] px-5 py-4">
+                <div className="min-w-0">
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                        <List size={22} className="text-brand shrink-0"/> {isAmericano ? "Tournament Leaderboard" : "Tournament Standings"}
+                    </h3>
+                    <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-content-muted">
+                        <span className="relative flex h-2 w-2">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </span>
-                        <span>Auto-Synced Standings</span>
+                        Updates automatically from results
                         <button
                             disabled={isRecalculating}
-                            title="Force Refresh Standings"
+                            title="Recalculate standings now"
                             onClick={async () => {
                                 if (!tournament?.id) return;
                                 setIsRecalculating(true);
@@ -3697,36 +3874,36 @@ const StandingsTab = ({ tournament, categoryId }: any) => {
                                     setIsRecalculating(false);
                                 }
                             }}
-                            className="ml-1 hover:text-white p-0.5 rounded transition-colors disabled:opacity-50 cursor-pointer"
+                            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-content-secondary hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50 cursor-pointer"
                         >
-                            <RotateCcw size={14} className={isRecalculating ? 'animate-spin text-brand' : ''} />
+                            <RotateCcw size={12} className={isRecalculating ? 'animate-spin text-brand' : ''} /> Refresh
                         </button>
                     </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                    {groupKeys.length > 1 && !isAmericano && (
+                        <select
+                            aria-label="Group"
+                            value={selectedGroup}
+                            onChange={(e) => setSelectedGroup(e.target.value)}
+                            className="h-10 bg-surface-elevated border border-white/10 rounded-xl px-3 text-white text-sm font-semibold focus:outline-none focus:border-brand transition-colors cursor-pointer"
+                        >
+                            <option value="All">All groups</option>
+                            {groupKeys.map(g => (
+                                <option key={g} value={g}>Group {g}</option>
+                            ))}
+                        </select>
+                    )}
                     <button
                         onClick={() => {
                             setExporterTeams(standings);
                             setExporterOpen(true);
                         }}
-                        className="bg-brand hover:bg-brand/90 text-white text-xs font-black uppercase tracking-wider py-2.5 px-5 rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-brand/20"
+                        className="h-10 bg-brand hover:bg-brand/90 text-white text-sm font-bold py-2 px-4 rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-brand/20"
                     >
-                        <Tv size={14} className="animate-pulse" /> Export Standings
+                        <Tv size={15} /> Export standings
                     </button>
-
-                    {groupKeys.length > 1 && !isAmericano && (
-                        <div className="flex items-center gap-3">
-                            <label className="text-sm font-bold text-content-muted uppercase tracking-wider">Select Group</label>
-                            <select 
-                                value={selectedGroup}
-                                onChange={(e) => setSelectedGroup(e.target.value)}
-                                className="bg-surface-elevated border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-brand transition-colors"
-                            >
-                                <option value="All">All Groups</option>
-                                {groupKeys.map(g => (
-                                    <option key={g} value={g}>Group {g}</option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
                 </div>
             </div>
 
@@ -3890,6 +4067,19 @@ const GroupAssignmentTab = ({ tournament, categoryId }: { tournament: Tournament
     const [localGroups, setLocalGroups] = useState<Record<string, string>>({});
     const [isDirty, setIsDirty] = useState(false);
     const [saving, setSaving] = useState(false);
+    // Once a group match is live or played, moving teams would rewrite results: lock the draw.
+    const { matches: allMatches } = useTournamentMatches(tournament.id);
+    const catMatches = (allMatches || []).filter(m => isMatchInCategory(m, categoryId, tournament));
+    const groupMatches = catMatches.filter(m => !isPadelKo(m));
+    const locked = groupMatches.some(m => String(m.status).toUpperCase() !== 'SCHEDULED');
+    // Live tables per saved group (what spectators see), not the unsaved picks.
+    const savedGroups = [...new Set(teams.map(t => t.groupId).filter(Boolean) as string[])].sort();
+    const tables = savedGroups.map(g => {
+        const gTeams = teams.filter(t => t.groupId === g);
+        const ids = new Set(gTeams.map(t => t.id));
+        const gm = groupMatches.filter(m => ids.has(m.team1Id || '') && ids.has(m.team2Id || ''));
+        return { g, rows: sortStandings(calculateStatsForTournament(tournament, gTeams, gm, categoryId || undefined) as any[]) as Team[] };
+    });
 
     useEffect(() => {
         const initial: Record<string, string> = {};
@@ -3971,10 +4161,10 @@ const GroupAssignmentTab = ({ tournament, categoryId }: { tournament: Tournament
             }
 
             setIsDirty(false);
-            alert('Group assignments saved successfully.');
+            toast.success('Group assignments saved successfully.');
         } catch (err) {
             console.error(err);
-            alert('Failed to save group assignments.');
+            toast.error('Failed to save group assignments.');
         } finally {
             setSaving(false);
         }
@@ -4013,19 +4203,22 @@ const GroupAssignmentTab = ({ tournament, categoryId }: { tournament: Tournament
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <div>
                     <h3 className="font-bold text-white">Group Assignments</h3>
+                    {locked && <div className="text-amber-300 text-xs mt-1 flex items-center gap-1"><Lock size={13}/> The group stage has started, so groups are locked. Reset the started matches to change them.</div>}
                     {!isValid && <div className="text-accent-warning text-xs mt-1 flex items-center gap-1"><AlertTriangle size={14}/> Teams cannot be divided equally. {teams.length} teams / {groupSize} per group.</div>}
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
                     <button 
                         onClick={handleAutoAssign} 
-                        className="bg-surface-elevated hover:bg-white/10 text-white px-4 py-2 rounded-xl font-bold transition-all border border-white/10 flex items-center gap-2 flex-1 sm:flex-none justify-center"
+                        disabled={locked}
+                        title={locked ? 'Locked: the group stage has started' : undefined}
+                        className="bg-surface-elevated hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2 rounded-xl font-bold transition-all border border-white/10 flex items-center gap-2 flex-1 sm:flex-none justify-center"
                     >
                         <RefreshCcw size={16}/>
                         Auto-Assign
                     </button>
                     <button 
                         onClick={handleSave} 
-                        disabled={!isDirty || saving}
+                        disabled={!isDirty || saving || locked}
                         className="bg-brand hover:bg-brand-light disabled:opacity-50 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg shadow-brand/20 flex items-center gap-2 flex-1 sm:flex-none justify-center"
                     >
                         {saving ? <Loader2 size={16} className="animate-spin" /> : <Database size={16}/>}
@@ -4042,7 +4235,8 @@ const GroupAssignmentTab = ({ tournament, categoryId }: { tournament: Tournament
                             {team.name}
                         </span>
                         <select 
-                            className="bg-surface-panel text-white border border-white/10 rounded-lg px-3 py-1.5 focus:border-brand outline-none transition-all cursor-pointer hover:bg-surface-elevated"
+                            disabled={locked}
+                            className="bg-surface-panel text-white border border-white/10 rounded-lg px-3 py-1.5 focus:border-brand outline-none transition-all cursor-pointer hover:bg-surface-elevated disabled:opacity-50 disabled:cursor-not-allowed"
                             value={localGroups[team.id] || 'A'}
                             onChange={(e) => handleGroupChange(team.id, e.target.value)}
                         >
@@ -4056,6 +4250,41 @@ const GroupAssignmentTab = ({ tournament, categoryId }: { tournament: Tournament
             </div>
             
             {teams.length === 0 && <p className="text-content-muted text-sm text-center py-8">No accepted teams to group yet.</p>}
+
+            {tables.length > 0 && (
+                <div className="mt-8">
+                    <h3 className="font-bold text-white mb-1">Group tables</h3>
+                    <p className="text-content-muted text-xs mb-4">Live from played group matches, using the saved groups.</p>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {tables.map(({ g, rows }) => (
+                            <div key={g} className="rounded-xl border border-white/10 overflow-hidden">
+                                <div className="px-4 py-2.5 bg-white/[.04] text-xs font-black uppercase tracking-widest text-brand">Group {g}</div>
+                                <table className="w-full text-sm">
+                                    <thead className="text-[11px] uppercase text-content-muted">
+                                        <tr><th className="px-3 py-2 text-left w-8">#</th><th className="px-3 py-2 text-left">Team</th><th className="px-2 py-2">P</th><th className="px-2 py-2">W</th><th className="px-2 py-2">L</th><th className="px-2 py-2">GD</th><th className="px-3 py-2 text-brand">Pts</th></tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5">
+                                        {rows.map((r, i) => {
+                                            const gd = (r.gamesWon || 0) - (r.gamesLost || 0);
+                                            return (
+                                                <tr key={r.id} className="text-center">
+                                                    <td className="px-3 py-2 text-left font-mono text-content-muted">{i + 1}</td>
+                                                    <td className="px-3 py-2 text-left font-bold text-white truncate max-w-[180px]">{r.name}</td>
+                                                    <td className="px-2 py-2 text-content-secondary">{r.matchesPlayed || 0}</td>
+                                                    <td className="px-2 py-2 text-emerald-400">{r.wins || 0}</td>
+                                                    <td className="px-2 py-2 text-red-400">{r.losses || 0}</td>
+                                                    <td className="px-2 py-2 text-content-secondary">{gd > 0 ? `+${gd}` : gd}</td>
+                                                    <td className="px-3 py-2 font-black text-white">{r.points || 0}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </Card>
     )
 }
@@ -4449,7 +4678,13 @@ const ScheduleTab = ({ tournament, categoryId }: { tournament: Tournament; categ
     const filteredMatches = (globalMatches || []).filter(m => isMatchInCategory(m, categoryId, tournament));
   const missingMatches = (globalMatches || []).filter(m => m.roundName && m.roundName.includes('Round of'));
 
+    // Regenerating replaces every match in the category, finished ones included: not once play has started.
+    const playStarted = filteredMatches.some(m => String(m.status).toUpperCase() !== 'SCHEDULED');
     const handleGenerateClick = () => {
+        if (playStarted) {
+            toast.warning('Matches have already started', 'Regenerating would replace played results. Edit individual matches, or reset the started ones first.');
+            return;
+        }
         setShowAutoSchedule(true);
     };
 
@@ -4463,6 +4698,7 @@ const ScheduleTab = ({ tournament, categoryId }: { tournament: Tournament; categ
     };
 
     const executeGenerate = async () => {
+        if (playStarted) { setGenerateError('Matches have already started, so the schedule can’t be regenerated.'); return; }
         setGenerating(true);
         setGenerateError('');
         try {
@@ -4484,7 +4720,7 @@ const ScheduleTab = ({ tournament, categoryId }: { tournament: Tournament; categ
             await appendNewMexicanoRound(tournament.id);
         } catch(e) {
             console.error(e);
-            alert("Failed to generate next Mexicano round.");
+            toast.error("Failed to generate next Mexicano round.");
         } finally {
             setGenerating(false);
         }
@@ -4607,7 +4843,7 @@ const ScheduleTab = ({ tournament, categoryId }: { tournament: Tournament; categ
             setEditingMatch(null);
         } catch (error) {
             console.error("Failed to save match edit:", error);
-            alert("Failed to save changes. Please try again.");
+            toast.error("Failed to save changes. Please try again.");
         } finally {
             setIsSavingMatch(false);
         }
@@ -4865,7 +5101,7 @@ const ScheduleTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                             {['IN_PROGRESS', 'LIVE'].includes(String(editingMatch.status).toUpperCase()) && (
                                 <button onClick={async () => {
                                     const pts = (editingMatch.score?.history || []).length;
-                                    if (!window.confirm(pts ? `This match already has ${pts} point(s) scored. Reset it to not started and clear the score?` : 'Reset this match to not started? It leaves the live screens.')) return;
+                                    if (!(await confirmDialog({ title: 'Reset this match to not started?', body: pts ? `It already has ${pts} point(s) scored; the score will be cleared.` : 'It leaves the live screens.', confirmLabel: 'Reset match', danger: true }))) return;
                                     try { await resetMatchToScheduled(tournament.id, editingMatch.id, auth.currentUser?.email || 'admin'); toast.success('Match reset to not started'); setEditingMatch(null); }
                                     catch (e) { console.error(e); toast.error("Couldn't reset the match", 'Please try again.'); }
                                 }} className="w-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-bold py-3 rounded-lg flex items-center justify-center gap-2 border border-amber-500/30 transition-colors">
@@ -4895,10 +5131,10 @@ const ScheduleTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                                     OBS Broadcast Link
                                 </div>
                                 <div className="flex gap-2">
-                                    <input readOnly value={`https://matchup.com.pk/#obs/${tournament.id}/${editingMatch.id}`} className="flex-1 bg-surface-dark border border-white/10 rounded-lg p-2 text-xs text-content-secondary font-mono outline-none" />
+                                    <input readOnly value={obsLinkFor(tournament.id, editingMatch)} className="flex-1 bg-surface-dark border border-white/10 rounded-lg p-2 text-xs text-content-secondary font-mono outline-none" />
                                     <button onClick={() => {
-                                        navigator.clipboard.writeText(`https://matchup.com.pk/#obs/${tournament.id}/${editingMatch.id}`);
-                                        alert('OBS Link copied!');
+                                        navigator.clipboard.writeText(obsLinkFor(tournament.id, editingMatch));
+                                        toast.success('OBS Link copied!');
                                     }} className="p-2 bg-brand/20 text-brand rounded-lg hover:bg-brand/30 transition-colors" title="Copy OBS Link">
                                         <Copy size={16} />
                                     </button>
@@ -5115,6 +5351,7 @@ const KnockoutTab = ({ tournament, categoryId }: { tournament: Tournament; categ
     const [deletingMatch, setDeletingMatch] = useState<Match | null>(null);
     const [correctingScoreMatch, setCorrectingScoreMatch] = useState<Match | null>(null);
     const [showAddMatch, setShowAddMatch] = useState(false);
+    const [showBracket, setShowBracket] = useState(false);
     const [selectedColKey, setSelectedColKey] = useState<string>('ALL');
 
     const filteredMatches = (globalMatches || []).filter(m => isMatchInCategory(m, categoryId, tournament));
@@ -5162,6 +5399,14 @@ const KnockoutTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                 colKey = `ROUND_${baseRound}_R32`;
                 title = 'Round of 32';
                 order = m.round ? 1000 + m.round : 1003;
+            } else if (/^round of \d+/i.test(m.roundName || '')) {
+                const size = /^round of (\d+)/i.exec(m.roundName!)![1];
+                colKey = `ROUND_${baseRound}_R${size}`;
+                title = `Round of ${size}`;
+            } else if (m.roundName === 'Third Place') {
+                colKey = `ROUND_${baseRound}_3P`;
+                title = 'Third Place';
+                order = m.round ? 999.5 + m.round : 1006.5;
             } else {
                 colKey = `ROUND_${baseRound}_${m.roundName || 'Match'}`;
                 title = m.roundName || `Round ${baseRound}`;
@@ -5219,7 +5464,7 @@ const KnockoutTab = ({ tournament, categoryId }: { tournament: Tournament; categ
             setEditingMatch(null);
         } catch (error) {
             console.error("Failed to save match edit:", error);
-            alert("Failed to save changes. Please try again.");
+            toast.error("Failed to save changes. Please try again.");
         } finally {
             setIsSavingMatch(false);
         }
@@ -5249,9 +5494,15 @@ const KnockoutTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                      
                      <div className="hidden md:block h-8 w-px bg-white/10 mx-2"></div>
                      
+                     <button
+                        onClick={() => setShowBracket(true)}
+                        className="bg-brand hover:bg-brand-light text-content-inverse px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg shadow-brand/20 ml-auto md:ml-0"
+                     >
+                         <Trophy size={18} /> Generate bracket
+                     </button>
                      <button 
                         onClick={() => setShowAddMatch(true)}
-                        className="bg-brand hover:bg-brand-light text-content-inverse px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg shadow-brand/20 ml-auto md:ml-0"
+                        className="bg-white/5 hover:bg-white/10 text-white border border-white/10 px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-all"
                      >
                          <Plus size={18} /> Add Match
                      </button>
@@ -5454,7 +5705,7 @@ const KnockoutTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                             {['IN_PROGRESS', 'LIVE'].includes(String(editingMatch.status).toUpperCase()) && (
                                 <button onClick={async () => {
                                     const pts = (editingMatch.score?.history || []).length;
-                                    if (!window.confirm(pts ? `This match already has ${pts} point(s) scored. Reset it to not started and clear the score?` : 'Reset this match to not started? It leaves the live screens.')) return;
+                                    if (!(await confirmDialog({ title: 'Reset this match to not started?', body: pts ? `It already has ${pts} point(s) scored; the score will be cleared.` : 'It leaves the live screens.', confirmLabel: 'Reset match', danger: true }))) return;
                                     try { await resetMatchToScheduled(tournament.id, editingMatch.id, auth.currentUser?.email || 'admin'); toast.success('Match reset to not started'); setEditingMatch(null); }
                                     catch (e) { console.error(e); toast.error("Couldn't reset the match", 'Please try again.'); }
                                 }} className="w-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-bold py-3 rounded-lg flex items-center justify-center gap-2 border border-amber-500/30 transition-colors">
@@ -5485,10 +5736,10 @@ const KnockoutTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                                     OBS Broadcast Link
                                 </div>
                                 <div className="flex gap-2">
-                                    <input readOnly value={`https://matchup.com.pk/#obs/${tournament.id}/${editingMatch.id}`} className="flex-1 bg-surface-dark border border-white/10 rounded-lg p-2 text-xs text-content-secondary font-mono outline-none" />
+                                    <input readOnly value={obsLinkFor(tournament.id, editingMatch)} className="flex-1 bg-surface-dark border border-white/10 rounded-lg p-2 text-xs text-content-secondary font-mono outline-none" />
                                     <button onClick={() => {
-                                        navigator.clipboard.writeText(`https://matchup.com.pk/#obs/${tournament.id}/${editingMatch.id}`);
-                                        alert('OBS Link copied!');
+                                        navigator.clipboard.writeText(obsLinkFor(tournament.id, editingMatch));
+                                        toast.success('OBS Link copied!');
                                     }} className="p-2 bg-brand/20 text-brand rounded-lg hover:bg-brand/30 transition-colors" title="Copy OBS Link">
                                         <Copy size={16} />
                                     </button>
@@ -5660,6 +5911,8 @@ const KnockoutTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                 </Sheet>
             )}
 
+            {showBracket && <GenerateBracketPanel tournament={tournament} categoryId={categoryId} onClose={() => setShowBracket(false)} />}
+
             {/* Add Match Side Panel */}
             {showAddMatch && (
                 <AddMatchPanel 
@@ -5671,6 +5924,63 @@ const KnockoutTab = ({ tournament, categoryId }: { tournament: Tournament; categ
         </div>
     )
 }
+
+/** Builds the whole knockout bracket at once; winners then move up automatically after every result. */
+const GenerateBracketPanel = ({ tournament, categoryId, onClose }: { tournament: Tournament; categoryId: string | null; onClose: () => void }) => {
+    const cat = categoryId ? tournament.categories?.find(c => c.id === categoryId) : undefined;
+    const teams = (tournament.teams || []).filter(t => t.status === 'ACCEPTED' && (!cat || t.categoryId === cat.id));
+    const groups = [...new Set(teams.map(t => t.groupId || 'A'))];
+    const fmt = cat?.format || tournament.format;
+    const [mode, setMode] = useState<'groups' | 'seeds'>(groups.length > 1 || fmt === TournamentFormat.GROUP_TO_KNOCKOUT ? 'groups' : 'seeds');
+    const [perGroup, setPerGroup] = useState<number>((cat as any)?.advanceCount || (tournament as any).advanceCount || 2);
+    const [size, setSize] = useState<number>(teams.length);
+    const [thirdPlace, setThirdPlace] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState('');
+    const qualifiers = mode === 'groups' ? groups.length * perGroup : Math.min(size, teams.length);
+    let bracket = 2; while (bracket < qualifiers) bracket *= 2;
+    const firstRound = bracket === 2 ? 'Final' : bracket === 4 ? 'Semi-finals' : bracket === 8 ? 'Quarter-finals' : `Round of ${bracket}`;
+    const run = async () => {
+        setBusy(true); setErr('');
+        try {
+            const n = await generateKnockoutBracket(tournament.id, categoryId, { mode, perGroup, size, thirdPlace });
+            toast.success('Bracket created', `${n} knockout matches. Winners now move up automatically.`);
+            onClose();
+        } catch (e: any) { setErr(e?.message || 'Couldn’t create the bracket.'); setBusy(false); }
+    };
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+            <div className="w-full max-w-lg bg-surface-panel border border-white/10 rounded-2xl p-6 space-y-5" onClick={e => e.stopPropagation()} role="dialog" aria-label="Generate knockout bracket">
+                <div>
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2"><Trophy className="text-brand" size={20} /> Generate knockout bracket</h3>
+                    <p className="text-content-secondary text-sm mt-1">Creates every round up to the final in one go. When a match finishes, its winner is placed in the next round automatically.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                    {([['groups', 'From group standings', 'Top teams of each group, filled in when the group finishes.'], ['seeds', 'From the team list', 'Ranked by the current table, otherwise registration order.']] as const).map(([k, title, hint]) => (
+                        <button key={k} type="button" onClick={() => setMode(k)} className={`text-left rounded-xl border px-3 py-2.5 transition-all ${mode === k ? 'border-brand ring-2 ring-brand/40 bg-brand/5' : 'border-white/10 hover:border-white/30'}`}>
+                            <span className="block text-white text-sm font-bold">{title}</span>
+                            <span className="block text-[11px] text-content-muted mt-0.5">{hint}</span>
+                        </button>
+                    ))}
+                </div>
+                {mode === 'groups' ? (
+                    <label className="block"><span className="adm-label">Teams that qualify from each group ({groups.length} {groups.length === 1 ? 'group' : 'groups'})</span>
+                        <input type="number" min={1} className="adm-input" value={perGroup} onChange={e => setPerGroup(Math.max(1, Number(e.target.value) || 1))} /></label>
+                ) : (
+                    <label className="block"><span className="adm-label">Teams in the bracket (of {teams.length})</span>
+                        <input type="number" min={2} max={teams.length} className="adm-input" value={size} onChange={e => setSize(Math.max(2, Math.min(teams.length, Number(e.target.value) || 2)))} /></label>
+                )}
+                <label className="flex items-center gap-2 text-sm text-white"><input type="checkbox" checked={thirdPlace} onChange={e => setThirdPlace(e.target.checked)} /> Add a third-place match</label>
+                <p className="text-xs text-content-muted">{qualifiers} teams · starts at the {firstRound}{bracket > qualifiers ? ` · ${bracket - qualifiers} top ${bracket - qualifiers === 1 ? 'seed gets a bye' : 'seeds get byes'}` : ''}. Knockout matches that haven’t started are replaced.</p>
+                {err && <div className="rounded-xl border border-red-500/30 bg-red-500/10 text-red-200 text-sm px-3 py-2" role="alert">{err}</div>}
+                <div className="flex gap-3">
+                    <button type="button" onClick={onClose} className="flex-1 bg-white/5 hover:bg-white/10 text-white py-3 rounded-xl font-bold border border-white/10">Cancel</button>
+                    <button type="button" onClick={run} disabled={busy || qualifiers < 2} className="flex-[2] bg-brand hover:bg-brand-light disabled:opacity-50 text-content-inverse py-3 rounded-xl font-bold">{busy ? 'Creating…' : 'Create bracket'}</button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const TeamSelector = ({ tournament, categoryId, value, onChange, label, className }: any) => {
     const [tab, setTab] = useState<'pool' | 'others'>('pool');
@@ -5891,7 +6201,7 @@ const AddMatchPanel = ({ tournament, categoryId, onClose }: { tournament: Tourna
             onClose();
         } catch (e) {
             console.error(e);
-            alert("Failed to add match.");
+            toast.error("Failed to add match.");
         } finally {
             setIsSubmitting(false);
         }

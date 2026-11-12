@@ -54,15 +54,15 @@ export const ReplaceTeamModal: React.FC<ReplaceTeamModalProps> = ({
     const handleNext = () => {
         if (step === 2) {
             if (selectionMode === 'new' && (!newTeamName || !newPlayer1Name || !newPlayer2Name)) {
-                alert("Please fill in all team details.");
+                toast.error("Please fill in all team details.");
                 return;
             }
             if (selectionMode === 'new' && askCountry && (!newPlayer1Country || !newPlayer2Country)) {
-                alert("Please select the country for each player.");
+                toast.error("Please select the country for each player.");
                 return;
             }
             if (selectionMode === 'existing' && !selectedExistingTeamId) {
-                alert("Please select a team.");
+                toast.error("Please select a team.");
                 return;
             }
         }

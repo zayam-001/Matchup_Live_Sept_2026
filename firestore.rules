@@ -54,19 +54,25 @@ service cloud.firestore {
 
     // Users
     match /users/{userId} {
-      // Users can read/write their own document
+      // Users can read/write their own document, but never their own role: the role
+      // decides organiser/admin access (isStaff), so only a superadmin sets it.
       allow read: if isOwner(userId) || isSuperAdmin();
       allow list: if isAuthenticated() && resource.data.email == request.auth.token.email || isSuperAdmin();
-      allow write: if isOwner(userId) || isSuperAdmin();
+      allow create: if isSuperAdmin() || (isOwner(userId) && request.resource.data.get('role', 'player') == 'player');
+      allow update: if isSuperAdmin() || (isOwner(userId) && request.resource.data.get('role', null) == resource.data.get('role', null));
+      allow delete: if isSuperAdmin();
     }
     // Players
     match /players/{userId} {
       // Players can read and write only their own document. Superadmins can read/write all.
       allow read, list: if true;
-      allow create: if (isOwner(userId) && request.resource.data.get('walletPoints', 0) == 0) || isSuperAdmin();
+      // `role` is what isSuperAdmin() checks, so nobody can give it to themselves.
+      allow create: if (isOwner(userId) && request.resource.data.get('walletPoints', 0) == 0
+        && request.resource.data.get('role', 'player') == 'player') || isSuperAdmin();
       // Referees (authenticated) update stats. Nobody but a superadmin can raise a
       // wallet balance, and only the owner can spend it.
-      allow update: if isSuperAdmin() || (isAuthenticated() && (
+      allow update: if isSuperAdmin() || (isAuthenticated() &&
+        request.resource.data.get('role', null) == resource.data.get('role', null) && (
         request.resource.data.get('walletPoints', 0) == resource.data.get('walletPoints', 0) ||
         (isOwner(userId) && request.resource.data.get('walletPoints', 0) < resource.data.get('walletPoints', 0))
       ));
@@ -186,7 +192,10 @@ service cloud.firestore {
         resource.data.organizerEmail == request.auth.token.email ||
         resource.data.adminTag == request.auth.token.email ||
         isSuperAdmin() ||
-        request.auth.token.firebase.sign_in_provider == 'anonymous'
+        // Referees (anonymous sign-in) update standings, never who owns the
+        // tournament or its passcode.
+        (request.auth.token.firebase.sign_in_provider == 'anonymous' &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['organizerId', 'organizerEmail', 'adminTag', 'refereePasscode']))
       );
       allow delete: if isAuthenticated() && (
         resource.data.organizerId == request.auth.uid || 
@@ -280,6 +289,113 @@ service cloud.firestore {
     match /onboardedPlayers/{playerId} {
       allow read: if true;
       allow write: if isAuthenticated();
+    }
+
+    // ---------------------------------------------------------------- Futsal
+    // Separate collections so padel code never reads them. Public read; the
+    // organiser who owns a competition (or a superadmin) manages it; captains
+    // register and edit their own squad; scorers update matches with the same
+    // passcode + anonymous sign-in model padel referees use.
+    function futsalOwns(tournamentId) {
+      let t = get(/databases/$(database)/documents/futsalTournaments/$(tournamentId)).data;
+      return isAuthenticated() && (
+        t.organizerId == request.auth.uid ||
+        (t.organizerEmail != '' && t.organizerEmail == request.auth.token.email) ||
+        isSuperAdmin()
+      );
+    }
+    function isRealUser() {
+      return isAuthenticated() && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    match /futsalTournaments/{id} {
+      allow read: if true;
+      allow create: if isRealUser() && request.resource.data.organizerId == request.auth.uid;
+      allow update: if futsalOwns(id) && request.resource.data.organizerId == resource.data.organizerId;
+      allow delete: if futsalOwns(id);
+    }
+
+    match /futsalTeams/{id} {
+      allow read: if true;
+      allow create: if futsalOwns(request.resource.data.tournamentId) || (
+        isRealUser() &&
+        request.resource.data.captainUid == request.auth.uid &&
+        request.resource.data.status == 'PENDING' &&
+        get(/databases/$(database)/documents/futsalTournaments/$(request.resource.data.tournamentId)).data.status == 'REGISTRATION'
+      );
+      // Captains can change their squad and contact details, never status, group or seed.
+      // The captain is matched by account, or by their email when the organiser imported the team.
+      allow update: if futsalOwns(resource.data.tournamentId) || (
+        isRealUser() &&
+        (resource.data.captainUid == request.auth.uid ||
+          (request.auth.token.email != null && resource.data.get('captainEmail', '') != '' &&
+           request.auth.token.email.lower() == resource.data.captainEmail.lower())) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name', 'shortName', 'color', 'logoUrl', 'captainName', 'captainPhone', 'captainEmail', 'players'])
+      );
+      allow delete: if futsalOwns(resource.data.tournamentId);
+    }
+
+    match /futsalMatches/{id} {
+      allow read: if true;
+      allow create: if futsalOwns(request.resource.data.tournamentId);
+      allow update: if request.resource.data.tournamentId == resource.data.tournamentId && (
+        futsalOwns(resource.data.tournamentId) ||
+        (isAuthenticated() && request.auth.token.firebase.sign_in_provider == 'anonymous')
+      );
+      allow delete: if futsalOwns(resource.data.tournamentId);
+    }
+
+    // ---------------------------------------------------------------- Player squads
+    // Teams a player builds for themselves. Members (by email) can list and open
+    // them; only the owner changes or deletes one, and ownership can't move.
+    match /playerSquads/{id} {
+      allow get: if isAuthenticated();
+      allow list: if isAuthenticated() && (
+        resource.data.ownerUid == request.auth.uid ||
+        (request.auth.token.email != null && request.auth.token.email.lower() in resource.data.members)
+      );
+      allow create: if isRealUser() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isRealUser() && resource.data.ownerUid == request.auth.uid && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if isRealUser() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    // ---------------------------------------------------------------- Quick Play
+    // Casual matches a player sets up. Signed-in users can open one by its id
+    // (shared with the referee code); only the host and invited players can list
+    // them. The host edits everything; a referee (any signed-in user holding the
+    // match link) may change only the score.
+    match /quickMatches/{id} {
+      allow get: if isAuthenticated();
+      allow list: if isAuthenticated() && (
+        resource.data.hostUid == request.auth.uid ||
+        (request.auth.token.email != null && request.auth.token.email.lower() in resource.data.invites)
+      );
+      allow create: if isRealUser() && request.resource.data.hostUid == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        resource.data.hostUid == request.auth.uid ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['score', 'events', 'status', 'winner', 'updatedAt'])
+      );
+      allow delete: if isAuthenticated() && resource.data.hostUid == request.auth.uid;
+    }
+    // Quick Play community leaderboard: a finished match's points per player, keyed by a hash of
+    // their email (no addresses). Any signed-in user can read it; only the match's host can publish
+    // it, and only for a match that has actually finished.
+    match /quickBoard/{matchId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isRealUser()
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.matchId == matchId
+        && get(/databases/$(database)/documents/quickMatches/$(matchId)).data.hostUid == request.auth.uid
+        && get(/databases/$(database)/documents/quickMatches/$(matchId)).data.status == 'COMPLETED';
+      allow delete: if isRealUser() && resource.data.hostUid == request.auth.uid;
+    }
+    // Referee code -> match id. Looked up by exact code only; never listed or changed.
+    match /quickCodes/{code} {
+      allow get: if true;
+      allow list, update: if false;
+      allow create: if isRealUser() && request.resource.data.hostUid == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.hostUid == request.auth.uid;
     }
 
     // FIX (found live via local testing of the real app): enrollTeamManually

@@ -118,7 +118,7 @@ export const RegistrationForm: React.FC<{ initialTournamentId?: string }> = ({ i
             else setFormData(prev => ({ ...prev, p2Photo: url }));
         } catch (error) {
             console.error("Upload error:", error);
-            alert("Failed to upload image.");
+            toast.error("Failed to upload image.");
         }
     }
   };

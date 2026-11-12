@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from './ui/Card';
 import { sendPlayerPasswordReset, registerPlayer, loginPlayer, loginReferee, loginOrganiser, changeOrganiserPassword, skipOrganiserPasswordChange, loginWithGoogle, completeGoogleSignUp, subscribeToTournaments, setPlayerPersistence } from '../services/storage';
 import { db, auth } from '../services/storage';
@@ -7,6 +7,44 @@ import { motion } from 'motion/react';
 import { SkillLevel, Tournament } from '../types';
 import { ArrowRight, Trophy, Shield, Activity, Loader2, User, Lock, ChevronRight, Eye, EyeOff, Mail } from 'lucide-react';
 import './landing/home.css';
+
+/** Plain-language auth errors: never show "Firebase" or raw error codes to people signing in. */
+const friendlyAuthError = (err: any, fallback = 'Something went wrong. Please try again.'): string => {
+    const code: string = err?.code || '';
+    const raw: string = String(err?.message || '');
+    if (code === 'auth/password-does-not-meet-requirements' || /password requirements/i.test(raw)) {
+        const needs: string[] = [];
+        if (/upper case/i.test(raw)) needs.push('an uppercase letter');
+        if (/lower case/i.test(raw)) needs.push('a lowercase letter');
+        if (/numeric character/i.test(raw.replace(/non-alphanumeric character/gi, ''))) needs.push('a number');
+        if (/non-alphanumeric/i.test(raw)) needs.push('a symbol (like ! @ # $)');
+        const len = raw.match(/at least (\d+) characters/i)?.[1];
+        if (len) needs.push(`at least ${len} characters`);
+        return needs.length ? `Your password needs ${needs.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` : 'Choose a stronger password with upper and lowercase letters, a number and a symbol.';
+    }
+    const map: Record<string, string> = {
+        'auth/invalid-credential': "Wrong email or password. If you signed up with Google, use 'Continue with Google' above.",
+        'auth/wrong-password': 'Wrong email or password.',
+        'auth/user-not-found': 'No account found with that email.',
+        'auth/email-already-in-use': 'An account with this email already exists. Try signing in instead.',
+        'auth/invalid-email': 'Please enter a valid email address.',
+        'auth/weak-password': 'Your password is too short. Use at least 6 characters.',
+        'auth/too-many-requests': 'Too many attempts. Please wait a few minutes and try again.',
+        'auth/network-request-failed': 'No connection. Check your internet and try again.',
+        'auth/user-disabled': 'This account has been disabled. Contact support.',
+        'auth/popup-closed-by-user': 'Google sign-in was closed before it finished.',
+        'auth/cancelled-popup-request': 'Google sign-in was cancelled.',
+        'auth/popup-blocked': 'Your browser blocked the Google sign-in window. Allow pop-ups and try again.',
+        'auth/account-exists-with-different-credential': 'This email is already registered with a different sign-in method.',
+        'auth/requires-recent-login': 'For security, please sign in again and retry.',
+        'auth/operation-not-allowed': 'This sign-in method isn’t available right now.',
+        'permission-denied': 'You don’t have access to do that.',
+    };
+    if (map[code]) return map[code];
+    // Messages our own code throws are already readable; strip any provider prefix from the rest.
+    const cleaned = raw.replace(/^firebase:\s*/i, '').replace(/\s*\((auth|firestore)\/[^)]+\)\.?\s*$/i, '').replace(/firebase/gi, '').trim();
+    return cleaned && !/^error$/i.test(cleaned) ? cleaned : fallback;
+};
 import './auth.css';
 
 export const Auth: React.FC<{ 
@@ -77,6 +115,19 @@ export const Auth: React.FC<{
 
     // Operations Form State
     const [opRole, setOpRole] = useState<'admin' | 'referee'>('admin');
+    const futsalDemo = useRef(false);
+    const [futsalTournaments, setFutsalTournaments] = useState<{ id: string; name: string; status: string; scorerPasscode: string; sport?: 'futsal' | 'football' }[]>([]);
+    useEffect(() => {
+        if (opRole !== 'referee') return;
+        let unsub = () => {};
+        let live = true;
+        import('../futsal/store').then(m => {
+            if (!live) return;
+            futsalDemo.current = m.isDemo();
+            unsub = m.subscribeFutsalTournaments(rows => setFutsalTournaments(rows.filter(t => t.status === 'ACTIVE' || t.status === 'REGISTRATION')));
+        });
+        return () => { live = false; unsub(); };
+    }, [opRole]);
     const [opEmail, setOpEmail] = useState('');
     const [opPassword, setOpPassword] = useState('');
     const [opPasscode, setOpPasscode] = useState('');
@@ -228,6 +279,17 @@ export const Auth: React.FC<{
                         }
                     }
                 } else if (opRole === 'referee') {
+                    // Futsal and football competitions share this login and open their referee mode.
+                    const ft = futsalTournaments.find(x => `futsal:${x.id}` === selectedTournamentId);
+                    if (ft) {
+                        if (opPasscode !== String(ft.scorerPasscode)) throw new Error("Invalid tournament passcode.");
+                        // Demo data lives in the browser, so it needs no sign-in.
+                        if (!futsalDemo.current) { try { await loginReferee(); } catch (e) { console.warn("Anonymous sign-in failed:", e); } }
+                        // Same session and route as padel referees: the #referee page picks the futsal screen by id.
+                        localStorage.setItem('referee_session', JSON.stringify({ timestamp: Date.now(), tournamentId: `futsal:${ft.id}` }));
+                        onAuthSuccess('referee', `futsal:${ft.id}`);
+                        return;
+                    }
                     const t = tournaments.find(t => t.id === selectedTournamentId || t.slug === selectedTournamentId);
                     if (!t) throw new Error("Please select a tournament.");
                     
@@ -245,11 +307,7 @@ export const Auth: React.FC<{
                 }
             }
         } catch (err: any) {
-            let errorMessage = err.message || "Authentication failed. Please try again.";
-            if (err.code === 'auth/invalid-credential') {
-                errorMessage = "Invalid email or password. If you originally signed up with Google, please use the 'Continue with Google' button above.";
-            }
-            setError(errorMessage);
+            setError(friendlyAuthError(err, 'Sign-in failed. Please try again.'));
         } finally {
             setIsLoading(false);
         }
@@ -298,7 +356,7 @@ export const Auth: React.FC<{
 
                             throw new Error("This Google account does not have admin privileges. Please use a different account or contact support.");
                         } catch (e: any) {
-                            setError(e.message || "Failed to verify admin privileges.");
+                            setError(friendlyAuthError(e, "Couldn't verify admin access."));
                             return;
                         }
                     } else {
@@ -315,7 +373,7 @@ export const Auth: React.FC<{
                 onAuthSuccess('player');
             }
         } catch (err: any) {
-            setError("Google sign-in failed: " + err.message);
+            setError(friendlyAuthError(err, 'Google sign-in failed. Please try again.'));
         } finally {
             setIsLoading(false);
         }
@@ -336,7 +394,7 @@ export const Auth: React.FC<{
             await changeOrganiserPassword(newOpPassword);
             onAuthSuccess('admin');
         } catch (err: any) {
-            setError(err.message || "Failed to update password.");
+            setError(friendlyAuthError(err, "Couldn't update your password. Please try again."));
         } finally {
             setIsLoading(false);
         }
@@ -348,7 +406,7 @@ export const Auth: React.FC<{
             await skipOrganiserPasswordChange();
             onAuthSuccess('admin');
         } catch (err: any) {
-            setError(err.message || "Failed to skip.");
+            setError(friendlyAuthError(err, "Couldn't continue. Please try again."));
         } finally {
             setIsLoading(false);
         }
@@ -653,7 +711,15 @@ export const Auth: React.FC<{
                                             <div className="auth__input-wrap">
                                                 <select required value={selectedTournamentId} onChange={(e) => setSelectedTournamentId(e.target.value)} className="auth__input auth__select">
                                                     <option value="" disabled className="text-black bg-white">Select a tournament</option>
-                                                    {tournaments.map(t => <option key={t.id} value={t.id} className="text-black bg-white">{t.name}</option>)}
+                                                    {futsalTournaments.length > 0 ? (
+                                                        <>
+                                                            <optgroup label="Padel" className="text-black bg-white">{tournaments.map(t => <option key={t.id} value={t.id} className="text-black bg-white">{t.name}</option>)}</optgroup>
+                                                            {(['futsal', 'football'] as const).map(sp => {
+                                                                const list = futsalTournaments.filter(t => (t.sport === 'football' ? 'football' : 'futsal') === sp);
+                                                                return list.length > 0 && <optgroup key={sp} label={sp === 'football' ? 'Football' : 'Futsal'} className="text-black bg-white">{list.map(t => <option key={t.id} value={`futsal:${t.id}`} className="text-black bg-white">{t.name}</option>)}</optgroup>;
+                                                            })}
+                                                        </>
+                                                    ) : tournaments.map(t => <option key={t.id} value={t.id} className="text-black bg-white">{t.name}</option>)}
                                                 </select>
                                                 <ChevronRight className="auth__chev" size={16} />
                                             </div>

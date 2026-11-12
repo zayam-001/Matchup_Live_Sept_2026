@@ -228,6 +228,71 @@ export const setupHomeStory = (root: HTMLElement, opts: { motion: boolean }): Ho
                     scrollTrigger: { trigger: '.h-upcoming', start: 'top bottom', end: 'bottom top', scrub: true },
                 } as gsap.TweenVars);
 
+                // ── Futsal · New pitch: the court tilts up as formats go 5v5 → 7v7 → custom ──
+                const futsal = q('.h-futsal');
+                const formats = ['5', '6', '7', 'c'];
+                approach('.h-futsal__copy')
+                    .from('.h-futsal__copy .h-line', { yPercent: 60, opacity: 0, stagger: 0.08 }, 0)
+                    .from('.h-futsal__copy > p, .h-futsal__formats', { opacity: 0, y: 30 }, 0.15)
+                    .from('.h-futsal__pitch-wrap', { x: 80, opacity: 0 }, 0);
+                gsap.timeline({
+                    defaults: { ease: 'none' },
+                    scrollTrigger: {
+                        trigger: '.h-futsal__stage',
+                        start: pinned ? 'top top' : 'top 60%',
+                        end: pinned ? '+=100%' : 'bottom 40%',
+                        pin: pinned,
+                        scrub: 0.6,
+                        onUpdate: self => futsal?.setAttribute('data-format', formats[Math.min(formats.length - 1, Math.floor(self.progress * formats.length))]),
+                    },
+                })
+                    .fromTo('.h-pitch', { transformPerspective: 1100, rotationX: 52, rotationZ: 14, scale: 0.92 }, { rotationX: 30, rotationZ: 4, scale: 1.04, duration: 1 }, 0);
+
+                // ── Futsal · Match night: kick-off, fouls, goals, the table moves ──
+                const night = q('.h-matchnight');
+                const clockEl = q('.h-scorebug__time');
+                const halfEl = q('.h-scorebug__half');
+                const homeEl = q('.h-scorebug__h');
+                const foulsH = qa('.h-fouls[data-side="h"] i');
+                const foulsA = qa('.h-fouls[data-side="a"] i');
+                let shownGoals = -1;
+                const paintNight = (p: number) => {
+                    if (!night) return;
+                    const beat = Math.min(4, Math.floor(p * 4) + 1);
+                    night.dataset.beat = String(beat);
+                    const secs = Math.round(p * 32 * 60);
+                    if (clockEl) clockEl.textContent = `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
+                    if (halfEl) halfEl.textContent = p < 0.5 ? '1st half' : '2nd half';
+                    const fill = beat === 2 ? Math.min(1, (p - 0.25) / 0.2) : beat > 2 ? 1 : 0;
+                    foulsH.forEach((el, k) => el.classList.toggle('on', k < Math.ceil(fill * 5)));
+                    foulsA.forEach((el, k) => el.classList.toggle('on', k < Math.ceil(fill * 2)));
+                    const goals = p < 0.56 ? 0 : p < 0.7 ? 1 : 2;
+                    night.dataset.goals = String(goals);
+                    if (homeEl && goals !== shownGoals) {
+                        homeEl.textContent = String(goals);
+                        if (shownGoals >= 0 && goals > shownGoals) {
+                            homeEl.classList.add('is-bump');
+                            window.setTimeout(() => homeEl.classList.remove('is-bump'), 500);
+                        }
+                        shownGoals = goals;
+                    }
+                };
+                approach('.h-matchnight__copy')
+                    .from('.h-matchnight__copy .h-line', { yPercent: 60, opacity: 0, stagger: 0.08 }, 0)
+                    .from('.h-matchnight__copy > p, .h-beats', { opacity: 0, y: 30 }, 0.15)
+                    .from('.h-scorebug', { y: 80, opacity: 0, rotationX: 10, transformPerspective: 1200 }, 0)
+                    .from('.h-events, .h-mini', { y: 60, opacity: 0, stagger: 0.08 }, 0.15);
+                ScrollTrigger.create({
+                    trigger: '.h-matchnight__stage',
+                    start: pinned ? 'top top' : 'top 65%',
+                    end: pinned ? '+=120%' : 'bottom 35%',
+                    pin: pinned,
+                    scrub: 0.6,
+                    onUpdate: self => paintNight(self.progress),
+                    onLeave: () => paintNight(1),
+                });
+                paintNight(0);
+
                 // ── Chapter 6 · The momentum: numbers climb with the scroll ──
                 const counters = qa('.h-count');
                 const counterState = { p: 0 };
@@ -331,6 +396,9 @@ export const setupHomeStory = (root: HTMLElement, opts: { motion: boolean }): Ho
                 gsap.fromTo('.h-footer__word', { yPercent: 40, opacity: 0.2 }, { yPercent: 0, opacity: 1, ease: 'none', scrollTrigger: { trigger: '.h-footer', start: 'top bottom', end: 'bottom bottom', scrub: 0.6 } });
 
                 return () => {
+                    night?.setAttribute('data-beat', '4');
+                    night?.setAttribute('data-goals', '2');
+                    futsal?.setAttribute('data-format', '5');
                     community?.classList.remove('is-pinned');
                     counterObserver.disconnect();
                     heroRig?.classList.remove('is-launched');

@@ -141,7 +141,14 @@
 .adm .adm-ws__title { margin: 4px 0 4px; font-size: clamp(22px, 2.8vw, 34px); font-weight: 900; letter-spacing: -.03em; text-transform: none; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .adm-ws__meta { display: flex; align-items: center; gap: 6px; color: var(--a-muted); font-size: 13px; }
 .adm-ws__actions { display: flex; align-items: center; gap: 8px; }
-.adm-ws__stats { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--a-line); background: rgba(0, 0, 0, .2); }
+.adm-ws__stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); border-top: 1px solid var(--a-line); background: rgba(0, 0, 0, .2); }
+.adm-ws__code-val { display: inline-flex; align-items: center; gap: 6px; }
+.adm-ws__code-reveal { padding: 0; border: 0; background: none; color: #fff; font: inherit; font-size: 20px; font-weight: 900; letter-spacing: .08em; cursor: pointer; }
+.adm-ws__code-btn { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--a-line); background: rgba(255, 255, 255, .04); color: var(--a-muted); cursor: pointer; }
+.adm-ws__code-btn:hover { color: #fff; border-color: rgba(255, 255, 255, .3); }
+.adm-ws__code-edit { display: inline-flex; align-items: center; gap: 6px; }
+.adm-ws__code-edit input { width: 110px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--a-blue, #4D78FF); background: rgba(0, 0, 0, .35); color: #fff; font-size: 16px; font-weight: 800; letter-spacing: .08em; outline: none; }
+.adm-ws__code-edit button { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--a-line); background: rgba(255, 255, 255, .06); color: #fff; cursor: pointer; }
 .adm-ws__stats > div { display: flex; flex-direction: column; gap: 2px; padding: 14px 24px; border-left: 1px solid var(--a-line); }
 .adm-ws__stats > div:first-child { border-left: 0; }
 .adm-ws__stats strong { font-size: 20px; font-weight: 900; color: #fff; }
@@ -202,7 +209,7 @@
   .adm-ws__row { flex-wrap: wrap; padding: 18px; }
   .adm-ws__actions { width: 100%; }
   .adm-ws__stats { grid-template-columns: 1fr 1fr; }
-  .adm-ws__stats > div:nth-child(3) { border-left: 0; }
+  .adm-ws__stats > div:nth-child(odd) { border-left: 0; }
   .adm-ws__stats > div:nth-child(n+3) { border-top: 1px solid var(--a-line); }
   .adm-tabs { top: 64px; }
   .adm-tab { padding: 9px 12px; }

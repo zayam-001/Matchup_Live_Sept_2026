@@ -1,27 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { BootSplash } from './components/BootSplash';
 import { Layout } from './components/ui/Layout';
-import { LiveScoreboard } from './components/LiveScoreboard';
-import { RegistrationForm } from './components/RegistrationForm';
-import { AdminDashboard } from './components/AdminDashboard';
-import { RefereeInterface } from './components/RefereeInterface';
-import LiveScoringPage from './components/LiveScoringPage';
-import { PrivacyPolicy } from './components/PrivacyPolicy';
-import { Auth } from './components/Auth';
-import { PlayerDashboard } from './components/PlayerDashboard';
 import { PublicLanding } from './components/PublicLanding';
-import { QuickPlay } from './components/QuickPlay';
-import { Onboarding } from './components/Onboarding';
-import { CourtLeaderboard } from './components/CourtLeaderboard';
-import { GlobalLeaderboard } from './components/GlobalLeaderboard';
-import { TournamentLeaderboard } from './components/TournamentLeaderboard';
-import { CourtDashboard } from './components/CourtDashboard';
-import { QuickPlaySetup } from './components/QuickPlaySetup';
-import { QuickPlaySession } from './components/QuickPlaySession';
-import OBSOverlay from './components/OBSOverlay';
 import { useAuth } from './hooks/useAuth';
-import { collection, getDocs, limit, query } from 'firebase/firestore';
-import { db, auth } from './services/storage';
+import { auth } from './services/storage';
+
+// Every screen except the landing page loads on demand, so the first visit
+// downloads only what it shows (the admin panel alone is most of the app).
+const named = <M, K extends keyof M>(load: () => Promise<M>, key: K) =>
+  lazy(() => load().then(m => ({ default: m[key] as M[K] & React.ComponentType<any> })));
+const LiveScoreboard = named(() => import('./components/LiveScoreboard'), 'LiveScoreboard');
+const RegistrationForm = named(() => import('./components/RegistrationForm'), 'RegistrationForm');
+const AdminDashboard = named(() => import('./components/AdminDashboard'), 'AdminDashboard');
+const RefereeInterface = named(() => import('./components/RefereeInterface'), 'RefereeInterface');
+const PrivacyPolicy = named(() => import('./components/PrivacyPolicy'), 'PrivacyPolicy');
+const Auth = named(() => import('./components/Auth'), 'Auth');
+const QuickPlay = named(() => import('./components/QuickPlay'), 'QuickPlay');
+const Onboarding = named(() => import('./components/Onboarding'), 'Onboarding');
+const CourtLeaderboard = named(() => import('./components/CourtLeaderboard'), 'CourtLeaderboard');
+const GlobalLeaderboard = named(() => import('./components/GlobalLeaderboard'), 'GlobalLeaderboard');
+const TournamentLeaderboard = named(() => import('./components/TournamentLeaderboard'), 'TournamentLeaderboard');
+const CourtDashboard = named(() => import('./components/CourtDashboard'), 'CourtDashboard');
+const QuickPlaySetup = named(() => import('./components/QuickPlaySetup'), 'QuickPlaySetup');
+const QuickPlaySession = named(() => import('./components/QuickPlaySession'), 'QuickPlaySession');
+const OBSOverlay = lazy(() => import('./components/OBSOverlay'));
+const CourtOBS = lazy(() => import('./components/CourtOBS'));
+const FutsalApp = lazy(() => import('./futsal/FutsalApp'));
+const FutsalPortal = lazy(() => import('./futsal/ui/FutsalPortal'));
+const QuickReferee = lazy(() => import('./futsal/ui/QuickPlay'));
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('landing');
@@ -54,6 +60,8 @@ const App: React.FC = () => {
   const [liveCategoryId, setLiveCategoryId] = useState<string | undefined>();
   const [obsMatchId, setObsMatchId] = useState<string | undefined>();
   const [obsTournamentId, setObsTournamentId] = useState<string | undefined>();
+  const [obsCourt, setObsCourt] = useState<string | undefined>();
+  const [quickCode, setQuickCode] = useState<string | undefined>();
 
   // Hash-based routing with role guards
   useEffect(() => {
@@ -138,7 +146,13 @@ const App: React.FC = () => {
       if (hash === 'obs') {
         // Pattern 1: #obs/tournamentId/matchId
         // Pattern 2: #obs/matchId (legacy fallback)
-        if (segments.length >= 3) {
+        // Pattern 3: #obs/tournamentId/court/courtId - follows whatever is live on that court
+        setObsCourt(undefined);
+        if (segments.length >= 4 && segments[2] === 'court') {
+            setObsTournamentId(segments[1]);
+            setObsCourt(segments.slice(3).join('/'));
+            setObsMatchId(undefined);
+        } else if (segments.length >= 3) {
             setObsTournamentId(segments[1]);
             setObsMatchId(segments[2]);
         } else if (segments.length === 2) {
@@ -146,6 +160,23 @@ const App: React.FC = () => {
             setObsMatchId(segments[1]);
         }
         setActiveTab('obs');
+        return;
+      }
+
+      // Futsal organising now lives inside the organiser portal.
+      if (hash.startsWith('futsal-admin')) {
+        window.location.replace('#admin');
+        return;
+      }
+      // Quick Play referee: #qp or #qp/<code>, open to anyone holding the code.
+      if (hash === 'qp') {
+        setQuickCode(segments[1]);
+        setActiveTab('qp');
+        return;
+      }
+      // Futsal and football share their own router and guards.
+      if (hash.startsWith('futsal') || hash.startsWith('football')) {
+        setActiveTab('futsal');
         return;
       }
 
@@ -163,7 +194,7 @@ const App: React.FC = () => {
       // If they are on a role tab they are authenticated for, allow it.
       if ((hash === 'admin' && adminAuthenticated) ||
           (hash === 'referee' && refereeAuthenticated) ||
-          (hash === 'player' && isAuthenticated)) {
+          ((hash === 'player' || hash === 'player-futsal') && isAuthenticated)) {
           setActiveTab(hash);
           return;
       }
@@ -182,7 +213,7 @@ const App: React.FC = () => {
               window.location.hash = 'player';
               return;
           }
-          if (!isAuthenticated && ['player', 'admin', 'referee', 'auth'].includes(hash)) {
+          if (!isAuthenticated && ['player', 'player-futsal', 'admin', 'referee', 'auth'].includes(hash)) {
               window.location.hash = 'auth-player';
               return;
           }
@@ -245,11 +276,23 @@ const App: React.FC = () => {
     return <BootSplash />;
   }
 
+  if (activeTab === 'futsal') {
+    return <Suspense fallback={<BootSplash />}><FutsalApp organiserSignedIn={adminAuthenticated} /></Suspense>;
+  }
+
+  if (activeTab === 'qp') {
+    return <Suspense fallback={<BootSplash />}><QuickReferee code={quickCode} /></Suspense>;
+  }
+
   if (activeTab === 'obs') {
+    // OBS pages stay transparent while they load: no splash over the stream.
+    if (obsCourt && obsTournamentId) {
+      return <Suspense fallback={null}><CourtOBS tournamentId={obsTournamentId} court={obsCourt} /></Suspense>;
+    }
     if (!obsMatchId) {
       return <div className="min-h-screen bg-bg-dark flex items-center justify-center text-white">Invalid OBS Link</div>;
     }
-    return <OBSOverlay tournamentId={obsTournamentId} matchId={obsMatchId} />;
+    return <Suspense fallback={null}><OBSOverlay tournamentId={obsTournamentId} matchId={obsMatchId} /></Suspense>;
   }
 
   return (
@@ -261,6 +304,7 @@ const App: React.FC = () => {
       refereeAuthenticated={refereeAuthenticated}
       onLogout={handleLogout}
     >
+      <Suspense fallback={<BootSplash />}>
       {activeTab === 'landing' && <PublicLanding onNavigate={handleTabChange} />}
       {activeTab === 'live' && <LiveScoreboard initialTournamentId={liveTournamentId} initialCategoryId={liveCategoryId} />}
       {activeTab === 'register' && <RegistrationForm initialTournamentId={registrationTournamentId} />}
@@ -269,7 +313,10 @@ const App: React.FC = () => {
       {activeTab === 'privacy' && <PrivacyPolicy onBack={() => handleTabChange('landing')} />}
       {activeTab === 'auth-player' && <Auth initialMode="player" onAuthSuccess={handleAuthSuccess} />}
       {activeTab === 'auth-admin' && <Auth initialMode="operations" tournamentId={refereeTournamentId} onAuthSuccess={handleAuthSuccess} />}
-      {activeTab === 'player' && isAuthenticated && <PlayerDashboard onLogout={handleLogout} onNavigate={handleTabChange} />}
+      {/* One player portal for padel and futsal. */}
+      {(activeTab === 'player' || activeTab === 'player-futsal') && isAuthenticated && user && (
+        <FutsalPortal key={activeTab} account={user as any} onNavigate={handleTabChange} onLogout={handleLogout} initialPage={activeTab === 'player-futsal' ? 'overview' : 'home'} />
+      )}
       {activeTab === 'quick-play' && <QuickPlay />}
       {activeTab === 'quick-play-setup' && <QuickPlaySetup />}
       {activeTab === 'quick-play-session' && <QuickPlaySession />}
@@ -288,6 +335,7 @@ const App: React.FC = () => {
       {activeTab === 'global-leaderboard' && <GlobalLeaderboard />}
       {activeTab === 'tournament-leaderboard' && <TournamentLeaderboard />}
       {activeTab === 'court-dashboard' && <CourtDashboard />}
+      </Suspense>
     </Layout>
   );
 };

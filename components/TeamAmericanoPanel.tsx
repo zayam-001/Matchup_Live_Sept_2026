@@ -22,6 +22,7 @@ import {
     updateTeamStatus,
 } from '../services/storage';
 import { toast } from './Toast';
+import { confirmDialog } from './ui/ConfirmDialog';
 
 interface Props {
     tournament: Tournament;
@@ -78,19 +79,19 @@ export const TeamAmericanoPanel: React.FC<Props> = ({ tournament, categoryId, ma
         }
     };
 
-    const generate = () => {
-        if (rounds.length > 0 && !window.confirm('Regenerate the whole schedule? Every current Team Americano match is replaced with a new draw.')) return;
+    const generate = async () => {
+        if (rounds.length > 0 && !(await confirmDialog({ title: 'Regenerate the whole schedule?', body: 'Every current Team Americano match is replaced with a new draw.', confirmLabel: 'Regenerate', danger: true }))) return;
         run('generate', () => generateSchedule(tournament.id, undefined, {
             slots: [], courts: [], matchDuration: cfg.roundDuration, bufferTime: cfg.breakMinutes, useSeeding: false, categoryId,
         }), 'Schedule generated');
     };
 
-    const changeStatus = (team: Team, status: 'WITHDRAWN' | 'DISQUALIFIED' | 'ACCEPTED') => {
+    const changeStatus = async (team: Team, status: 'WITHDRAWN' | 'DISQUALIFIED' | 'ACCEPTED') => {
         const verb = status === 'ACCEPTED' ? 'Reinstate' : status === 'WITHDRAWN' ? 'Withdraw' : 'Disqualify';
         const note = status === 'ACCEPTED' ? '' : cfg.withdrawalRule === 'void'
             ? '\n\nTheir played matches will be voided (this tournament is set to void them).'
             : '\n\nTheir played matches stay in the standings (this tournament is set to keep them).';
-        if (!window.confirm(`${verb} ${team.name}?${note}${anyStarted && status !== 'ACCEPTED' ? '\n\nAfterwards, use "Regenerate remaining rounds" to rebuild the rounds that haven\'t started.' : ''}`)) return;
+        if (!(await confirmDialog({ title: `${verb} ${team.name}?`, body: `${note.trim()}${anyStarted && status !== 'ACCEPTED' ? '\n\nAfterwards, use "Regenerate remaining rounds" to rebuild the rounds that haven\'t started.' : ''}`.trim() || undefined, confirmLabel: verb, danger: status !== 'ACCEPTED' }))) return;
         run(`status_${team.id}`, () => updateTeamStatus(tournament.id, team.id, status), `${team.name}: ${status.toLowerCase()}`);
     };
 
@@ -123,9 +124,9 @@ export const TeamAmericanoPanel: React.FC<Props> = ({ tournament, categoryId, ma
         <span className="flex items-center justify-end gap-1">
             {isLiveMatch(m) && (
                 <button type="button" title="Reset to not started (started by mistake)" disabled={!!busy}
-                    onClick={() => {
+                    onClick={async () => {
                         const pts = (m.score?.history || []).length;
-                        if (!window.confirm(pts ? `This match already has ${pts} point(s) scored. Reset it to not started and clear the score?` : 'Reset this match to not started? It leaves the live screens.')) return;
+                        if (!(await confirmDialog({ title: 'Reset this match to not started?', body: pts ? `It already has ${pts} point(s) scored; the score will be cleared.` : 'It leaves the live screens.', confirmLabel: 'Reset match', danger: true }))) return;
                         run(`reset_${m.id}`, () => resetMatchToScheduled(tournament.id, m.id, auth?.currentUser?.email || 'admin'), 'Match reset to not started');
                     }}
                     className="p-1.5 rounded-lg text-content-muted hover:text-amber-300 hover:bg-amber-500/10"><RotateCcw size={14} /></button>
@@ -167,7 +168,7 @@ export const TeamAmericanoPanel: React.FC<Props> = ({ tournament, categoryId, ma
                     )}
                     {anyStarted && openRounds.length > 0 && (
                         <button type="button" disabled={!!busy}
-                            onClick={() => window.confirm(`Rebuild the ${openRounds.length} round(s) that haven't started, using the current team list? Played rounds are kept.`) && run('regen', () => regenerateTeamAmericanoRemainingRounds(tournament.id, categoryId), 'Remaining rounds regenerated')}
+                            onClick={async () => { if (await confirmDialog({ title: `Rebuild ${openRounds.length} remaining round(s)?`, body: 'Rounds that haven’t started are rebuilt from the current team list. Played rounds are kept.', confirmLabel: 'Rebuild rounds' })) run('regen', () => regenerateTeamAmericanoRemainingRounds(tournament.id, categoryId), 'Remaining rounds regenerated'); }}
                             className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 border disabled:opacity-50 ${fieldChanged ? 'bg-amber-500 border-amber-500 text-black' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}>
                             {busy === 'regen' ? <Loader2 size={15} className="animate-spin" /> : <RefreshCcw size={15} />} Regenerate Remaining Rounds
                         </button>

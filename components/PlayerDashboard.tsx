@@ -13,14 +13,16 @@ import { RankingsTable, ResultsList, TierCounts } from './player/RankingsTable';
 import { MergePrompt } from './player/MergePrompt';
 import './player/player.css';
 import './spectator.css';
-import { GoogleGenAI } from '@google/genai';
 import { Trophy, Calendar, Users, Activity, Settings, LogOut, ChevronRight, MapPin, Plus, Trash2, User, Phone, Mail, Search, Star, Share2, Play, Loader2, Download , History } from 'lucide-react';
 import { ScorecardTemplate } from './ScorecardTemplate';
 import { toPng } from 'html-to-image';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { useAuth } from '../hooks/useAuth';
 import { TeamAmericanoPlayerCard } from './TeamAmericanoPlayerCard';
+
+const PlayerFutsal = React.lazy(() => import('../futsal/ui/PlayerFutsal'));
 import { getActiveFormat, isTeamAmericanoFormat } from '../lib/teamAmericano';
+import { compressToDataUrl } from '../lib/imageCompress';
 
 const performanceData = [
   { month: 'Jan', matches: 2, wins: 1, winRate: 50 },
@@ -31,7 +33,10 @@ const performanceData = [
   { month: 'Jun', matches: 8, wins: 6, winRate: 75 },
 ];
 
-export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab: string) => void }> = ({ onLogout, onNavigate }) => {
+export type PadelTab = 'OVERVIEW' | 'RANKINGS' | 'HISTORY' | 'TEAMS';
+
+/** The padel profile. `embedded` renders it inside the player portal, which owns navigation. */
+export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab: string) => void, embedded?: boolean, tab?: PadelTab }> = ({ onLogout, onNavigate, embedded, tab }) => {
     const { user: authUser } = useAuth();
     const [player, setPlayer] = useState<any>(authUser);
 
@@ -47,10 +52,9 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
     const [venues, setVenues] = useState<any[]>([]);
     const [selectedCity, setSelectedCity] = useState("Karachi");
     const [isCityDropdownOpen, setIsCityDropdownOpen] = useState(false);
-    const [aiVenues, setAiVenues] = useState<any[]>([]);
-    const [isLoadingAiVenues, setIsLoadingAiVenues] = useState(false);
     const CITIES = ['Karachi', 'Lahore', 'Islamabad', 'Faisalabad'];
-    const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'RANKINGS' | 'HISTORY' | 'TEAMS'>('OVERVIEW');
+    const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'RANKINGS' | 'HISTORY' | 'TEAMS' | 'FUTSAL'>(tab || 'OVERVIEW');
+    useEffect(() => { if (embedded && tab) setActiveTab(tab); }, [embedded, tab]);
     const { rankings, links, loading: rankingsLoading } = useGlobalRankings();
     const [linksLoaded, setLinksLoaded] = useState(false);
     useEffect(() => { if (!rankingsLoading) setLinksLoaded(true); }, [rankingsLoading]);
@@ -184,56 +188,6 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
 
     const filteredVenues = venues.filter(v => (v.city || 'Karachi').toLowerCase() === selectedCity.toLowerCase());
 
-    useEffect(() => {
-        setAiVenues([]);
-        if (filteredVenues.length === 0) {
-            let isActive = true;
-            const fetchAiVenues = async () => {
-                setIsLoadingAiVenues(true);
-                try {
-                    // Make sure Vite defines process.env.GEMINI_API_KEY
-                    const apiKey = process.env.GEMINI_API_KEY;
-                    if (!apiKey) {
-                        setIsLoadingAiVenues(false);
-                        return;
-                    }
-                    const ai = new GoogleGenAI({ apiKey });
-                    const response = await ai.models.generateContent({
-                        model: 'gemini-2.5-flash',
-                        contents: `Provide a list of 5 popular real-world sports venues (especially Padel, Tennis, or Futsal) in ${selectedCity}, Pakistan. Just return a JSON array of objects with "name" and "courts" (make up a reasonable integer for courts). No markdown backticks, just raw JSON. Example: [{"name": "Karachi Padel", "courts": 4}]`,
-                    });
-                    
-                    if (isActive) {
-                        try {
-                           const text = response.text || "";
-                           const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
-                           const parsed = JSON.parse(cleanJson);
-                           setAiVenues(parsed);
-                        } catch (e) {
-                           console.error("Failed to parse Gemini response for venues", e);
-                        }
-                        setIsLoadingAiVenues(false);
-                    }
-                } catch (err: any) {
-                     if (err?.status === 429 || err?.message?.includes("quota") || err?.status === "RESOURCE_EXHAUSTED" || err?.error?.status === "RESOURCE_EXHAUSTED") {
-                         console.info("Gemini API quota exceeded. Falling back to local venue suggestions.");
-                     } else {
-                         console.warn("Gemini API unavailable. Using fallback venues.");
-                     }
-                     if (isActive) {
-                         setAiVenues([
-                             { name: `${selectedCity} Padel Club`, courts: 4 },
-                             { name: `Elite Sports ${selectedCity}`, courts: 3 },
-                             { name: `${selectedCity} Tennis Arena`, courts: 6 }
-                         ]);
-                         setIsLoadingAiVenues(false);
-                     }
-                }
-            };
-            fetchAiVenues();
-            return () => { isActive = false; };
-        }
-    }, [selectedCity, filteredVenues.length]);
 
     const handleSaveProfile = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -262,8 +216,8 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
         if (!e.target.files || e.target.files.length === 0 || !player) return;
         const file = e.target.files[0];
         
-        if (file.size > 2 * 1024 * 1024) {
-            toast.warning("Photo too large", "Please choose a photo smaller than 2MB.");
+        if (file.size > 15 * 1024 * 1024) {
+            toast.warning("Photo too large", "Please choose a photo smaller than 15MB.");
             return;
         }
 
@@ -272,18 +226,9 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
             const url = await uploadProfilePicture(player.id, file);
             setEditPhotoUrl(url);
         } catch (error) {
-            console.error("Error uploading photo to object storage, falling back to Base64:", error);
-            // Default to base64 if Firebase storage rules block the upload
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setEditPhotoUrl(reader.result as string);
-                setIsUploadingPhoto(false);
-            };
-            reader.onerror = () => {
-                setIsUploadingPhoto(false);
-            };
-            reader.readAsDataURL(file);
-            return; // Exit early since FileReader will handle the state update
+            console.error("Error uploading photo to object storage, falling back to an inline thumbnail:", error);
+            // If storage refuses the upload, keep a small inline thumbnail (a few KB) rather than the full photo.
+            try { setEditPhotoUrl(await compressToDataUrl(file, { maxSize: 256, quality: 0.75 })); } catch { toast.error("Couldn't use that photo", 'Try a JPG or PNG.'); }
         }
         setIsUploadingPhoto(false);
     };
@@ -658,19 +603,17 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
 
         if (!file || !player) return;
 
-        // Check file size (limit to 1MB for Firestore base64)
-        if (file.size > 1024 * 1024) {
-            toast.warning("Photo too large", "Please choose a photo smaller than 1MB.");
+        if (file.size > 15 * 1024 * 1024) {
+            toast.warning("Photo too large", "Please choose a photo smaller than 15MB.");
             return;
         }
-
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-            const base64String = reader.result as string;
-            const updated = await updatePlayerProfile(player.id, { photoUrl: base64String });
-            if (updated) setPlayer(updated);
-        };
-        reader.readAsDataURL(file);
+        // Store a compressed file and keep only its link on the profile: profiles are read on every
+        // leaderboard and roster, so an inline photo would be downloaded again each time.
+        let photoUrl: string;
+        try { photoUrl = await uploadProfilePicture(player.id, file); }
+        catch { photoUrl = await compressToDataUrl(file, { maxSize: 256, quality: 0.75 }); }
+        const updated = await updatePlayerProfile(player.id, { photoUrl });
+        if (updated) setPlayer(updated);
     };
 
     return (
@@ -678,7 +621,7 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
             {!player ? (
                 <div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 animate-spin" /></div>
             ) : (
-                <div className="pp spx-root min-h-screen pb-20 pt-24 md:pt-28 space-y-6 px-4 md:px-8 max-w-[1280px] mx-auto w-full">
+                <div className={embedded ? 'pp spx-root space-y-6 w-full' : 'pp spx-root min-h-screen pb-20 pt-24 md:pt-28 space-y-6 px-4 md:px-8 max-w-[1280px] mx-auto w-full'}>
                     {/* Hidden File Input */}
                     <input 
                         type="file" 
@@ -720,16 +663,23 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
                     <MergePrompt candidates={mergeCandidates.suggested} account={player} />
 
                 {/* Navigation Tabs */}
-            <div className="pp-tabs" role="tablist">
+            {!embedded && <div className="pp-tabs" role="tablist">
                 {([
                     ['OVERVIEW', 'Home', <Activity size={16} key="i" />],
                     ['RANKINGS', 'Rankings', <Trophy size={16} key="i" />],
                     ['HISTORY', 'Match history', <History size={16} key="i" />],
                     ['TEAMS', 'Partners', <Users size={16} key="i" />],
+                    ['FUTSAL', 'Futsal', <Activity size={16} key="i" />],
                 ] as const).map(([id, label, icon]) => (
-                    <button key={id} type="button" role="tab" aria-selected={activeTab === id} className={`pp-tab ${activeTab === id ? 'is-on' : ''}`} onClick={() => setActiveTab(id)}>{icon} {label}</button>
+                    <button key={id} type="button" role="tab" aria-selected={activeTab === id} className={`pp-tab ${activeTab === id ? 'is-on' : ''}`} onClick={() => (id === 'FUTSAL' ? onNavigate('player-futsal') : setActiveTab(id))}>{icon} {label}</button>
                 ))}
-            </div>
+            </div>}
+
+            {activeTab === 'FUTSAL' && player && (
+                <React.Suspense fallback={<div className="pp-empty"><Loader2 className="animate-spin" size={22} /></div>}>
+                    <PlayerFutsal account={player} />
+                </React.Suspense>
+            )}
 
             {activeTab === 'RANKINGS' && (
                 <div className="space-y-4">
@@ -1070,26 +1020,6 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
                                                 <div>
                                                     <div className="font-bold text-white text-sm group-hover:text-brand transition-colors">{venue.name}</div>
                                                     <div className="text-xs text-content-muted">{venue.courts?.length || 0} Courts • Active</div>
-                                                </div>
-                                            </div>
-                                            <ChevronRight size={16} className="text-content-muted group-hover:text-white transition-colors" />
-                                        </Card>
-                                    ))
-                                ) : isLoadingAiVenues ? (
-                                    <div className="text-center p-4">
-                                        <Loader2 className="animate-spin text-brand mx-auto mb-2" size={24} />
-                                        <p className="text-xs text-content-muted">Discovering venues...</p>
-                                    </div>
-                                ) : aiVenues.length > 0 ? (
-                                    aiVenues.slice(0, 5).map((venue, idx) => (
-                                        <Card key={idx} variant="panel" className="p-4 flex items-center justify-between group cursor-pointer hover:border-brand/50 transition-all">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-xl bg-surface-ground border border-white/5 flex items-center justify-center text-brand">
-                                                    <MapPin size={18} />
-                                                </div>
-                                                <div>
-                                                    <div className="font-bold text-white text-sm group-hover:text-brand transition-colors">{venue.name}</div>
-                                                    <div className="text-xs text-content-muted">{venue.courts || 0} Courts • Recommended</div>
                                                 </div>
                                             </div>
                                             <ChevronRight size={16} className="text-content-muted group-hover:text-white transition-colors" />

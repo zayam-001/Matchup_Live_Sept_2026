@@ -13,6 +13,7 @@ import { RefereeStartMatchModal } from './RefereeStartMatchModal';
 import { MatchScoringSystem } from './MatchScoringSystem';
 import { WinnerBanner } from './WinnerBanner';
 import { useMatchResult } from '../hooks/useMatchResult';
+import { confirmDialog } from './ui/ConfirmDialog';
 
 const activeMatchEnds = new Set<string>();
 
@@ -23,7 +24,7 @@ const ScoringControl = ({ match: initialMatch, teams, tournamentId, isAmericano,
     const t2 = teams.find((t: any) => t.id === match.team2Id);
     
     const handleResumeMatch = async () => {
-        if (confirm('Are you sure you want to resume this match? This will clear the winner and mark it as live again.')) {
+        if (await confirmDialog({ title: 'Resume this match?', body: 'This clears the winner and marks it live again.', confirmLabel: 'Resume match' })) {
             try {
                 await resumeMatch(tournamentId, match.id);
                 // The subscription will update the local match state
@@ -329,7 +330,7 @@ const ScoringControl = ({ match: initialMatch, teams, tournamentId, isAmericano,
                     <button
                         type="button"
                         onClick={async () => {
-                            if (!confirm('Cancel this start? The match goes back to "not started" and leaves the live screens.')) return;
+                            if (!(await confirmDialog({ title: 'Cancel this start?', body: 'The match goes back to “not started” and leaves the live screens.', confirmLabel: 'Cancel start', cancelLabel: 'Keep it live', danger: true }))) return;
                             try {
                                 const { resetMatchToScheduled } = await import('../services/storage');
                                 await resetMatchToScheduled(tournamentId, match.id, 'referee');
@@ -401,7 +402,23 @@ const ScoringControl = ({ match: initialMatch, teams, tournamentId, isAmericano,
 };
 
 
-export const RefereeInterface: React.FC<{ initialTournamentId?: string, initialAuthenticated?: boolean, onLogout?: () => void }> = ({ initialTournamentId, initialAuthenticated, onLogout }) => {
+const FutsalReferee = React.lazy(() => import('../futsal/ui/FutsalReferee'));
+
+type RefereeProps = { initialTournamentId?: string, initialAuthenticated?: boolean, onLogout?: () => void };
+
+/** Futsal competitions (ids prefixed "futsal:") use their own referee screen; padel is untouched. */
+export const RefereeInterface: React.FC<RefereeProps> = (props) => {
+  if (props.initialTournamentId?.startsWith('futsal:')) {
+    return (
+      <React.Suspense fallback={<div className="pb-20 max-w-2xl mx-auto px-4 text-center mt-20 pt-28"><Loader2 className="animate-spin text-brand mx-auto" size={32} /></div>}>
+        <FutsalReferee tournamentId={props.initialTournamentId.slice(7)} initialAuthenticated={props.initialAuthenticated} onLogout={props.onLogout} />
+      </React.Suspense>
+    );
+  }
+  return <PadelRefereeInterface {...props} />;
+};
+
+const PadelRefereeInterface: React.FC<RefereeProps> = ({ initialTournamentId, initialAuthenticated, onLogout }) => {
 
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(initialTournamentId || null);
