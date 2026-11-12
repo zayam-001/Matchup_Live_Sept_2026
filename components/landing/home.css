@@ -6,8 +6,6 @@
    ========================================================================== */
 
 .home {
-  /* The landing page keeps Poppins for its headlines (the rest of the platform uses Barlow Condensed). */
-  --font-display: 'Poppins', sans-serif;
   --navy-950: #01082E;
   --navy-900: #020D45;
   --navy-850: #041358;
