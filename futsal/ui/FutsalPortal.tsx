@@ -21,6 +21,7 @@ import { PadelSquads, TeamManagement } from './TeamManagement';
 import { playerGames, scoreText, sideOf, type QuickMatch } from '../quick';
 import { publicPath, SPORT_LABEL, sportOf } from '../sport';
 import { useAllFutsal, useNow } from './shared';
+import { RotateGate } from './RotateGate';
 
 interface Account { id?: string; uid?: string; email?: string; phone?: string; fullName?: string; name?: string; photoUrl?: string }
 type TeamPage = 'overview' | 'squad' | 'quick' | 'register' | 'matches' | 'stats';
@@ -229,6 +230,7 @@ export const FutsalPortal: React.FC<{ account: Account; onNavigate: (tab: string
     return (
         <div className={`admx fxp fxg ${page === 'home' || page === 'season' || page === 'friends' || page === 'play' || subOfPage === 'quick' || (inSport && (subOfPage === 'overview' || subOfPage === 'stats' || subOfPage === 'matches' || subOfPage === 'squad')) ? 'is-home' : ''}`}>
             <div className="fxg__bg" aria-hidden="true" />
+            <RotateGate />
             <header className="fxg-top">
                 <button type="button" className="fxg-logo" onClick={() => go('home')} aria-label="Match Up home">
                     <Logo size={52} />
