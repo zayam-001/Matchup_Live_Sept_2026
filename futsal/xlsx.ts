@@ -51,7 +51,9 @@ export const readXlsx = async (file: Blob): Promise<string[][]> => {
             const idx = ref ? colIndex(ref) : i;
             const type = c.getAttribute('t');
             const v = c.getElementsByTagName('v')[0]?.textContent ?? '';
-            const value = type === 's' ? shared[Number(v)] ?? '' : type === 'inlineStr' ? text(c.getElementsByTagName('is')[0]) : v;
+            // Excel stores numbers as "11.0" or "3.342619522E9": turn whole numbers back into plain digits.
+            const num = (!type || type === 'n') && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null;
+            const value = type === 's' ? shared[Number(v)] ?? '' : type === 'inlineStr' ? text(c.getElementsByTagName('is')[0]) : num !== null && Number.isInteger(num) ? String(num) : v;
             cells[idx] = value.trim();
         });
         const filled = Array.from(cells, x => x ?? '');

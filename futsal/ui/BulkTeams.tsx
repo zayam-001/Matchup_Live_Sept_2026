@@ -34,6 +34,9 @@ export const downloadTemplate = async (kind: 'xlsx' | 'csv' = 'xlsx') => {
     save(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }), 'MatchUp_Squads_Template.csv');
 };
 /** Excel drops a phone's leading zero when the cell is a number: put it back. */
+/** GK/DEF/MID/FWD, also from common football shorthands (CB, CDM, RW, ST …). */
+const POS_ALIAS: Record<string, Position> = { GOALKEEPER: 'GK', KEEPER: 'GK', CB: 'DEF', LB: 'DEF', RB: 'DEF', LWB: 'DEF', RWB: 'DEF', DEFENDER: 'DEF', CM: 'MID', CDM: 'MID', CAM: 'MID', DM: 'MID', AM: 'MID', LM: 'MID', RM: 'MID', MIDFIELDER: 'MID', ST: 'FWD', CF: 'FWD', LW: 'FWD', RW: 'FWD', STRIKER: 'FWD', FORWARD: 'FWD', WINGER: 'FWD' };
+const posOf = (v: string): Position => { const k = v.trim().toUpperCase(); return (['GK', 'DEF', 'MID', 'FWD'].includes(k) ? k : POS_ALIAS[k] || '') as Position; };
 const phoneOf = (v: string) => { const d = v.replace(/[^\d+]/g, ''); return /^3\d{9}$/.test(d) ? `0${d}` : d; };
 
 /** CSV with quotes, commas inside quotes and Excel's BOM. */
@@ -79,12 +82,12 @@ const build = (rows: string[][], t: FutsalTournament, cat: FutsalCategory, exist
         if (!name) { errors.push(`Row ${line}: player name is empty.`); return; }
         const email = c.email >= 0 ? (r[c.email] || '').trim().toLowerCase() : '';
         if (email && !EMAIL.test(email)) errors.push(`Row ${line}: "${email}" isn't a valid email.`);
-        const pos = (c.pos >= 0 ? (r[c.pos] || '').trim().toUpperCase() : '') as Position;
+        const pos = posOf(c.pos >= 0 ? r[c.pos] || '' : '');
         const num = c.num >= 0 && /^\d{1,2}$/.test((r[c.num] || '').trim()) ? Number(r[c.num].trim()) : undefined;
         const key = team.toLowerCase();
         if (!byTeam.has(key)) byTeam.set(key, { name: team, rows: [] });
         const phone = c.phone >= 0 ? phoneOf(r[c.phone] || '') : '';
-        byTeam.get(key)!.rows.push({ line, name, email, phone, cap: /^(y|yes|true|1|c|captain)$/i.test((c.cap >= 0 ? r[c.cap] : '').trim()), num, pos: ['GK', 'DEF', 'MID', 'FWD'].includes(pos) ? pos : '' });
+        byTeam.get(key)!.rows.push({ line, name, email, phone, cap: /^(y|yes|true|1|c|captain)$/i.test((c.cap >= 0 ? r[c.cap] : '').trim()), num, pos });
     });
     const teams: FutsalTeam[] = [];
     let colour = existing.length;
