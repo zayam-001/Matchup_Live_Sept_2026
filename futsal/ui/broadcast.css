@@ -199,3 +199,8 @@
 .fb-focus__card { position: relative; }
 .fb-matchlink { position: absolute; top: 14px; right: 14px; z-index: 3; padding: 7px 12px; border: 1px solid rgba(255,255,255,.18); border-radius: 999px; background: rgba(3, 9, 38, .75); color: #fff; font-size: 12px; font-weight: 800; letter-spacing: .02em; text-decoration: none; }
 .fb-matchlink:hover { border-color: rgba(255,138,91,.7); background: rgba(255,138,91,.18); }
+/* Lineups scroll when a squad (e.g. 11-a-side with subs) is taller than the panel */
+.fb-lineups__cols { overflow-y: auto !important; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(220, 227, 247, .35) transparent; align-items: start; }
+.fb-lineups__cols::-webkit-scrollbar { width: 6px; }
+.fb-lineups__cols::-webkit-scrollbar-thumb { border-radius: 3px; background: rgba(220, 227, 247, .35); }
+.fb-lineup h3 { position: sticky; top: 0; z-index: 1; padding: .4vh 0; background: rgb(16, 22, 92); }
