@@ -3,7 +3,7 @@
 // match content is futsal: goals, clock, fouls, W/D/L tables.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import gsap from 'gsap';
-import { Activity, Award, Calendar, History, Layers, MapPin, Play, Share2, Timer, Trophy, Tv, Users } from 'lucide-react';
+import { Activity, ArrowUpRight, Award, Calendar, History, Layers, MapPin, Play, Share2, Timer, Trophy, Tv, Users } from 'lucide-react';
 import '../../components/spectator.css';
 import { CategorySelector } from '../../components/ui/CategorySelector';
 import { computeStandings, isLeagueFormat, leagueQualifiers, eventMinute, foulsFor, isKnockout, playerStats, scoreOf, shortHanded, fmtClock, sourceLabel } from '../engine';
@@ -11,7 +11,7 @@ import { FORMAT_LABELS, goalTypeLabel, PRESETS } from '../presets';
 import type { FutsalCategory, FutsalMatch, FutsalTeam, FutsalTournament } from '../types';
 import { NEUTRAL, SIDE_LINE } from './palette';
 import { clockText, playerName, stageText, useFutsalTournament, useNow } from './shared';
-import { sportLabel } from '../sport';
+import { publicPath, sportLabel } from '../sport';
 
 const FutsalBroadcast = React.lazy(() => import('./FutsalBroadcast'));
 
@@ -137,6 +137,7 @@ export const FutsalSpectatorDetail: React.FC<{ tournamentId: string; onBack: () 
                             <Tv size={16} /> {broadcastOff ? 'Broadcast ended' : 'Broadcast mode'}
                         </button>
                         <button type="button" className="spx-btn spx-btn--ghost" onClick={() => { setActiveTab('live'); contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}><Play size={16} /> {live.length ? 'Watch live' : 'View matches'}</button>
+                        <a className="spx-btn spx-btn--ghost" href={`#${publicPath(t)}`} target="_blank" rel="noopener noreferrer">Open tournament page <ArrowUpRight size={16} /></a>
                         <button type="button" className="spx-btn spx-btn--icon" onClick={share} aria-label="Share tournament"><Share2 size={16} />{copied && <span className="spx-copied">Link copied</span>}</button>
                     </div>
                 </div>

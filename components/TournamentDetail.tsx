@@ -12,8 +12,7 @@ import {
   Timer,
   Share2,
   Play,
-  Layers
-} from 'lucide-react';
+  Layers, ArrowUpRight } from 'lucide-react';
 import './spectator.css';
 import gsap from 'gsap';
 import { Tournament, Match, Team, MatchStatus, SponsorTier } from '../types';
@@ -253,6 +252,7 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
               </button>
             )}
             <button type="button" className={`spx-btn ${onEnterBroadcastMode ? 'spx-btn--ghost' : 'spx-btn--primary'}`} onClick={watchLive}><Play size={16} /> {liveMatches.length ? 'Watch live' : 'View matches'}</button>
+            <a className="spx-btn spx-btn--ghost" href={`#tournament/${(tournament as any).slug || tournament.id}`} target="_blank" rel="noopener noreferrer">Open tournament page <ArrowUpRight size={16} /></a>
             <button type="button" className="spx-btn spx-btn--icon" onClick={share} aria-label="Share tournament"><Share2 size={16} />{copied && <span className="spx-copied">Link copied</span>}</button>
           </div>
         </div>
