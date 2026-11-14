@@ -827,7 +827,7 @@ const PadelBoard: React.FC<{ m: QuickMatch; canScore: boolean; save: Save } & Bo
  */
 const TeamBoard: React.FC<{ m: QuickMatch; canScore: boolean; save: Save } & BoardTools> = ({ m, canScore, save, ...tools }) => {
     const [, tick] = useState(0);
-    const [pick, setPick] = useState<{ side: QuickSide; kind: 'goal' | 'card' | 'pen' } | null>(null);
+    const [pick, setPick] = useState<{ side: QuickSide; kind: 'goal' | 'card' | 'pen' | 'shoot' } | null>(null);
     const [card, setCard] = useState<'Y' | 'R'>('Y');
     const [penIn, setPenIn] = useState(true);
     const c = m.score.clock || { period: 1, running: false, elapsed: 0 };
@@ -908,9 +908,10 @@ const TeamBoard: React.FC<{ m: QuickMatch; canScore: boolean; save: Save } & Boa
         save(log(m, { ...m.score, fouls: f }, { side, kind: 'foul', minute: matchMinute(m), ...tag(side) }));
         if (f[i] === 5) toast.info(`${team(side).name}: 5 fouls`, 'From the next foul the other team gets a 10-metre free kick.');
     };
-    const kick = (scored: boolean) => {
+    const kick = (scored: boolean, name?: string) => {
         const side = pensNext(kicks);
-        const next = [...kicks, { side, scored }];
+        const next = [...kicks, { side, scored, ...(name ? { name } : {}) }];
+        setPick(null);
         save(log(m, { ...m.score, pens: next }, { side, kind: 'period' }));
         if (pensDecided(next, best)) { const t = pensTally(next); toast.success(`${(t.h > t.a ? team('home') : team('away')).name} win on penalties`, `${t.h}-${t.a}. Confirm to save it.`); }
     };
@@ -965,7 +966,7 @@ const TeamBoard: React.FC<{ m: QuickMatch; canScore: boolean; save: Save } & Boa
                             return (
                                 <div key={side} className="qx-shoot__row">
                                     <b>{team(side).name}</b>
-                                    <span>{ks.map((x, i) => <i key={i} className={x.scored ? 'is-in' : 'is-out'}>{x.scored ? '✓' : '✕'}</i>)}{Array.from({ length: Math.max(0, best - ks.length) }, (_, i) => <i key={`e${i}`} />)}</span>
+                                    <span>{ks.map((x, i) => <i key={i} className={x.scored ? 'is-in' : 'is-out'} title={x.name || undefined}>{x.scored ? '✓' : '✕'}</i>)}{Array.from({ length: Math.max(0, best - ks.length) }, (_, i) => <i key={`e${i}`} />)}</span>
                                     <em>{side === 'home' ? pt.h : pt.a}</em>
                                 </div>
                             );
@@ -976,8 +977,8 @@ const TeamBoard: React.FC<{ m: QuickMatch; canScore: boolean; save: Save } & Boa
                         : <>
                             <span className="qx-shoot__next">Kick {pt.th + pt.ta + 1}{pt.th >= best && pt.ta >= best ? ' · sudden death' : ''}: <b>{team(pensNext(kicks)).name}</b></span>
                             <div className="qx-shoot__btns">
-                                <button type="button" className="qx-score-btn" onClick={() => kick(true)}>Scored</button>
-                                <button type="button" className="qx-score-btn qx-score-btn--miss" onClick={() => kick(false)}>Missed / saved</button>
+                                <button type="button" className="qx-score-btn" onClick={() => { setPenIn(true); setPick({ side: pensNext(kicks), kind: 'shoot' }); }}>Scored</button>
+                                <button type="button" className="qx-score-btn qx-score-btn--miss" onClick={() => { setPenIn(false); setPick({ side: pensNext(kicks), kind: 'shoot' }); }}>Missed / saved</button>
                             </div>
                         </>)}
                 </div>
@@ -1010,12 +1011,13 @@ const TeamBoard: React.FC<{ m: QuickMatch; canScore: boolean; save: Save } & Boa
             {pick && createPortal(
                 <div className="qx-sheet" role="dialog" aria-label={pick.kind === 'goal' ? 'Who scored?' : pick.kind === 'pen' ? 'Penalty' : 'Card'} onClick={() => setPick(null)}>
                     <div className="qx-sheet__card" onClick={e => e.stopPropagation()}>
-                        <header><b>{pick.kind === 'goal' ? 'Goal' : pick.kind === 'pen' ? 'Penalty' : 'Card'} · {team(pick.side).name}</b><button type="button" aria-label="Close" onClick={() => setPick(null)}><X size={16} /></button></header>
+                        <header><b>{pick.kind === 'goal' ? 'Goal' : pick.kind === 'pen' ? 'Penalty' : pick.kind === 'shoot' ? (penIn ? 'Shootout: scored' : 'Shootout: missed') : 'Card'} · {team(pick.side).name}</b><button type="button" aria-label="Close" onClick={() => setPick(null)}><X size={16} /></button></header>
                         {pick.kind === 'card' && <span className="qx-sheet__cards">{(['Y', 'R'] as const).map(k => <button key={k} type="button" className={card === k ? 'is-on' : ''} onClick={() => setCard(k)}><i className={`qx-cardchip is-${k}`} /> {k === 'Y' ? 'Yellow' : 'Red'}</button>)}</span>}
                         {pick.kind === 'pen' && <span className="qx-sheet__cards">{[true, false].map(k => <button key={String(k)} type="button" className={penIn === k ? 'is-on' : ''} onClick={() => setPenIn(k)}>{k ? '✓ Scored' : '✕ Missed / saved'}</button>)}</span>}
-                        <small className="qx-note--muted">{pick.kind === 'goal' ? 'Who scored?' : pick.kind === 'pen' ? 'Who took it?' : 'Which player?'}</small>
+                        <small className="qx-note--muted">{pick.kind === 'goal' ? 'Who scored?' : pick.kind === 'pen' || pick.kind === 'shoot' ? 'Who took it?' : 'Which player?'}</small>
                         <div className="qx-sheet__list">
-                            {team(pick.side).players.map(p => <button key={p.email || p.name} type="button" onClick={() => (pick.kind === 'goal' ? goal(pick.side, p) : pick.kind === 'pen' ? (penIn ? goal(pick.side, p, true) : penMiss(pick.side, p)) : giveCard(pick.side, p))}><span className="qx-av">{initials(p.name)}</span>{p.name}</button>)}
+                            {team(pick.side).players.map(p => <button key={p.email || p.name} type="button" onClick={() => (pick.kind === 'shoot' ? kick(penIn, p.name) : pick.kind === 'goal' ? goal(pick.side, p) : pick.kind === 'pen' ? (penIn ? goal(pick.side, p, true) : penMiss(pick.side, p)) : giveCard(pick.side, p))}><span className="qx-av">{initials(p.name)}</span>{p.name}</button>)}
+                            {pick.kind === 'shoot' && <button type="button" className="is-plain" onClick={() => kick(penIn)}>Not sure who</button>}
                             {pick.kind === 'goal' && <button type="button" className="is-plain" onClick={() => goal(pick.side)}>Not sure / own goal</button>}
                             {pick.kind === 'pen' && <button type="button" className="is-plain" onClick={() => (penIn ? goal(pick.side, undefined, true) : penMiss(pick.side))}>Not sure who</button>}
                         </div>

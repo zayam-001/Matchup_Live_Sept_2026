@@ -95,6 +95,7 @@ type Sheet =
     | { kind: 'goal'; side: Side; period: number; ms: number }
     | { kind: 'ratings' }
     | { kind: 'card'; side: Side; color: 'YELLOW' | 'RED' }
+    | { kind: 'pen'; side: Side; scored: boolean }
     | { kind: 'sub'; side: Side; out?: string }
     | { kind: 'lineup'; side: Side }
     | { kind: 'menu' }
@@ -252,8 +253,8 @@ export const Console: React.FC<{ t: FutsalTournament; cat: FutsalCategory; teams
                     <div className="fx-stack" style={{ marginTop: 12 }}>
                         <div className="fx-note">Penalty shootout. Next kick: <b>{team(shootoutNext(m)).name}</b></div>
                         <div className="fx-sc__main">
-                            <button type="button" className="fx-sc__btn fx-sc__btn--goal" onClick={() => commit(addEvent(m, rules, { type: 'PEN_SCORED', side: shootoutNext(m) }))}>Scored</button>
-                            <button type="button" className="fx-sc__btn" style={{ minHeight: 72, fontSize: 22 }} onClick={() => commit(addEvent(m, rules, { type: 'PEN_MISSED', side: shootoutNext(m) }))}>Missed / saved</button>
+                            <button type="button" className="fx-sc__btn fx-sc__btn--goal" onClick={() => setSheet({ kind: 'pen', side: shootoutNext(m), scored: true })}>Scored</button>
+                            <button type="button" className="fx-sc__btn" style={{ minHeight: 72, fontSize: 22 }} onClick={() => setSheet({ kind: 'pen', side: shootoutNext(m), scored: false })}>Missed / saved</button>
                         </div>
                         <ShootoutDots m={m} home={home} away={away} />
                         {shootoutDecided(m) && <button type="button" className="fx-btn fx-btn--primary" onClick={() => commit(finishMatch(m, 'penalties'))}>Confirm result</button>}
@@ -341,6 +342,27 @@ export const Console: React.FC<{ t: FutsalTournament; cat: FutsalCategory; teams
                                 </div>
                             </>
                         )}
+                        {sheet.kind === 'pen' && (() => {
+                            // Who took the kick: anyone in the squad who hasn't been sent off.
+                            const kick = (playerId?: string) => {
+                                const taker = playerId ? team(sheet.side).players.find(p => p.id === playerId)?.name : '';
+                                commit(addEvent(m, rules, { type: sheet.scored ? 'PEN_SCORED' : 'PEN_MISSED', side: sheet.side, ...(playerId ? { playerId } : {}) }), `${sheet.scored ? 'Scored' : 'Missed'}${taker ? ` · ${taker}` : ''}`);
+                                setSheet(null);
+                            };
+                            return (
+                                <>
+                                    <h3>Penalty {sheet.scored ? 'scored' : 'missed'} · {team(sheet.side).name}</h3>
+                                    <p className="fx-muted" style={{ margin: '0 0 8px' }}>Who took it?</p>
+                                    <div className="fx-players">
+                                        {team(sheet.side).players.filter(p => !cardsFor(m, p.id).red).map(p => (
+                                            <button key={p.id} type="button" className="fx-player-btn" onClick={() => kick(p.id)}><span className="fx-num">{p.number ?? ''}</span><span>{p.name}</span>
+                                                {m.events.some(e => (e.type === 'PEN_SCORED' || e.type === 'PEN_MISSED') && e.playerId === p.id) && <span className="fx-muted" style={{ marginLeft: 'auto', fontSize: 12 }}>already kicked</span>}</button>
+                                        ))}
+                                    </div>
+                                    <button type="button" className="fx-btn" style={{ marginTop: 10, width: '100%' }} onClick={() => kick()}>Not sure who</button>
+                                </>
+                            );
+                        })()}
                         {sheet.kind === 'sub' && (() => {
                             const lu = lineupOf(sheet.side);
                             const on = new Set(lu.players);
@@ -527,7 +549,7 @@ const ShootoutDots: React.FC<{ m: FutsalMatch; home: FutsalTeam; away: FutsalTea
             <div key={side} className="fx-row" style={{ marginBottom: 6 }}>
                 <b style={{ width: 50 }}>{team.shortName}</b>
                 {m.events.filter(e => e.side === side && (e.type === 'PEN_SCORED' || e.type === 'PEN_MISSED')).map(e => (
-                    <span key={e.id} style={{ width: 22, height: 22, borderRadius: 999, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, background: e.type === 'PEN_SCORED' ? 'rgba(59,227,155,.25)' : 'rgba(255,59,107,.25)' }}>{e.type === 'PEN_SCORED' ? '✓' : '✕'}</span>
+                    <span key={e.id} title={e.playerId ? team.players.find(p => p.id === e.playerId)?.name : undefined} style={{ width: 22, height: 22, borderRadius: 999, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, background: e.type === 'PEN_SCORED' ? 'rgba(59,227,155,.25)' : 'rgba(255,59,107,.25)' }}>{e.type === 'PEN_SCORED' ? '✓' : '✕'}</span>
                 ))}
             </div>
         ))}
