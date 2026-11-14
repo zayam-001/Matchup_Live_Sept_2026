@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { MatchupLogo } from '../../components/MatchupLogo';
-import { clockMs, displayClock, isKnockout, phaseLabel, scoreOf, sourceLabel, STAGE_NAMES } from '../engine';
+import { clockMs, displayClock, isKnockout, phaseLabel, resolveSlots, scoreOf, sourceLabel, STAGE_NAMES } from '../engine';
 import { isDemo, subscribeFutsalMatches, subscribeFutsalTeams, subscribeFutsalTournament, subscribeFutsalTournaments } from '../store';
 import { CREST } from './palette';
 import type { FutsalCategory, FutsalMatch, FutsalTeam, FutsalTournament, SlotSource } from '../types';
@@ -20,6 +20,22 @@ export const useNow = (ms = 1000, active = true) => {
     return now;
 };
 
+/**
+ * Knockout and playoff teams worked out live from results (league or group tables, earlier winners and
+ * losers), so every screen shows who's through the moment a result is in, even before the referee's
+ * device writes the slots back.
+ */
+const withResolvedSlots = (tournaments: FutsalTournament[], teams: FutsalTeam[], matches: FutsalMatch[]): FutsalMatch[] => {
+    if (!matches.some(m => isKnockout(m.stage) && m.status === 'SCHEDULED' && (m.homeFrom || m.awayFrom))) return matches;
+    const fixed = new Map<string, FutsalMatch>();
+    tournaments.forEach(t => t.categories.forEach(cat => {
+        const inT = matches.filter(m => m.tournamentId === t.id);
+        if (!inT.length) return;
+        resolveSlots(cat, teams.filter(x => x.tournamentId === t.id), inT).forEach(m => fixed.set(m.id, m));
+    }));
+    return fixed.size ? matches.map(m => fixed.get(m.id) || m) : matches;
+};
+
 export const useFutsalTournament = (id?: string) => {
     const [t, setT] = useState<FutsalTournament | null | undefined>(undefined);
     const [teams, setTeams] = useState<FutsalTeam[] | null>(null);
@@ -32,7 +48,8 @@ export const useFutsalTournament = (id?: string) => {
         const c = subscribeFutsalMatches(id, setMatches);
         return () => { a(); b(); c(); };
     }, [id]);
-    return { t, teams: teams || [], matches: matches || [], loading: t === undefined || teams === null || matches === null };
+    const resolved = useMemo(() => (t && teams && matches ? withResolvedSlots([t], teams, matches) : matches || []), [t, teams, matches]);
+    return { t, teams: teams || [], matches: resolved, loading: t === undefined || teams === null || matches === null };
 };
 
 export const useAllFutsal = (withMatches = true) => {
@@ -45,7 +62,8 @@ export const useAllFutsal = (withMatches = true) => {
         const c = withMatches ? subscribeFutsalMatches(null, setMatches) : () => {};
         return () => { a(); b(); c(); };
     }, [withMatches]);
-    return { tournaments: ts || [], teams: teams || [], matches: matches || [], loading: ts === null || teams === null || matches === null };
+    const resolved = useMemo(() => (ts && teams && matches ? withResolvedSlots(ts, teams, matches) : matches || []), [ts, teams, matches]);
+    return { tournaments: ts || [], teams: teams || [], matches: resolved, loading: ts === null || teams === null || matches === null };
 };
 
 export const useToast = () => {
