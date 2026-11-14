@@ -10,4 +10,6 @@
   100% { transform: rotate(0deg); }
 }
 .rg__title { font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-size: 34px; font-weight: 800; letter-spacing: .06em; line-height: 1; text-align: left; text-transform: uppercase; }
+.rg__btn { margin-top: 8px; padding: 12px 22px; border: 0; background: linear-gradient(100deg, #FF8A5B, #E55C30); color: #fff; font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-size: 20px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%); }
+.rg__skip { border: 0; background: none; color: #9AA6D6; font-size: 13px; text-decoration: underline; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .rg__phone { animation: none; transform: rotate(-90deg); } }
