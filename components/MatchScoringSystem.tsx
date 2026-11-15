@@ -66,10 +66,12 @@ export interface MatchScoringSystemProps {
   onShowBanner?: () => void;
   onResumeMatch?: () => void;
   isAmericano?: boolean;
+  /** FIP rules: star point on the third deuce, tie-break at 6-6, set end offered automatically. */
+  isFip?: boolean;
 }
 
 export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
-  score, mode, matchId, tournamentId, matchType, team1Name, team2Name, team1, team2, refereePin, isMatchEnded, onUpdateScore, onEndMatch, onTriggerBroadcast, onBack, isAmericano = false, onShowBanner, onResumeMatch
+  score, mode, matchId, tournamentId, matchType, team1Name, team2Name, team1, team2, refereePin, isMatchEnded, onUpdateScore, onEndMatch, onTriggerBroadcast, onBack, isAmericano = false, isFip = false, onShowBanner, onResumeMatch
 }) => {
   const [americanoTargetPoints, setAmericanoTargetPoints] = useState<number>(() => {
     if (score && (score as any).americanoTargetPoints) return Number((score as any).americanoTargetPoints);
@@ -415,11 +417,36 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
       nextState.pointsB = 0;
     }
 
+    // FIP: deuce 1 and 2 are played with advantage; the third deuce (5-5 in raw points) is a single
+    // deciding star point. It only lasts for that game. A set goes to a tie-break at 6-6.
+    let fipSetEnd: { team: TeamId; scoreA: number; scoreB: number } | null = null;
+    if (isFip) {
+      if (gWinner) {
+        nextState.goldenPoint = false;
+        const { gamesA: a, gamesB: b } = nextState;
+        if (a === 6 && b === 6) nextState.isTiebreak = true;
+        else if ((Math.max(a, b) === 6 && Math.abs(a - b) >= 2) || (Math.max(a, b) === 7 && Math.min(a, b) === 5)) {
+          fipSetEnd = { team: a > b ? 'teamA' : 'teamB', scoreA: a, scoreB: b };
+        }
+      } else if (nextState.isTiebreak) {
+        const { pointsA: pa, pointsB: pb } = nextState;
+        // Tie-break: first to 7 by two; the set is recorded 7-6.
+        if (Math.max(pa, pb) >= 7 && Math.abs(pa - pb) >= 2) {
+          fipSetEnd = pa > pb
+            ? { team: 'teamA', scoreA: nextState.gamesA + 1, scoreB: nextState.gamesB }
+            : { team: 'teamB', scoreA: nextState.gamesA, scoreB: nextState.gamesB + 1 };
+        }
+      } else if (nextState.pointsA === nextState.pointsB && nextState.pointsA >= 5) {
+        nextState.goldenPoint = true;
+      }
+    }
+
     const newHistoryEvent = { stateBefore: matchState, timestamp: Date.now(), action: actionDetails };
     const newHistory = [...history, newHistoryEvent as any];
     setHistory(newHistory);
     isLocalUpdateRef.current = true;
     setMatchState(nextState);
+    if (fipSetEnd) { setPendingSetResult(fipSetEnd); setWorkflowPhase('SET_END_PROMPT'); }
   };
 
   const confirmSetEnd = (startNext: boolean, isTiebreakForNext: boolean = false) => {
@@ -452,6 +479,11 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
     setTimeout(() => {
         if (startNext) {
           setWorkflowPhase('SCORING');
+        } else if (nextState.setsA !== nextState.setsB) {
+          // The sets already decide it: go straight to the summary with that winner.
+          setSelectedWinnerId(nextState.setsA > nextState.setsB ? 1 : 2);
+          setResolutionType('normal');
+          setWorkflowPhase('FINAL_CONFIRMATION');
         } else {
           setWorkflowPhase('WINNER_SELECTION');
         }
@@ -984,7 +1016,15 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
                     <h2 className="text-xl font-black text-white uppercase tracking-tight mb-2">Set Concluded!</h2>
                     <p className="text-gray-400 text-xs mb-8">Score: {pendingSetResult?.scoreA} - {pendingSetResult?.scoreB}</p>
                     <div className="flex flex-col gap-4">
-                      {matchState.setsA + (pendingSetResult?.team === 'teamA' ? 1 : 0) === 1 && matchState.setsB + (pendingSetResult?.team === 'teamB' ? 1 : 0) === 1 ? (
+                      {(() => {
+                        const a = matchState.setsA + (pendingSetResult?.team === 'teamA' ? 1 : 0), b = matchState.setsB + (pendingSetResult?.team === 'teamB' ? 1 : 0);
+                        return Math.max(a, b) >= 2 && (
+                          <button onClick={() => confirmSetEnd(false)} className="py-4 bg-[#22C55E] hover:bg-[#2fd36b] text-black font-black uppercase text-sm rounded-xl transition-colors">
+                            Match won · {a > b ? team1Name : team2Name} ({a}-{b})
+                          </button>
+                        );
+                      })()}
+                      {isFip && Math.max(matchState.setsA + (pendingSetResult?.team === 'teamA' ? 1 : 0), matchState.setsB + (pendingSetResult?.team === 'teamB' ? 1 : 0)) >= 2 ? null : matchState.setsA + (pendingSetResult?.team === 'teamA' ? 1 : 0) === 1 && matchState.setsB + (pendingSetResult?.team === 'teamB' ? 1 : 0) === 1 ? (
                         <>
                           <p className="text-xs text-brand font-bold uppercase tracking-widest mb-1">Each team has won 1 set</p>
                           <button 

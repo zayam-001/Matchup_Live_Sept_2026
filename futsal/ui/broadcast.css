@@ -204,3 +204,132 @@
 .fb-lineups__cols::-webkit-scrollbar { width: 6px; }
 .fb-lineups__cols::-webkit-scrollbar-thumb { border-radius: 3px; background: rgba(220, 227, 247, .35); }
 .fb-lineup h3 { position: sticky; top: 0; z-index: 1; padding: .4vh 0; background: rgb(16, 22, 92); }
+
+/* Team logos (when a team has one) */
+.fb-logo { flex: 0 0 auto; width: 3.6vh; height: 3.6vh; min-width: 22px; min-height: 22px; object-fit: contain; }
+.fb-crest--img img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 1cqh 2cqh rgba(0,0,0,.25)); }
+/* Sponsor marquee */
+.fb-ticker__track--logos { gap: 5vw; animation-duration: 35s; }
+.fb-sponsor { display: inline-flex; align-items: center; height: 5.2vh; min-height: 30px; }
+.fb-sponsor img { height: 100%; width: auto; max-width: 14vw; object-fit: contain; }
+
+/* ── Crimson theme: red Champions-night look (white cards, red headers, maroon type) ── */
+.fb--crimson {
+  --cr-red: #E31B3F; --cr-red-2: #C8102E; --cr-ink: #3B0A14; --cr-muted: #7B4A55; --cr-line: #F3DCE1; --cr-tint: #FDE8EC;
+  background:
+    radial-gradient(ellipse 65% 45% at 50% -5%, rgba(160, 24, 50, .75), transparent 70%),
+    linear-gradient(180deg, #7A1224 0%, #5A0E1C 45%, #3F0914 100%);
+}
+.fb--crimson .fb__stars, .fb--crimson .fb__beam, .fb--crimson .fb__pitch { display: none; }
+.fb--crimson .fb__title h1 { background: none; color: #fff; -webkit-text-fill-color: #fff; letter-spacing: .05em !important; }
+.fb--crimson .fb__stars-row { color: #fff; opacity: .85; gap: 2.6vh; }
+.fb--crimson .fb__stars-row svg { width: 1.3vh; height: 1.3vh; }
+.fb--crimson .fb__venue { color: rgba(255, 255, 255, .75); letter-spacing: .3em; }
+.fb--crimson .fb__sep { background: rgba(255, 255, 255, .35); }
+.fb--crimson .fb__chip { border-color: rgba(255, 255, 255, .25); background: rgba(255, 255, 255, .1); }
+
+/* Panels */
+.fb--crimson .fb-panel { border: 0; border-radius: 1.6vh; background: #fff; color: var(--cr-ink); box-shadow: 0 1.4vh 4vh rgba(30, 0, 8, .35); }
+.fb--crimson .fb-panel h2 { border: 0; background: var(--cr-red); color: #fff; letter-spacing: .14em !important; }
+.fb--crimson .fb-fixture { border-bottom: 1px solid var(--cr-line); color: var(--cr-ink); }
+.fb--crimson .fb-fixture__when { color: var(--cr-red-2); }
+.fb--crimson .fb-fixture__when small { color: var(--cr-muted); letter-spacing: .08em; }
+.fb--crimson .fb-vs { background: var(--cr-red-2); color: #fff; }
+.fb--crimson .fb-table th { color: var(--cr-muted); }
+.fb--crimson .fb-table td { border-top-color: var(--cr-line); color: var(--cr-ink); }
+.fb--crimson .fb-table tr.is-q td { background: var(--cr-tint); }
+.fb--crimson .fb-table tr.is-q td:first-child { box-shadow: inset .4vh 0 0 var(--cr-red); }
+.fb--crimson .fb-table td.pts { color: var(--cr-red-2); }
+.fb--crimson .fb-tables { padding: 0; }
+.fb--crimson .fb-tables h3 { display: none; }
+.fb--crimson .fb-tables > div:only-child .fb-table td:nth-child(2) { font-weight: 700; text-transform: none; }
+
+/* Match card */
+.fb--crimson .fb-card { border: 0; background: #fff; color: var(--cr-ink); box-shadow: 0 1.4vh 4vh rgba(30, 0, 8, .35); }
+.fb--crimson .fb-card__tab, .fb--crimson .fb-card__tab.is-live { background: var(--cr-red); color: #fff; box-shadow: none; }
+.fb--crimson .fb-card__tab i { background: #fff; }
+.fb--crimson .fb-card__comp { color: var(--cr-ink); font-family: var(--fb-head); font-weight: 800; }
+.fb--crimson .fb-card__comp span { color: var(--cr-muted); }
+.fb--crimson .fb-team small { color: var(--cr-muted); }
+.fb--crimson .fb-crest span { color: #fff; }
+.fb--crimson .fb-score__panel { color: var(--cr-red-2); text-shadow: none; }
+.fb--crimson .fb-score__panel em { color: var(--cr-ink); }
+.fb--crimson .fb-score__clock, .fb--crimson .fb-score__clock.is-running { border: 0; background: var(--cr-ink); color: #FF9DB0; box-shadow: none; }
+.fb--crimson .fb-score__clock small { color: #fff; }
+.fb--crimson .fb-score__pens, .fb--crimson .fb-side { color: var(--cr-muted); }
+.fb--crimson .fb-card__foot { border-top-color: var(--cr-line); background: #fff; }
+.fb--crimson .fb-goal svg, .fb--crimson .fb-lineup__row svg { color: var(--cr-red); }
+.fb--crimson .fb-matchlink { border: 0; background: var(--cr-red-2); color: #fff; }
+.fb--crimson .fb-matchlink:hover { background: var(--cr-red); }
+
+/* Stats and lineups */
+.fb--crimson .fb-stat { border-bottom: 1px solid var(--cr-line); }
+.fb--crimson .fb-stat > b { color: var(--cr-ink); }
+.fb--crimson .fb-stat span { color: var(--cr-muted); letter-spacing: .14em; }
+.fb--crimson .fb-stat__bar { display: none; }
+.fb--crimson .fb-lineup h3 { background: #fff; color: var(--cr-ink) !important; }
+.fb--crimson .fb-lineup + .fb-lineup h3 { color: var(--cr-red-2) !important; }
+.fb--crimson .fb-lineup__row { border-bottom-color: var(--cr-line); color: var(--cr-ink); }
+.fb--crimson .fb-lineup__num { border: 0; background: var(--cr-red-2) !important; text-shadow: none; }
+.fb--crimson .fb-lineup__tag, .fb--crimson .fb-lineup__tag.is-c { background: var(--cr-tint); color: var(--cr-red-2); }
+.fb--crimson .fb-lineups__cols { scrollbar-color: rgba(200, 16, 46, .35) transparent; }
+
+/* Marquee */
+.fb--crimson .fb-ticker { border-color: rgba(255, 140, 160, .3); background: rgba(40, 5, 12, .55); }
+.fb--crimson .fb-ticker__label { background: #fff; color: var(--cr-red-2); }
+.fb--crimson .fb-ticker__track { color: #fff; }
+.fb--crimson .fb-ticker__track b { color: #fff; }
+.fb--crimson .fb-ticker__track em { color: rgba(255, 200, 210, .7); }
+
+/* Penalty shootout strip inside a broadcast card */
+.fb-card { grid-template-rows: auto auto 1fr auto auto; }
+.fx-pens--bc { display: grid; gap: 1.2cqh; margin: 0 5cqh 2cqh; padding: 1.8cqh 3cqh; border-radius: 2cqh; background: rgba(3, 6, 34, .55); color: #fff; font-family: var(--fb-head); }
+.fx-pens--bc .fx-pens__title { color: var(--fb-silver); font-size: max(9px, 4.8cqh); font-weight: 800; letter-spacing: .18em; text-transform: uppercase; text-align: center; }
+.fx-pens--bc .fx-pens__row { display: grid; grid-template-columns: minmax(0, 1fr) auto 6cqh; align-items: center; gap: 3cqh; }
+.fx-pens--bc .fx-pens__row b { overflow: hidden; font-size: max(10px, 5.6cqh); font-weight: 800; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.fx-pens--bc .fx-pens__row em { font-size: max(12px, 7cqh); font-style: normal; font-weight: 800; text-align: right; }
+.fx-pens--bc .fx-pens__dots { display: flex; gap: 1.4cqh; }
+.fx-pens--bc .fx-pens__dots i { display: grid; place-items: center; width: 5.2cqh; height: 5.2cqh; min-width: 14px; min-height: 14px; border: 2px solid rgba(255, 255, 255, .3); border-radius: 50%; font-size: max(8px, 3cqh); font-style: normal; font-weight: 900; }
+.fx-pens--bc .fx-pens__dots i.is-in { border-color: #3BE39B; background: #3BE39B; color: #032; }
+.fx-pens--bc .fx-pens__dots i.is-out { border-color: #FF3B6B; background: #FF3B6B; color: #fff; }
+.fb--crimson .fx-pens--bc { background: var(--cr-tint); color: var(--cr-ink); }
+.fb--crimson .fx-pens--bc .fx-pens__title { color: var(--cr-red-2); }
+.fb--crimson .fx-pens--bc .fx-pens__dots i { border-color: rgba(59, 10, 20, .25); }
+.fb--crimson .fx-pens--bc .fx-pens__dots i.is-in { border-color: #15A35A; background: #15A35A; color: #fff; }
+.fb--crimson .fx-pens--bc .fx-pens__dots i.is-out { border-color: var(--cr-red-2); background: var(--cr-red-2); }
+/* Shootout: both teams side by side, and the focus card gets more height while it's on */
+.fx-pens--bc { grid-template-columns: 1fr 1fr; column-gap: 6cqh; }
+.fx-pens--bc .fx-pens__title { grid-column: 1 / -1; }
+.fb-focus:has(.fx-pens--bc) { grid-template-rows: minmax(0, 1.1fr) minmax(0, .9fr); }
+.fb-card__main { min-height: 0; }
+.fb-card:has(.fx-pens--bc) .fb-team .fb-crest { width: 20cqh; height: 22cqh; }
+.fb-card:has(.fx-pens--bc) .fb-team { gap: 1.4cqh; }
+.fb-card:has(.fx-pens--bc) .fb-score__panel { font-size: max(26px, 26cqh); }
+.fb-card:has(.fx-pens--bc) .fb-card__comp { margin-top: 1.4cqh; }
+.fb-card:has(.fx-pens--bc) .fb-score__clock { display: none; } /* the tab already says Penalties */
+.fb-card .fx-pens--bc { justify-self: stretch; width: auto; max-width: none; position: static; }
+/* Shootout strip, mirrored under the teams: home kicks | PENALTIES | away kicks (names are already above) */
+.fb-card .fx-pens--bc { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; column-gap: 5cqh; row-gap: 0; padding: 1.6cqh 4cqh; }
+.fb-card .fx-pens--bc .fx-pens__title { grid-column: 2; grid-row: 1; padding: .6cqh 2.4cqh; border-radius: 99px; }
+.fb-card .fx-pens--bc .fx-pens__row { grid-row: 1; display: flex; align-items: center; gap: 2.6cqh; }
+.fb-card .fx-pens--bc .fx-pens__row:nth-of-type(1) { grid-column: 1; justify-content: flex-end; }
+.fb-card .fx-pens--bc .fx-pens__row:nth-of-type(2) { grid-column: 3; justify-content: flex-start; }
+.fb-card .fx-pens--bc .fx-pens__row:nth-of-type(2) em { order: -1; }
+.fb-card .fx-pens--bc .fx-pens__row b { display: none; }
+.fb-card .fx-pens--bc .fx-pens__row em { min-width: 1.2em; text-align: center; font-size: max(14px, 8cqh); }
+.fb-card:has(.fx-pens--bc) .fb-team small { display: none; }
+.fb--crimson .fb-card .fx-pens--bc .fx-pens__title { background: var(--cr-red-2); color: #fff; }
+/* Crest, name and captain always fit above the scorers' footer */
+.fb-team .fb-crest { width: 25cqh; height: 28cqh; }
+.fb-team { gap: 1.8cqh; }
+.fb-card__main { overflow: hidden; }
+.fb-lineup__tag.is-g { background: #15A35A; color: #fff; }
+.fb-lineup__tag.is-a { background: #2F6FDE; color: #fff; }
+.fb--crimson .fb-lineup__tag.is-g { background: #15A35A; color: #fff; }
+.fb--crimson .fb-lineup__tag.is-a { background: #3B0A14; color: #fff; }
+/* Shootout kicks: even circles with centred tick / cross icons */
+.fb-card .fx-pens--bc .fx-pens__dots { gap: 1.2cqh; }
+.fb-card .fx-pens--bc .fx-pens__dots i { box-sizing: border-box; width: 6cqh; height: 6cqh; min-width: 16px; min-height: 16px; border-width: 2px; line-height: 0; }
+.fb-card .fx-pens--bc .fx-pens__dots i svg { width: 64%; height: 64%; display: block; }
+.fb--crimson .fb-card .fx-pens--bc .fx-pens__dots i:not(.is-in):not(.is-out) { border-color: rgba(59, 10, 20, .22); background: #fff; }
+.fb-card .fx-pens--bc .fx-pens__dots i { width: 7cqh; height: 7cqh; min-width: 20px; min-height: 20px; }

@@ -22,7 +22,11 @@ const Ball = () => (
     </svg>
 );
 
-const Crest: React.FC<{ team?: FutsalTeam }> = ({ team }) => (
+/** A team's own logo when it has one; otherwise a shield with its short name. */
+const TeamMark: React.FC<{ team?: FutsalTeam; fallback: React.ReactNode }> = ({ team, fallback }) =>
+    team?.logoUrl ? <img className="fb-logo" src={team.logoUrl} alt="" /> : <>{fallback}</>;
+
+const Crest: React.FC<{ team?: FutsalTeam }> = ({ team }) => team?.logoUrl ? <span className="fb-crest fb-crest--img" aria-hidden="true"><img src={team.logoUrl} alt="" /></span> : (
     <span className="fb-crest" aria-hidden="true">
         <svg viewBox="0 0 40 45">
             <path d="M20 1.5L37 7v14c0 11-7.4 19-17 22.5C10.4 40 3 32 3 21V7z" fill="url(#fbCrest)" stroke={CREST.stroke} strokeWidth="1.6" />
@@ -104,7 +108,11 @@ const MatchFocus: React.FC<{ m: FutsalMatch; cat: FutsalCategory; t: FutsalTourn
         if (!team) return null;
         const lu = m.lineups?.[side];
         const ids = lu?.players?.length ? lu.players : team.players.map(p => p.id);
-        const scorers = new Set(m.events.filter(e => e.type === 'GOAL' && e.side === side).map(e => e.playerId));
+        // Goals and assists this match, per player: shown as G / A tags (with a count when more than one).
+        const tally = (key: 'playerId' | 'assistId') => m.events.filter(e => e.type === 'GOAL' && e.side === side && !e.auto && e[key])
+            .reduce((n, e) => n.set(e[key]!, (n.get(e[key]!) || 0) + 1), new Map<string, number>());
+        const goals = tally('playerId'), assists = tally('assistId');
+        const tag = (n: number | undefined, l: string) => n ? <span className={`fb-lineup__tag is-${l.toLowerCase()}`} title={l === 'G' ? 'Goals' : 'Assists'}>{n > 1 ? n : ''}{l}</span> : null;
         return (
             <div className="fb-lineup">
                 <h3 style={{ color: SIDE_LINE[side] }}>{team.name}</h3>
@@ -114,7 +122,7 @@ const MatchFocus: React.FC<{ m: FutsalMatch; cat: FutsalCategory; t: FutsalTourn
                         <span className="fb-lineup__name">{p.name}</span>
                         {lu?.gk === p.id && <span className="fb-lineup__tag">GK</span>}
                         {p.id === team.players[0]?.id && <span className="fb-lineup__tag is-c">C</span>}
-                        {scorers.has(p.id) && <Ball />}
+                        {tag(goals.get(p.id), 'G')}{tag(assists.get(p.id), 'A')}
                     </div>
                 ))}
             </div>
@@ -166,9 +174,9 @@ const Idle: React.FC<{ t: FutsalTournament; teams: FutsalTeam[]; matches: Futsal
                 {next.length ? next.map(m => (
                     <div key={m.id} className="fb-fixture">
                         <span className="fb-fixture__when">{new Date(m.startAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}<small>{new Date(m.startAt!).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</small></span>
-                        <span className="fb-fixture__team"><i className="fb-dot" style={{ background: SIDE_LINE.home }} /><span>{nameOf(teams, matches, m, 'home')}</span></span>
+                        <span className="fb-fixture__team"><TeamMark team={teams.find(x => x.id === m.homeId)} fallback={<i className="fb-dot" style={{ background: SIDE_LINE.home }} />} /><span>{nameOf(teams, matches, m, 'home')}</span></span>
                         <span className="fb-vs">VS</span>
-                        <span className="fb-fixture__team fb-fixture__away"><span>{nameOf(teams, matches, m, 'away')}</span><i className="fb-dot" style={{ background: SIDE_LINE.away }} /></span>
+                        <span className="fb-fixture__team fb-fixture__away"><span>{nameOf(teams, matches, m, 'away')}</span><TeamMark team={teams.find(x => x.id === m.awayId)} fallback={<i className="fb-dot" style={{ background: SIDE_LINE.away }} />} /></span>
                     </div>
                 )) : <div className="fb-fixture"><span /><span>No upcoming fixtures</span></div>}
             </section>
@@ -186,7 +194,7 @@ const Idle: React.FC<{ t: FutsalTournament; teams: FutsalTeam[]; matches: Futsal
                                         return (
                                             <tr key={r.teamId} className={i < q ? 'is-q' : ''}>
                                                 <td>{i + 1}</td>
-                                                <td><span className="fb-fixture__team"><i className="fb-dot" style={{ background: NEUTRAL }} /><span>{team?.name}</span></span></td>
+                                                <td><span className="fb-fixture__team"><TeamMark team={team} fallback={<i className="fb-dot" style={{ background: NEUTRAL }} />} /><span>{team?.name}</span></span></td>
                                                 <td>{r.p}</td><td>{r.w}</td><td>{r.d}</td><td>{r.l}</td><td>{r.gd > 0 ? `+${r.gd}` : r.gd}</td><td className="pts">{r.pts}</td>
                                             </tr>
                                         );
@@ -198,6 +206,20 @@ const Idle: React.FC<{ t: FutsalTournament; teams: FutsalTeam[]; matches: Futsal
                 </div>
             </section>
         </div>
+    );
+};
+
+/** Sponsor logos scrolling in the marquee (used instead of results when the tournament has sponsors). */
+const SponsorTicker: React.FC<{ sponsors: { name: string; logoUrl: string }[] }> = ({ sponsors }) => {
+    // Enough copies to fill a wide screen before the loop repeats.
+    const row = Array.from({ length: Math.max(2, Math.ceil(8 / sponsors.length)) }, () => sponsors).flat();
+    const item = (s: { name: string; logoUrl: string }, k: string) => <span key={k} className="fb-sponsor"><img src={s.logoUrl} alt={s.name} /></span>;
+    return (
+        <footer className="fb-ticker">
+            <div style={{ overflow: 'hidden', flex: 1, display: 'flex' }}>
+                <div className="fb-ticker__track fb-ticker__track--logos">{row.map((s, i) => item(s, `a${i}`))}{row.map((s, i) => item(s, `b${i}`))}</div>
+            </div>
+        </footer>
     );
 };
 
@@ -248,7 +270,7 @@ export const FutsalBroadcast: React.FC<{ t: FutsalTournament; teams: FutsalTeam[
     const year = t.startDate?.slice(0, 4);
 
     return createPortal(
-        <div className="fb" role="dialog" aria-label={`${t.name} broadcast`}>
+        <div className={`fb ${t.theme === 'crimson' ? 'fb--crimson' : ''}`} role="dialog" aria-label={`${t.name} broadcast`}>
             <div className="fb__stars" aria-hidden="true" />
             <div className="fb__beam fb__beam--l" aria-hidden="true" />
             <div className="fb__beam fb__beam--r" aria-hidden="true" />
@@ -257,6 +279,7 @@ export const FutsalBroadcast: React.FC<{ t: FutsalTournament; teams: FutsalTeam[
             <header className="fb__head">
                 <div className="fb__brand">
                     <Logo size={84} variant="white" className="shrink-0 !w-[clamp(48px,8vh,84px)] !h-auto aspect-[800/586]" />
+                    {t.logoUrl && <><span className="fb__sep" aria-hidden="true" /><img src={t.logoUrl} alt={t.name} /></>}
                 </div>
                 <div className="fb__title">
                     <h1>{t.name}{year && !t.name.includes(year) ? ` | ${year}` : ''}</h1>
@@ -297,7 +320,7 @@ export const FutsalBroadcast: React.FC<{ t: FutsalTournament; teams: FutsalTeam[
                 )}
             </main>
 
-            <Ticker teams={teams} matches={matches} />
+            {t.sponsors?.length ? <SponsorTicker sponsors={t.sponsors} /> : <Ticker teams={teams} matches={matches} />}
         </div>,
         document.body,
     );

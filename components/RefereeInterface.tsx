@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { isFipTournament } from '../lib/pointsSystems';
 import { subscribeToTournaments, subscribeToTournament, updateMatchScore, addRefereeTag, triggerBroadcastEvent, subscribeToStandings, startMatch, loginReferee, resumeMatch, isTeamInCategory } from '../services/storage';
 import { addPoint } from '../services/scoreEngine';
 import { Match, MatchStatus, Tournament, SponsorTier } from '../types';
@@ -17,7 +18,7 @@ import { confirmDialog } from './ui/ConfirmDialog';
 
 const activeMatchEnds = new Set<string>();
 
-const ScoringControl = ({ match: initialMatch, teams, tournamentId, isAmericano, onUpdate, onBack, onShowBanner }: any) => {
+const ScoringControl = ({ match: initialMatch, teams, tournamentId, isAmericano, isFip, onUpdate, onBack, onShowBanner }: any) => {
     const { matchData: liveMatch } = useMatchResult(initialMatch?.id);
     const match = liveMatch || initialMatch;
     const t1 = teams.find((t: any) => t.id === match.team1Id);
@@ -364,6 +365,7 @@ const ScoringControl = ({ match: initialMatch, teams, tournamentId, isAmericano,
                     onEndMatch={handleEndMatch}
                     onBack={onBack}
                     isAmericano={isAmericano}
+                    isFip={isFip}
                     onTriggerBroadcast={(type, message, subMessage) => {
                          triggerBroadcastEvent(tournamentId, match.id, {
                              type, message, subMessage, duration: 4000, timestamp: Date.now(), id: Date.now().toString()
@@ -701,6 +703,7 @@ const PadelRefereeInterface: React.FC<RefereeProps> = ({ initialTournamentId, in
                 match={selectedMatch} 
                 teams={selectedTournament.teams} 
                 tournamentId={selectedTournament.id}
+                isFip={isFipTournament(selectedTournament as any)}
                 isAmericano={(() => {
                     const fmt = selectedMatch.categoryId && selectedTournament.categories
                         ? (selectedTournament.categories.find(c => c.id === selectedMatch.categoryId)?.format || selectedTournament.format)

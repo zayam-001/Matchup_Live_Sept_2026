@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { isFipTournament } from '../lib/pointsSystems';
 import { gsap } from "gsap";
 import styles from "./obs.module.css";
 import { Match, MatchStatus } from "../types";
@@ -287,8 +288,12 @@ export default function OBSOverlay({
 
   // Americano formats are one running points total: show a single score box.
   const isPointsMatch = isPointsScoredFormat(getActiveFormat(tournament as any, match.categoryId));
+  // FIP-ranked padel events get the FIP scorebug: navy panel, labelled set columns, blue points column.
+  const isFip = isFipTournament(tournament as any);
   const themeClass = tournament?.broadcastTheme === 'sofcom' ? styles.themeSofcom
-    : tournament?.broadcastTheme === 'pinktober' ? styles.themePinktober : '';
+    : tournament?.broadcastTheme === 'pinktober' ? styles.themePinktober : isFip ? styles.themeFip : '';
+  // Star point (golden point at deuce), shown on broadcast as "★ STAR POINT".
+  const isStarPoint = Boolean((match.score as any)?.goldenPoint);
 
   const p1Games = match.score?.p1Games ?? 0;
   const p2Games = match.score?.p2Games ?? 0;
@@ -346,6 +351,7 @@ export default function OBSOverlay({
             {/* Completed / Previous Sets */}
             {completedSets.map((set, idx) => (
               <div key={idx} className={styles.obsSetCol}>
+                {isFip && <span className={styles.colLabel}>S{idx + 1}</span>}
                 <div className={styles.obsSetNum}>{set.t1}</div>
                 <div className={styles.scoreRowDivider} />
                 <div className={styles.obsSetNum}>{set.t2}</div>
@@ -355,6 +361,7 @@ export default function OBSOverlay({
             {/* Active Set Games (White Outlined Box) - only shown for current in-progress set */}
             {hasActiveSet && (
               <div className={styles.activeGameBox}>
+                {isFip && <span className={styles.colLabel}>S{completedSets.length + 1}</span>}
                 <div className={styles.activeGameNum} ref={p1GameRef}>
                   {p1Games}
                 </div>
@@ -368,6 +375,10 @@ export default function OBSOverlay({
             {/* Points Column - only shown during active set play (not for Americano: the box above already is the points) */}
             {hasActiveSet && !isPointsMatch && (
               <div className={styles.pointsCol}>
+                {/* Star point: the SP marker takes the column label's place, inside the box. */}
+                {isStarPoint
+                  ? <span className={`${styles.colLabel} ${styles.spBadge}`} title="Star point">SP</span>
+                  : isFip && <span className={`${styles.colLabel} ${styles.colLabelPoints}`}>Score</span>}
                 <div className={styles.pointsNum} ref={points1Ref}>
                   {p1Points}
                 </div>

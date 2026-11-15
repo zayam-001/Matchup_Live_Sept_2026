@@ -604,3 +604,24 @@
   .fx-nav a { padding: 8px 8px; font-size: 11px; letter-spacing: .04em; }
   .fx-match__go, .fx-match > svg:last-child { display: none !important; }
 }
+
+/* Crimson theme (red Champions-night look) for the public tournament pages */
+.fx--crimson {
+  --fx-bg: #3F0914; --fx-deep: #5A0E1C; --fx-navy: #4A0B18; --fx-indigo: #5A0E1C;
+  --fx-royal: #E31B3F; --fx-cyan: #FF6B84; --fx-violet: #FF8FA3; --fx-silver: #F6DDE2; --fx-muted: #D9A6B0;
+  --fx-line: rgba(255, 210, 218, .14);
+  --fx-card: linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02)), rgba(70, 8, 22, .6);
+  --fx-row: linear-gradient(180deg, rgba(140, 20, 46, .55), rgba(80, 10, 26, .75));
+  --fx-grad: linear-gradient(135deg, #FF5A76 0%, #E31B3F 52%, #B5102E 100%);
+}
+.fx--crimson .fx__sky { background: radial-gradient(ellipse 70% 45% at 50% 0%, rgba(160, 24, 50, .55), transparent 70%), linear-gradient(180deg, #7A1224 0%, #5A0E1C 45%, #3F0914 100%); }
+.fx--crimson .fx-top { background: rgba(63, 9, 20, .82); }
+@media (max-width: 760px) { .fx--crimson .fx-top { background: rgba(63, 9, 20, .96); } }
+.fx--crimson .fx-nav { background: rgba(74, 11, 24, .94); }
+.fx--crimson .fx-select option, .fx--crimson .fx-lb__table th { background: #4A0B18; }
+.fx--crimson .fx-sticky-tabs { background: linear-gradient(180deg, rgba(94, 14, 30, .96) 70%, transparent); }
+.fx--crimson .fx-match.is-live { background: linear-gradient(100deg, rgba(227, 27, 63, .55), rgba(80, 10, 26, .85) 55%); }
+.fx--crimson .fx-sheet__panel { background: linear-gradient(180deg, #7A1224, #3F0914); }
+.fx-pens__dots i svg { width: 62%; height: 62%; display: block; }
+/* Futsal views embedded in another page (e.g. the bracket on the spectator page) */
+.fx.fx-embed { min-height: 0; background: transparent; overflow-x: visible; }

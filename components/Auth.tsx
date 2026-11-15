@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { isTournamentFinished } from '../lib/lifecycle';
 import { Card } from './ui/Card';
 import { sendPlayerPasswordReset, registerPlayer, loginPlayer, loginReferee, loginOrganiser, changeOrganiserPassword, skipOrganiserPasswordChange, loginWithGoogle, completeGoogleSignUp, subscribeToTournaments, setPlayerPersistence } from '../services/storage';
 import { db, auth } from '../services/storage';
@@ -116,7 +117,7 @@ export const Auth: React.FC<{
     // Operations Form State
     const [opRole, setOpRole] = useState<'admin' | 'referee'>('admin');
     const futsalDemo = useRef(false);
-    const [futsalTournaments, setFutsalTournaments] = useState<{ id: string; name: string; status: string; scorerPasscode: string; sport?: 'futsal' | 'football' }[]>([]);
+    const [futsalTournaments, setFutsalTournaments] = useState<{ id: string; name: string; status: string; scorerPasscode: string; sport?: 'futsal' | 'football'; endDate?: string; reopenedAt?: string }[]>([]);
     useEffect(() => {
         if (opRole !== 'referee') return;
         let unsub = () => {};
@@ -133,6 +134,9 @@ export const Auth: React.FC<{
     const [opPasscode, setOpPasscode] = useState('');
     const [selectedTournamentId, setSelectedTournamentId] = useState('');
     const [tournaments, setTournaments] = useState<Tournament[]>([]);
+    // Referee picker: only ongoing and upcoming events (finished and retired ones are left out).
+    const refPadel = tournaments.filter(t => !isTournamentFinished(t));
+    const refFutsal = futsalTournaments.filter(t => !isTournamentFinished(t));
     
     // Organiser Password Rest State
     const [showForcePasswordChange, setShowForcePasswordChange] = useState(false);
@@ -713,13 +717,13 @@ export const Auth: React.FC<{
                                                     <option value="" disabled className="text-black bg-white">Select a tournament</option>
                                                     {futsalTournaments.length > 0 ? (
                                                         <>
-                                                            <optgroup label="Padel" className="text-black bg-white">{tournaments.map(t => <option key={t.id} value={t.id} className="text-black bg-white">{t.name}</option>)}</optgroup>
+                                                            <optgroup label="Padel" className="text-black bg-white">{refPadel.map(t => <option key={t.id} value={t.id} className="text-black bg-white">{t.name}</option>)}</optgroup>
                                                             {(['futsal', 'football'] as const).map(sp => {
-                                                                const list = futsalTournaments.filter(t => (t.sport === 'football' ? 'football' : 'futsal') === sp);
+                                                                const list = refFutsal.filter(t => (t.sport === 'football' ? 'football' : 'futsal') === sp);
                                                                 return list.length > 0 && <optgroup key={sp} label={sp === 'football' ? 'Football' : 'Futsal'} className="text-black bg-white">{list.map(t => <option key={t.id} value={`futsal:${t.id}`} className="text-black bg-white">{t.name}</option>)}</optgroup>;
                                                             })}
                                                         </>
-                                                    ) : tournaments.map(t => <option key={t.id} value={t.id} className="text-black bg-white">{t.name}</option>)}
+                                                    ) : refPadel.map(t => <option key={t.id} value={t.id} className="text-black bg-white">{t.name}</option>)}
                                                 </select>
                                                 <ChevronRight className="auth__chev" size={16} />
                                             </div>

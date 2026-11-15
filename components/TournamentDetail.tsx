@@ -12,12 +12,14 @@ import {
   Timer,
   Share2,
   Play,
-  Layers, ArrowUpRight } from 'lucide-react';
+  Layers, ArrowUpRight, GitBranch } from 'lucide-react';
+import { SpectatorBracket, bracketMatches } from './SpectatorBracket';
 import './spectator.css';
 import gsap from 'gsap';
 import { Tournament, Match, Team, MatchStatus, SponsorTier } from '../types';
 import { isMatchInCategory, isTeamInCategory } from '../services/storage';
 import { formatLabel } from '../lib/teamAmericano';
+import { isTournamentFinished } from '../lib/lifecycle';
 import { Badge } from './ui/Badge';
 import { 
   LiveMatchesTable, 
@@ -72,7 +74,7 @@ interface TournamentDetailProps {
   matches: Match[];
   onBack: () => void;
   onEnterBroadcastMode?: () => void;
-  initialTab?: 'live' | 'schedule' | 'results' | 'standings' | 'timeline';
+  initialTab?: 'live' | 'schedule' | 'results' | 'standings' | 'bracket' | 'timeline';
   searchQuery?: string;
 }
 
@@ -84,7 +86,7 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
   initialTab = 'live',
   searchQuery
 }) => {
-  const [activeTab, setActiveTab] = useState<'live' | 'schedule' | 'results' | 'standings' | 'timeline'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'live' | 'schedule' | 'results' | 'standings' | 'bracket' | 'timeline'>(initialTab);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
 
@@ -176,6 +178,8 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
     { id: 'schedule', label: 'Schedule', icon: Calendar },
     { id: 'results', label: 'Results', icon: Award },
     { id: 'standings', label: 'Standings', icon: Trophy },
+    // Only for events with a knockout stage.
+    ...(bracketMatches(matchesToDisplay, tournament.format).length ? [{ id: 'bracket', label: 'Bracket', icon: GitBranch }] : []),
     { id: 'timeline', label: 'Feed', icon: History }
   ];
 
@@ -183,10 +187,10 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
   const finishedCount = matchesToDisplay.filter((m: any) => m.status === MatchStatus.COMPLETED || String(m.status).toUpperCase() === 'COMPLETED' || String(m.status).toUpperCase() === 'FINISHED').length;
   const now = Date.now();
   const startTs = tournament.startDate ? new Date(tournament.startDate).getTime() : 0;
-  const endTs = tournament.endDate ? new Date(tournament.endDate).getTime() : 0;
-  const heroStatus = liveMatches.length > 0 ? 'live' : (tournament.status === 'COMPLETED' || (endTs && endTs < now)) ? 'done' : (startTs && startTs > now) ? 'soon' : 'on';
+  const finished = isTournamentFinished(tournament, matches);
+  const heroStatus = liveMatches.length > 0 ? 'live' : finished ? 'done' : (startTs && startTs > now) ? 'soon' : 'on';
   // Broadcast mode is for running events: off once the tournament is over.
-  const broadcastDisabled = liveMatches.length === 0 && (tournament.status === 'COMPLETED' || tournament.status === 'RETIRED' || (!!endTs && endTs < now));
+  const broadcastDisabled = liveMatches.length === 0 && finished;
   const prize = (selectedCategoryId ? (tournament.categories?.find(c => c.id === selectedCategoryId)?.prizeMoney || tournament.prizeMoney) : tournament.prizeMoney) || 0;
   const contentRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
@@ -330,6 +334,12 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
               </div>
             )}
 
+            {activeTab === 'bracket' && (
+              <div className="animate-in fade-in duration-500">
+                <SpectatorBracket matches={matchesToDisplay} teams={tournament.teams || []} format={tournament.format} />
+              </div>
+            )}
+
             {activeTab === 'standings' && (
               <div className="animate-in fade-in duration-500">
                 <StandingsTable 
@@ -360,7 +370,7 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
       {/* Floating Bottom Navigation Bar with Safe Area Inset Padding */}
       <div className="fixed bottom-0 left-0 right-0 p-4 md:p-6 flex justify-center z-50 pointer-events-none">
         <div 
-          className="pointer-events-auto w-full max-w-[600px] mx-auto"
+          className="pointer-events-auto w-full max-w-[680px] mx-auto"
           style={{
             paddingBottom: 'calc(env(safe-area-inset-bottom) + 0px)'
           }}

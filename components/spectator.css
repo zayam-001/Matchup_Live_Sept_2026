@@ -207,3 +207,85 @@
 .spx-modal-pink [class*="bg-[#0D0D0D]"] { background: linear-gradient(170deg, #5a1240, #2e0822) !important; border-color: rgba(255, 214, 232, .18) !important; }
 .spx-modal-pink [class*="bg-black"] { background-color: rgba(30, 4, 22, .85) !important; }
 .spx-modal-pink [class*="via-[#4D78FF]"] { --tw-gradient-via: #ff8cc6 !important; }
+
+/* ── Knockout bracket ── */
+.spx-bracket__empty { padding: 80px 16px; text-align: center; color: #9CA3AF; font-weight: 700; }
+.spx-bracket__champ { margin: 4px 0 18px; display: inline-flex; gap: 6px; padding: 8px 16px; border-radius: 999px; background: var(--spx-grad); color: #fff; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; }
+.spx-bracket__scroll { display: flex; gap: 28px; overflow-x: auto; padding-bottom: 12px; scroll-snap-type: x proximity; }
+.spx-bracket__round { flex: 0 0 236px; display: flex; flex-direction: column; scroll-snap-align: start; }
+.spx-bracket__round h4 { margin: 0 0 12px; text-align: center; font-size: 11px; font-weight: 900; letter-spacing: .16em; text-transform: uppercase; color: #8FA8FF; }
+.spx-bracket__col { flex: 1; display: flex; flex-direction: column; justify-content: space-around; gap: 14px; }
+.spx-bracket__match { position: relative; border: 1px solid rgba(255, 255, 255, .1); border-radius: 12px; background: rgba(4, 14, 66, .55); overflow: hidden; }
+.spx-bracket__match.is-live { border-color: rgba(229, 92, 48, .7); box-shadow: 0 0 0 1px rgba(229, 92, 48, .35), 0 10px 26px rgba(229, 92, 48, .2); }
+.spx-bracket__match small { display: block; padding: 5px 10px 0; font-size: 9px; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; color: #9CA3AF; }
+.spx-bracket__match small.spx-bracket__live { color: var(--spx-orange); }
+.spx-bracket__team { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 10px; font-size: 13px; font-weight: 700; color: #E5E7EB; }
+.spx-bracket__team + .spx-bracket__team { border-top: 1px solid rgba(255, 255, 255, .07); }
+.spx-bracket__team > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spx-bracket__team .is-tbd { color: #6B7280; font-style: italic; font-weight: 600; font-size: 12px; }
+.spx-bracket__team.is-win { color: #fff; background: linear-gradient(90deg, rgba(77, 120, 255, .28), transparent); }
+.spx-bracket__team.is-out { color: #6B7280; }
+.spx-bracket__sets { display: flex; gap: 6px; font-variant-numeric: tabular-nums; }
+.spx-bracket__sets b { min-width: 12px; text-align: center; font-weight: 900; }
+.spx-bracket__sets b.is-now { color: var(--spx-orange); }
+.spx-bracket__team.is-edit { padding: 5px 6px; }
+.spx-bracket__team.is-edit select { width: 100%; min-width: 0; padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(143, 168, 255, .35); background: rgba(10, 24, 70, .9); color: #fff; font: inherit; font-size: 12px; cursor: pointer; }
+.spx-bracket__team.is-edit select:focus { outline: 2px solid #4D78FF; outline-offset: 1px; }
+
+
+/* ==========================================================================
+   Crimson theme (red Champions-night look, e.g. IBA Champions League). Same hooks as Pinktober.
+   ========================================================================== */
+.spx-theme-crimson {
+  --spx-navy: #3F0914;
+  --spx-navy-2: #5A0E1C;
+  --spx-card: rgba(150, 18, 48, .6);
+  --spx-card-2: rgba(94, 10, 30, .85);
+  --spx-line: rgba(255, 210, 218, .14);
+  --spx-orange: #E31B3F;
+  --spx-peach: #FF6B84;
+  --spx-muted: #F4C6CF;
+  --spx-grad: linear-gradient(135deg, #FF6B84 0%, #E31B3F 50%, #B5102E 100%);
+}
+.spx-root.spx-theme-crimson {
+  background:
+    radial-gradient(ellipse 55% 45% at 8% 0%, rgba(255, 107, 132, .32), transparent 72%),
+    radial-gradient(ellipse 60% 55% at 100% 100%, rgba(227, 27, 63, .35), transparent 70%),
+    linear-gradient(160deg, #3F0914 0%, #5A0E1C 50%, #7A1224 100%);
+}
+.spx-theme-crimson .spx-hero__art { background: radial-gradient(circle at 75% 25%, rgba(255, 107, 132, .5), transparent 45%), linear-gradient(140deg, #7A1224, #3F0914) !important; }
+.spx-theme-crimson .spx-hero__shade { background: linear-gradient(180deg, rgba(52, 5, 16, .5) 0%, rgba(52, 5, 16, .1) 30%, rgba(52, 5, 16, .6) 60%, rgba(52, 5, 16, .96) 100%) !important; }
+.spx-theme-crimson .spx-status, .spx-theme-crimson .spx-chip, .spx-theme-crimson .spx-org { background: rgba(70, 7, 22, .6); border-color: rgba(255, 210, 218, .22); }
+.spx-theme-crimson .spx-status--live { background: rgba(227, 27, 63, .95); }
+.spx-theme-crimson .spx-btn--primary { box-shadow: 0 14px 36px rgba(227, 27, 63, .4), inset 0 1px 0 rgba(255, 255, 255, .3); }
+.spx-theme-crimson .spx-btn--ghost:hover { border-color: rgba(255, 107, 132, .55); }
+.spx-theme-crimson .spx-stats { background: rgba(70, 7, 22, .78); }
+.spx-theme-crimson .spx-panel { background: linear-gradient(170deg, rgba(150, 20, 50, .55), rgba(70, 7, 22, .8)); border-color: rgba(255, 210, 218, .16); }
+.spx-theme-crimson .spx-dock { background: rgba(70, 7, 22, .88); border-color: rgba(255, 210, 218, .18); }
+.spx-theme-crimson .spx-dock__pill { box-shadow: 0 10px 26px rgba(227, 27, 63, .5); }
+.spx-root.spx-theme-crimson .spx-bar { background: rgba(70, 7, 22, .85) !important; border-color: rgba(255, 107, 132, .2) !important; }
+.spx-root.spx-theme-crimson .spx-bar input:focus { box-shadow: 0 0 0 4px rgba(227, 27, 63, .18) !important; }
+
+/* Existing views (standings, results, leaderboard, schedule, feed) → plum glass. */
+.spx-theme-crimson [class*="bg-[#0A0A0A]"], .spx-theme-crimson [class*="bg-[#0a0a0a]"], .spx-theme-crimson [class*="bg-[#0d0d10]"],
+.spx-theme-crimson [class*="bg-[#111111]"], .spx-theme-crimson [class*="bg-[#111113]"], .spx-theme-crimson [class*="bg-[#111114]"],
+.spx-theme-crimson [class*="bg-[#050505]"] { background-color: rgba(70, 7, 22, .78) !important; }
+.spx-theme-crimson [class*="bg-[#18181b]"], .spx-theme-crimson [class*="bg-[#1A1A1A]"], .spx-theme-crimson [class*="bg-[#1a1a1a]"],
+.spx-theme-crimson [class*="bg-[#1B1B1E]"], .spx-theme-crimson [class*="bg-[#161616]"], .spx-theme-crimson [class*="bg-surface-dark"],
+.spx-theme-crimson [class*="bg-surface-panel"], .spx-theme-crimson [class*="bg-surface-ground"], .spx-theme-crimson [class*="bg-card-dark"] { background-color: rgba(150, 18, 48, .5) !important; }
+.spx-theme-crimson [class*="bg-gradient-to-"][class*="from-[#111113]"], .spx-theme-crimson [class*="from-[#0A0A0A]"] { --tw-gradient-from: rgba(70, 7, 22, .96) var(--tw-gradient-from-position) !important; }
+.spx-theme-crimson [class*="border-white/5"], .spx-theme-crimson [class*="border-white/10"] { border-color: rgba(255, 210, 218, .12) !important; }
+.spx-theme-crimson [class*="rounded-2xl"][class*="border"]:hover, .spx-theme-crimson [class*="rounded-3xl"][class*="border"]:hover { border-color: rgba(255, 107, 132, .4) !important; }
+.spx-theme-crimson [class*="text-[#4D78FF]"], .spx-theme-crimson [class*="text-brand"] { color: #FF6B84 !important; }
+.spx-theme-crimson [class*="bg-[#4D78FF]"], .spx-theme-crimson [class*="bg-brand"] { background-color: #E31B3F !important; }
+.spx-theme-crimson [class*="border-[#4D78FF]"] { border-color: rgba(255, 107, 132, .5) !important; }
+.spx-theme-crimson [class*="from-[#4D78FF]"] { --tw-gradient-from: #FF6B84 var(--tw-gradient-from-position) !important; }
+.spx-theme-crimson [class*="text-[#E65C31]"], .spx-theme-crimson [class*="text-[#E55C30]"] { color: #FF6B84 !important; }
+.spx-theme-crimson [class*="bg-[#E65C31]"], .spx-theme-crimson [class*="bg-[#E55C30]"] { background-color: #E31B3F !important; }
+.spx-theme-crimson table thead { background: rgba(94, 10, 30, .92) !important; }
+.spx-theme-crimson table thead th:last-child { color: #FF6B84 !important; }
+.spx-theme-crimson table tbody tr:hover { background: rgba(255, 107, 132, .08) !important; }
+.spx-theme-crimson table tbody tr:nth-child(-n+3) { background: linear-gradient(90deg, rgba(255, 107, 132, .1), transparent 60%); }
+.spx-theme-crimson .spx-hero__title, .spx-theme-crimson .spx-dock span { font-family: 'Barlow Condensed', 'Poppins', sans-serif !important; letter-spacing: .02em; text-transform: uppercase; }
+.spx-theme-crimson .spx-hero__title { letter-spacing: .03em !important; }
+.spx-theme-crimson .spx-panel { background: rgba(255, 255, 255, .06); border-color: rgba(255, 210, 218, .2); box-shadow: 0 18px 50px rgba(30, 0, 8, .35); }

@@ -150,7 +150,7 @@ export const Crest: React.FC<{ team?: FutsalTeam; size?: number; label?: string 
  * The public futsal/football shell. Inside a tournament (`tour`), the menu is that tournament's:
  * details and Match Up home; there's no way back to the list of competitions.
  */
-export const Shell: React.FC<{ active?: 'home' | 'details' | 'leaderboard' | 'none'; children: React.ReactNode; bare?: boolean; tour?: Pick<FutsalTournament, 'id' | 'sport'> }> = ({ active = 'none', children, bare, tour }) => {
+export const Shell: React.FC<{ active?: 'home' | 'details' | 'leaderboard' | 'none'; children: React.ReactNode; bare?: boolean; tour?: Pick<FutsalTournament, 'id' | 'sport'> & { theme?: FutsalTournament['theme'] } }> = ({ active = 'none', children, bare, tour }) => {
     const demo = isDemo();
     useEffect(() => {
         const prev = document.title;
@@ -159,7 +159,7 @@ export const Shell: React.FC<{ active?: 'home' | 'details' | 'leaderboard' | 'no
         return () => { document.title = prev; };
     }, []);
     return (
-        <div className="fx">
+        <div className={`fx ${tour?.theme === 'crimson' ? 'fx--crimson' : ''}`}>
             <div className="fx__sky" aria-hidden="true" />
             <div className="fx__body">
                 {!bare && (
@@ -253,6 +253,9 @@ export const MatchList: React.FC<{ list: FutsalMatch[]; t: FutsalTournament; tea
 export const isKo = (m: FutsalMatch) => isKnockout(m.stage);
 
 /** A penalty shootout kick by kick: ✓ scored, ✕ missed, empty dots for the kicks still to come in the first five. */
+const PEN_TICK = <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+const PEN_CROSS = <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" /></svg>;
+
 export const ShootoutTrack: React.FC<{ m: FutsalMatch; names: { home: string; away: string }; className?: string }> = ({ m, names, className = '' }) => {
     const all = (m.events || []).filter(e => e.type === 'PEN_SCORED' || e.type === 'PEN_MISSED');
     const row = (side: 'home' | 'away') => {
@@ -262,7 +265,7 @@ export const ShootoutTrack: React.FC<{ m: FutsalMatch; names: { home: string; aw
             <div className="fx-pens__row">
                 <b>{names[side]}</b>
                 <span className="fx-pens__dots">
-                    {ks.map(e => <i key={e.id} className={e.type === 'PEN_SCORED' ? 'is-in' : 'is-out'}>{e.type === 'PEN_SCORED' ? '✓' : '✕'}</i>)}
+                    {ks.map(e => <i key={e.id} className={e.type === 'PEN_SCORED' ? 'is-in' : 'is-out'} aria-label={e.type === 'PEN_SCORED' ? 'Scored' : 'Missed'}>{e.type === 'PEN_SCORED' ? PEN_TICK : PEN_CROSS}</i>)}
                     {Array.from({ length: pad }, (_, k) => <i key={`p${k}`} />)}
                 </span>
                 <em>{ks.filter(e => e.type === 'PEN_SCORED').length}</em>

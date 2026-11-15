@@ -376,6 +376,7 @@ export interface Tournament {
   registrationDeadline: string;
   startDate?: string;
   endDate?: string;
+  reopenedAt?: string; // Set when the organiser reopens a finished tournament
   teams: Team[];
   matches: Match[];
   categories?: TournamentCategory[]; // New field for multi-category support

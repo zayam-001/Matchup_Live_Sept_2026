@@ -1,12 +1,15 @@
 // Futsal inside spectator mode. Same frame as padel's TournamentDetail (hero, stats,
 // category selector, bottom dock) so both sports read as one product; only the
 // match content is futsal: goals, clock, fouls, W/D/L tables.
+import { isTournamentFinished } from '../../lib/lifecycle';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import gsap from 'gsap';
-import { Activity, ArrowUpRight, Award, Calendar, History, Layers, MapPin, Play, Share2, Timer, Trophy, Tv, Users } from 'lucide-react';
+import { Activity, ArrowUpRight, Award, Calendar, GitBranch, History, Layers, MapPin, Play, Share2, Timer, Trophy, Tv, Users } from 'lucide-react';
 import '../../components/spectator.css';
+import '../futsal.css';
+import { Bracket } from './views';
 import { CategorySelector } from '../../components/ui/CategorySelector';
-import { computeStandings, isLeagueFormat, leagueQualifiers, eventMinute, foulsFor, isKnockout, playerStats, scoreOf, shortHanded, fmtClock, sourceLabel } from '../engine';
+import { computeStandings, hasKnockoutStage, isLeagueFormat, leagueQualifiers, eventMinute, foulsFor, isKnockout, playerStats, scoreOf, shortHanded, fmtClock, sourceLabel } from '../engine';
 import { FORMAT_LABELS, goalTypeLabel, PRESETS } from '../presets';
 import type { FutsalCategory, FutsalMatch, FutsalTeam, FutsalTournament } from '../types';
 import { NEUTRAL, SIDE_LINE } from './palette';
@@ -15,7 +18,7 @@ import { publicPath, sportLabel } from '../sport';
 
 const FutsalBroadcast = React.lazy(() => import('./FutsalBroadcast'));
 
-type Tab = 'live' | 'schedule' | 'results' | 'standings' | 'timeline';
+type Tab = 'live' | 'schedule' | 'results' | 'standings' | 'bracket' | 'timeline';
 
 const fmtFull = (iso?: string) => (iso ? new Date(iso).toLocaleString([], { year: '2-digit', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'TBA');
 const fmtDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBA');
@@ -92,11 +95,11 @@ export const FutsalSpectatorDetail: React.FC<{ tournamentId: string; onBack: () 
     const live = catMatches.filter(m => m.status === 'LIVE');
     const played = catMatches.filter(m => m.status === 'COMPLETED');
     const startTs = t.startDate ? new Date(`${t.startDate}T00:00:00`).getTime() : 0;
-    const endTs = t.endDate ? new Date(`${t.endDate}T23:59:59`).getTime() : 0;
-    const heroStatus = live.length ? 'live' : t.status === 'COMPLETED' || (endTs && endTs < Date.now()) ? 'done' : startTs > Date.now() ? 'soon' : 'on';
+    const finished = isTournamentFinished(t, matches);
+    const heroStatus = live.length ? 'live' : finished ? 'done' : startTs > Date.now() ? 'soon' : 'on';
     const prize = 0;
     // Like padel: broadcast is for running events, off once it's over and nothing is live.
-    const broadcastOff = !live.length && (t.status === 'COMPLETED' || (!!endTs && endTs < Date.now()));
+    const broadcastOff = !live.length && finished;
     const share = async () => {
         const url = window.location.href;
         try {
@@ -106,11 +109,14 @@ export const FutsalSpectatorDetail: React.FC<{ tournamentId: string; onBack: () 
     };
     const tabs: { id: Tab; label: string; icon: any }[] = [
         { id: 'live', label: 'Live', icon: Activity }, { id: 'schedule', label: 'Schedule', icon: Calendar },
-        { id: 'results', label: 'Results', icon: Award }, { id: 'standings', label: 'Standings', icon: Trophy }, { id: 'timeline', label: 'Feed', icon: History },
+        { id: 'results', label: 'Results', icon: Award }, { id: 'standings', label: 'Standings', icon: Trophy },
+        // Knockout rounds or playoffs: the same bracket as the tournament page.
+        ...(hasKnockoutStage(cat.format) || catMatches.some(m => isKnockout(m.stage)) ? [{ id: 'bracket' as Tab, label: 'Bracket', icon: GitBranch }] : []),
+        { id: 'timeline', label: 'Feed', icon: History },
     ];
 
     return (
-        <div className="spx pb-32 pt-24 max-w-[1400px] mx-auto w-full animate-in fade-in duration-500 px-4 md:px-8 relative">
+        <div className={`spx pb-32 pt-24 max-w-[1400px] mx-auto w-full animate-in fade-in duration-500 px-4 md:px-8 relative ${t.theme === 'crimson' ? 'spx-theme-crimson' : ''}`}>
             <section ref={heroRef} className="spx-hero">
                 <div className="spx-hero__media" aria-hidden="true">
                     {t.bannerUrl ? <img src={t.bannerUrl} alt="" referrerPolicy="no-referrer" /> : <div className="spx-hero__art"><span className="spx-hero__art-court" /></div>}
@@ -164,6 +170,7 @@ export const FutsalSpectatorDetail: React.FC<{ tournamentId: string; onBack: () 
                         {activeTab === 'schedule' && <Schedule list={catMatches.filter(m => m.status !== 'COMPLETED')} teams={teams} matches={matches} />}
                         {activeTab === 'results' && <Results list={played} teams={teams} matches={matches} />}
                         {activeTab === 'standings' && <Standings cat={cat} teams={teams} matches={catMatches} />}
+                        {activeTab === 'bracket' && <div className={`fx fx-embed ${t.theme === 'crimson' ? 'fx--crimson' : ''}`}><Bracket t={t} cat={cat} teams={teams} matches={matches} /></div>}
                         {activeTab === 'timeline' && <Feed list={catMatches} teams={teams} matches={matches} cat={cat} />}
                     </div>
                 </div>

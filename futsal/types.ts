@@ -84,8 +84,13 @@ export interface FutsalTournament {
     pitches: string[];
     startDate: string; // yyyy-mm-dd
     endDate: string;
+    reopenedAt?: string;
     bannerUrl?: string;
     logoUrl?: string;
+    /** Look of broadcast, spectator and tournament pages: 'crimson' is the red Champions-night theme. */
+    theme?: 'default' | 'crimson';
+    /** Shown in the broadcast marquee instead of results when set. */
+    sponsors?: { name: string; logoUrl: string }[];
     status: TournamentStatus;
     categories: FutsalCategory[];
     scorerPasscode: string;

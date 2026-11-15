@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Award, CalendarClock, Copy, LayoutDashboard, ListChecks, Plus, Settings, Shuffle, Trash2, Trophy as TrophyIcon, Upload, Users } from 'lucide-react';
 import { BulkTeams } from './BulkTeams';
+import { ScheduleSheet } from './ScheduleSheet';
 import { uploadSystemImage } from '../../services/storage';
 import { blankMatch, computeAwards, computeStandings, drawGroups, finishMatch, generateFixtures, GROUP_NAMES, hasKnockoutStage, isKnockout, playerStats, resetMatch, resolveSlots, scoreOf, teamInitials } from '../engine';
 import { FORMAT_LABELS, matchMinutes, newCategory, newId, PRESETS, TIEBREAKER_LABELS } from '../presets';
@@ -455,6 +456,8 @@ export const Fixtures: React.FC<Ctx> = ({ t, teams, matches, toast, saveT }) => 
                 </div>
                 <p className="fx-muted" style={{ margin: 0, fontSize: 13 }}>{FORMAT_LABELS[cat.format]} · {accepted.length} approved teams{cat.format === 'GROUPS_KNOCKOUT' ? ` · top ${cat.advancePerGroup} per group go through` : cat.format === 'LEAGUE_PLAYOFFS' ? ' · top 4 go to the playoffs' : cat.format === 'LEAGUE_KNOCKOUT' ? ` · top ${cat.advancePerGroup} go to the knockout` : ''}. Generate the full set, or add matches one by one. Teams, time and {PITCH_WORD[sportOf(t)].toLowerCase()} of any match that hasn’t started can be changed in the table below; knockout matches fill in automatically.</p>
             </div>
+
+            <ScheduleSheet t={t} cat={cat} teams={teams} matches={matches} onDone={text => setMsg({ kind: 'ok', text })} />
 
             <div className="fx-card fx-card--pad fx-stack">
                 <div className="fx-row fx-row--between">

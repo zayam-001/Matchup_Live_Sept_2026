@@ -7,6 +7,10 @@
 // qualifying-draw points (Q1/Q2/last/bonus qualy) aren't modelled because the
 // app has no qualifying draws.
 
+/** FIP-sanctioned event (FIP points system or ranking tier): FIP scoring rules and the FIP broadcast look. */
+export const isFipTournament = (t?: { pointsSystem?: string | null; rankingTier?: string | null } | null) =>
+  [t?.pointsSystem, t?.rankingTier].some(v => String(v || '').toLowerCase().startsWith('fip'));
+
 export type PointsSystemId = 'matchup' | 'local' | 'fip_platinum' | 'fip_gold' | 'fip_silver' | 'fip_bronze' | 'fip_finals';
 
 export type KnockoutStage = 'CHAMPION' | 'RUNNER_UP' | 'SEMI_FINALIST' | 'QUARTER_FINALIST' | 'ROUND_OF_16' | 'ROUND_OF_32' | 'ROUND_OF_64';

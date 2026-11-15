@@ -19,6 +19,7 @@ import { TournamentBannerCard } from './TournamentBannerCard';
 import { motion, AnimatePresence } from 'motion/react';
 import { TournamentDetail } from './TournamentDetail';
 import { TeamAmericanoStandings } from './TeamAmericanoStandings';
+import { isTournamentFinished } from '../lib/lifecycle';
 import './spectator.css';
 import { getActiveFormat, isTeamAmericanoFormat, isPointsScoredFormat } from '../lib/teamAmericano';
 
@@ -208,7 +209,7 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
       let ts: any[] = [], teams: any[] = [], matches: any[] = [];
       const push = () => setFutsalTournaments(ts.filter(t => t.status !== 'DRAFT').map(t => ({
         id: `futsal:${t.id}`, name: t.name, sport: t.sport === 'football' ? 'football' : 'futsal', venue: t.venue, city: t.city, organizer: t.organizerName,
-        startDate: t.startDate, endDate: t.endDate, bannerUrl: t.bannerUrl, currency: t.currency,
+        startDate: t.startDate, endDate: t.endDate, bannerUrl: t.bannerUrl, currency: t.currency, broadcastTheme: (t as any).theme,
         status: t.status === 'COMPLETED' ? 'COMPLETED' : 'ACTIVE',
         teams: teams.filter(x => x.tournamentId === t.id && x.status === 'ACCEPTED'),
         matches: matches.filter(x => x.tournamentId === t.id).map(x => ({ id: x.id, status: x.status })),
@@ -278,15 +279,13 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
   
   // Broadcast mode is only for running events: a finished tournament (and no
   // match still live) never opens it, even when arriving with it switched on.
-  const broadcastEnded = !!activeTournament && !(tournamentMatches || []).some(isMatchLive) && (
-      activeTournament.status === 'COMPLETED' || activeTournament.status === 'RETIRED' ||
-      (!!activeTournament.endDate && new Date(activeTournament.endDate).getTime() < Date.now()));
+  const broadcastEnded = !!activeTournament && !(tournamentMatches || []).some(isMatchLive) && isTournamentFinished(activeTournament, tournamentMatches);
   if (isBroadcastMode && activeTournament && !broadcastEnded) {
       return <BroadcastMode tournament={activeTournament} onClose={() => setIsBroadcastMode(false)} />;
   }
   
   return (
-    <div className={`spx-root relative min-h-screen ${activeTournament?.broadcastTheme === 'pinktober' ? 'spx-theme-pinktober' : ''}`}>
+    <div className={`spx-root relative min-h-screen ${activeTournament?.broadcastTheme === 'pinktober' ? 'spx-theme-pinktober' : ''} ${(selectedFutsal as any)?.broadcastTheme === 'crimson' ? 'spx-theme-crimson' : ''}`}>
       {/* Sticky Search & Filter Bar */}
       <div className="spx-bar sticky top-[72px] md:top-[88px] z-40 bg-[#0d0d10]/95 backdrop-blur-2xl border-b border-white/10 py-3.5 px-4 md:px-8 mb-4 shadow-xl transition-all">
           <div className="max-w-7xl mx-auto space-y-2.5">
@@ -684,7 +683,7 @@ const TournamentList = ({ tournaments, onSelect, searchQuery = '', dateFilter = 
 
     const categorizeTournament = (t: Tournament) => {
         const now = new Date();
-        if (t.status === 'COMPLETED' || t.status === 'RETIRED' || (t.endDate && new Date(t.endDate) < now)) {
+        if (isTournamentFinished(t)) {
             return 'completed';
         }
         const hasLiveMatchRealtime = liveMatchTournamentIds.has(t.id);

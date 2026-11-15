@@ -1,6 +1,7 @@
 // The Match Up rankings, worked out live from tournament results: FIP-scale
 // placement points added up across every tournament a player has played. Nothing
 // is stored, so the table can't drift from results or collect duplicate rows.
+import { isTournamentFinished } from './lifecycle';
 import type { Team, Tournament } from '../types';
 import { buildKnockoutRoundSizes, getMatchStage, isKnockoutMatch, loserStage, placementPoints, STAGE_WEIGHT, tournamentTier, tournamentTierLabel, type KnockoutStage } from './pointsSystems';
 import type { Match } from '../types';
@@ -71,7 +72,7 @@ const stageFromRank = (rank?: number) => {
 };
 
 const isOver = (t: Tournament) =>
-    String(t.status || '').toUpperCase() === 'COMPLETED' || (!!t.endDate && new Date(t.endDate).getTime() < Date.now());
+    isTournamentFinished(t);
 
 const isDone = (m: any) => ['COMPLETED', 'FINISHED'].includes(String(m?.status || '').toUpperCase());
 const TABLE_FORMATS = ['AMERICANO', 'MEXICANO', 'TEAM_AMERICANO', 'ROUND_ROBIN'];

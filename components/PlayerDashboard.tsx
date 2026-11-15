@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { isTournamentFinished } from '../lib/lifecycle';
 import { Card } from './ui/Card';
 import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
@@ -291,7 +292,7 @@ export const PlayerDashboard: React.FC<{ onLogout: () => void, onNavigate: (tab:
         return !!email && email === normalizeEmail(player.email) && firstNameOf(p.name) === firstNameOf(player.fullName || player.name);
     };
     const isMyTeam = (team: any) => isMe(team?.player1) || isMe(team?.player2);
-    const isTournamentOver = (t: any) => ['COMPLETED', 'FINISHED'].includes(String(t.status).toUpperCase()) || (!!t.endDate && new Date(t.endDate).getTime() < Date.now());
+    const isTournamentOver = (t: any) => isTournamentFinished(t);
 
     // Tournament lists don't include matches, so load them for my events.
     const myTournamentsRaw = tournaments.filter(t => (t.teams || []).some(isMyTeam));

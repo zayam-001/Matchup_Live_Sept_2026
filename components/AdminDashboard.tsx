@@ -1,10 +1,11 @@
 import { CloneTournamentModal } from "./CloneTournamentModal";
+import { PadelScheduleSheet } from './PadelScheduleSheet';
 import { BulkUploadTeamsModal } from "./BulkUploadTeamsModal";
 import { TournamentLiveBadge } from "./TournamentLiveBadge";
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { TournamentFormat, SkillLevel, Tournament, MatchStatus, RoundRobinType, Team, Match, SponsorTier, Sponsor, Venue, BroadcastTheme } from '../types';
 import { createTournament, deleteTournament, updateTournament, subscribeToTournaments, subscribeToTournament, updateTeamStatus, generateSchedule, assignTeamGroup, updateTournamentTeamsGroups, updateMatchDetails, addKnockoutMatch, subscribeToVenues, uploadSystemImage, getOrganiserCredits, deductOrganiserCredits, enrollTeamManually, subscribeToStandings, searchGlobalTeams, refundOrganiserCredits, retireTournament, appendNewMexicanoRound, deleteMatch, replaceTeamInTournament, editTeamInTournament, syncAllDataToGlobal, getTournamentSponsors, resetMatchToScheduled, checkAndHealTournamentStats, bulkUploadPendingTeams, isTeamInCategory, isMatchInCategory } from '../services/storage';
-import { Check, X, Calendar, Users, Trophy, PlayCircle, Lock, RefreshCcw, ChevronLeft, Plus, ChevronRight, Grid, ArrowRight, Settings, Edit3, ArrowUpRight, MapPin, DollarSign, Database, Trash2, Mail, Phone, Hash, AlertTriangle, Loader2, LogOut, Camera, Image as ImageIcon, Medal, Activity, Clock, PlusCircle, Download, Share2, Copy, QrCode, ExternalLink, List, Archive, ChevronDown, History, RotateCcw, Upload } from 'lucide-react';
+import { Check, X, Calendar, Users, Trophy, PlayCircle, Lock, RefreshCcw, ChevronLeft, Plus, ChevronRight, Grid, ArrowRight, Settings, Edit3, ArrowUpRight, MapPin, DollarSign, Database, Trash2, Mail, Phone, Hash, AlertTriangle, Loader2, LogOut, Camera, Image as ImageIcon, Medal, Activity, Clock, PlusCircle, Download, Share2, Copy, QrCode, ExternalLink, List, Archive, ChevronDown, History, RotateCcw, Upload, GitBranch } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useTournamentMatches } from '../hooks/useTournamentMatches';
@@ -19,6 +20,10 @@ import { MatchResultCard } from './MatchResultCard';
 import { TeamDetailsOverlay } from './TeamDetailsOverlay';
 import { ReplaceTeamModal } from './ReplaceTeamModal';
 import { toast } from './Toast';
+import { SpectatorBracket, bracketMatches } from './SpectatorBracket';
+import { CourtBoard } from './CourtBoard';
+import { isTournamentFinished } from '../lib/lifecycle';
+import './spectator.css';
 import { TournamentLeaderboardTab } from './TournamentLeaderboardTab';
 import { EditTeamSheet } from './EditTeamSheet';
 import { StandingsOverlayExporter } from './StandingsOverlayExporter';
@@ -42,7 +47,7 @@ import { collection, doc, getDoc, query, where, getDocs } from 'firebase/firesto
 import { onAuthStateChanged, updateProfile } from 'firebase/auth';
 import { db, auth } from '../services/storage';
 
-import { calculateStatsForTournament, generateKnockoutBracket, deleteKnockoutMatchCascade, recalculateMatchResult, getAllRegisteredPlayers, mergePlayerProfiles, unmergePlayerProfile, dismissMergeSuggestion, subscribeToPlayerLinks, getRedemption, markRedemptionUsed } from '../services/storage';
+import { calculateStatsForTournament, generateKnockoutBracket, swapBracketSlots, setTournamentFinished, deleteKnockoutMatchCascade, recalculateMatchResult, getAllRegisteredPlayers, mergePlayerProfiles, unmergePlayerProfile, dismissMergeSuggestion, subscribeToPlayerLinks, getRedemption, markRedemptionUsed } from '../services/storage';
 import { matchPlayer, linkIdFor, type PlayerLink } from '../lib/playerIdentity';
 import { PKR_PER_POINT, type Redemption } from '../lib/wallet';
 import { confirmDialog } from './ui/ConfirmDialog';
@@ -586,7 +591,7 @@ export const AdminDashboard: React.FC<{ initialAuthenticated?: boolean, onLogout
   const [isCreating, setIsCreating] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [view, setView] = useState<'OVERVIEW' | 'TEAMS' | 'GROUPS' | 'SCHEDULE' | 'KNOCKOUT' | 'STANDINGS' | 'RESULTS' | 'LEADERBOARD'>('OVERVIEW');
+  const [view, setView] = useState<'OVERVIEW' | 'TEAMS' | 'GROUPS' | 'SCHEDULE' | 'KNOCKOUT' | 'BRACKET' | 'STANDINGS' | 'RESULTS' | 'LEADERBOARD'>('OVERVIEW');
 
   // Futsal and football live in the same portal: same wizard, same workspace layout.
   const [createSport, setCreateSport] = useState<'padel' | 'futsal' | 'football'>('padel');
@@ -915,11 +920,9 @@ const getTournamentCredits = (t: any) => {
       const s = String(t.status || 'DRAFT').toUpperCase();
       if (s === 'RETIRED' || s.includes('ARCHIV')) return 'Retired';
       if (s === 'DRAFT') return 'Draft';
-      if (s === 'COMPLETED') return 'Completed';
+      if (isTournamentFinished(t)) return 'Completed';
       const now = Date.now();
       const start = t.startDate ? new Date(t.startDate).getTime() : NaN;
-      const end = t.endDate ? new Date(t.endDate).getTime() : NaN;
-      if (!isNaN(end) && end < now) return 'Completed';
       if (!isNaN(start) && start > now) return 'Upcoming';
       return 'Ongoing';
   };
@@ -929,9 +932,8 @@ const getTournamentCredits = (t: any) => {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const futsalLifecycle = (t: FutsalTournament): 'Ongoing' | 'Upcoming' | 'Completed' | 'Draft' => {
       if (t.status === 'DRAFT') return 'Draft';
-      if (t.status === 'COMPLETED') return 'Completed';
+      if (isTournamentFinished(t)) return 'Completed';
       const today = new Date().toISOString().slice(0, 10);
-      if (t.endDate && t.endDate < today) return 'Completed';
       if (t.startDate && t.startDate > today) return 'Upcoming';
       return 'Ongoing';
   };
@@ -1550,6 +1552,7 @@ const getTournamentCredits = (t: any) => {
       { key: 'SCHEDULE', label: 'Schedule', icon: <Calendar size={18} />, active: view === 'SCHEDULE', onClick: () => setView('SCHEDULE') },
       { key: 'STANDINGS', label: 'Standings', icon: <List size={18} />, active: view === 'STANDINGS', onClick: () => setView('STANDINGS') },
       { key: 'KNOCKOUT', label: 'Knockouts', icon: <Trophy size={18} />, active: view === 'KNOCKOUT', onClick: () => setView('KNOCKOUT') },
+      { key: 'BRACKET', label: 'Bracket', icon: <GitBranch size={18} />, active: view === 'BRACKET', onClick: () => setView('BRACKET') },
       { key: 'RESULTS', label: 'Results', icon: <Check size={18} />, active: view === 'RESULTS', onClick: () => setView('RESULTS') },
       { key: 'LEADERBOARD', label: 'Leaderboard', icon: <Medal size={18} />, active: view === 'LEADERBOARD', onClick: () => setView('LEADERBOARD') },
   ];
@@ -1590,6 +1593,17 @@ const getTournamentCredits = (t: any) => {
                           </div>
                           <div className="adm-ws__actions">
                               <button onClick={(e) => handleEditTournament(e, activeTournament)} className="adm-btn adm-btn--ghost"><Edit3 size={16}/> Edit</button>
+                              {activeTournament.status !== 'RETIRED' && (isTournamentFinished(activeTournament) ? (
+                                   <button className="adm-btn adm-btn--ghost" title="Open it again so matches can be played and scored" onClick={async () => {
+                                       if (!(await confirmDialog({ title: 'Reopen this tournament?', body: 'It shows as ongoing again on every screen, and stays open past its end date until you mark it finished.', confirmLabel: 'Reopen' }))) return;
+                                       try { await setTournamentFinished(activeTournament.id, false); toast.success('Tournament reopened', 'It shows as ongoing again.'); } catch { toast.error('Couldn’t reopen it', 'Please try again.'); }
+                                   }}><RotateCcw size={16}/> Reopen</button>
+                              ) : (
+                                   <button className="adm-btn adm-btn--ghost" title="Mark the tournament finished" onClick={async () => {
+                                       if (!(await confirmDialog({ title: 'Mark this tournament finished?', body: 'Spectators see it as finished and broadcast mode turns off. Unplayed matches stay as they are, and you can reopen it any time.', confirmLabel: 'Mark finished' }))) return;
+                                       try { await setTournamentFinished(activeTournament.id, true); toast.success('Tournament finished', 'Spectators now see it as finished.'); } catch { toast.error('Couldn’t update it', 'Please try again.'); }
+                                   }}><Check size={16}/> Mark finished</button>
+                              ))}
                               {(activeTournament.teams || []).filter(x => x.status === 'ACCEPTED').length < 2 ? (
                                    <button onClick={(e) => handleDeleteTournament(e, activeTournament)} className="adm-mini adm-mini--danger" title="Delete"><Trash2 size={16}/></button>
                               ) : (activeTournament.status !== 'RETIRED' && (
@@ -1624,6 +1638,7 @@ const getTournamentCredits = (t: any) => {
               <TabButton active={view === 'SCHEDULE'} onClick={() => setView('SCHEDULE')} label="Schedule" icon={<Calendar size={16}/>} />
               <TabButton active={view === 'STANDINGS'} onClick={() => setView('STANDINGS')} label="Standings" icon={<List size={16}/>} />
               <TabButton active={view === 'KNOCKOUT'} onClick={() => setView('KNOCKOUT')} label="Knockouts" icon={<Trophy size={16}/>} />
+              <TabButton active={view === 'BRACKET'} onClick={() => setView('BRACKET')} label="Bracket" icon={<GitBranch size={16}/>} />
               <TabButton active={view === 'RESULTS'} onClick={() => setView('RESULTS')} label="Results" icon={<Check size={16}/>} />
               <TabButton active={view === 'LEADERBOARD'} onClick={() => setView('LEADERBOARD')} label="Leaderboard" icon={<Medal size={16}/>} />
           </div>
@@ -1648,12 +1663,14 @@ const getTournamentCredits = (t: any) => {
           )}
 
           {view === 'OVERVIEW' && <OverviewTab tournament={activeTournament} categoryId={selectedCategoryId} venues={allVenues} onEdit={() => handleEditTournament({ stopPropagation: () => {} } as any, activeTournament)} />}
+          {view === 'OVERVIEW' && <CourtBoard tournament={activeTournament} categoryId={selectedCategoryId} />}
           {view === 'OVERVIEW' && <CourtObsLinks tournament={activeTournament} />}
           {view === 'TEAMS' && <TeamsTab tournament={activeTournament} categoryId={selectedCategoryId} setView={setView} />}
           {view === 'GROUPS' && <GroupAssignmentTab tournament={activeTournament} categoryId={selectedCategoryId} />}
           {view === 'SCHEDULE' && <ScheduleTab tournament={activeTournament} categoryId={selectedCategoryId} />}
           {view === 'STANDINGS' && <StandingsTab tournament={activeTournament} categoryId={selectedCategoryId} />}
           {view === 'KNOCKOUT' && <KnockoutTab tournament={activeTournament} categoryId={selectedCategoryId} />}
+          {view === 'BRACKET' && <BracketTab tournament={activeTournament} categoryId={selectedCategoryId} />}
           {view === 'RESULTS' && <ResultsTab tournament={activeTournament} categoryId={selectedCategoryId} />}
           {view === 'LEADERBOARD' && <TournamentLeaderboardTab tournament={activeTournament} categoryId={selectedCategoryId} />}
           
@@ -1783,7 +1800,10 @@ const CourtObsLinks = ({ tournament }: { tournament: Tournament }) => {
         if (!venueIds.length) { setCourts(fallback); return; }
         import('../services/storage').then(({ getCourtsByVenueIds }) => getCourtsByVenueIds(venueIds)).then((res: any[]) => {
             if (!live) return;
+            // Only this tournament's courts when it names them (a venue can have more).
+            const own = new Set((tournament.courts || []).map(n => n.trim().toLowerCase()));
             const list = res.map(c => ({ id: c.id, name: c.courtName || c.name || c.id }))
+                .filter(c => !own.size || own.has(c.name.trim().toLowerCase()))
                 .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
             setCourts(list.length ? list : fallback);
         }).catch(() => live && setCourts(fallback));
@@ -3697,76 +3717,47 @@ const OverviewTab = ({ tournament, categoryId, onEdit, venues = [] }: { tourname
                 </Card>
             </div>
 
-            {/* Visual Bracket for Elimination Formats */}
-            {((category?.format || tournament.format) === TournamentFormat.SINGLE_ELIMINATION || (category?.format || tournament.format) === TournamentFormat.DOUBLE_ELIMINATION) && (
-                <div>
-                    <h3 className="text-xl font-bold text-white mb-4">Tournament Bracket</h3>
-                    <BracketView matches={(globalMatches || []).filter(m => isMatchInCategory(m, categoryId, tournament))} teams={accepted} />
-                </div>
-            )}
+
         </div>
     )
 }
 
-const BracketView = ({ matches, teams }: any) => {
-    // Basic Bracket Visualization
-    // Group matches by round
-    const rounds: Record<string, Match[]> = {};
-    matches.forEach((m: Match) => {
-        if (!rounds[m.round]) rounds[m.round] = [];
-        rounds[m.round].push(m);
-    });
-
-    const roundKeys = Object.keys(rounds).sort((a,b) => parseInt(a) - parseInt(b));
-    if (roundKeys.length === 0) return <p className="text-content-muted text-center py-8">No bracket generated yet.</p>;
-
+// Bracket menu tab: the knockout tree, where the organiser can re-point any slot of a match that hasn't started.
+const BracketTab = ({ tournament, categoryId }: { tournament: Tournament; categoryId: string | null }) => {
+    const { matches: all } = useTournamentMatches(tournament.id);
+    const matches = (all || []).filter(m => isMatchInCategory(m, categoryId, tournament));
+    const teams = (tournament.teams || []).filter(t => t.status === 'ACCEPTED');
+    const [editing, setEditing] = useState(false);
+    const [saving, setSaving] = useState(false);
+    if (!bracketMatches(matches, tournament.format).length) return (
+        <Card variant="panel" className="p-10 text-center text-content-secondary">No knockout matches yet. Create them from <b className="text-white">Knockouts → Generate bracket</b> and the bracket appears here.</Card>
+    );
+    const swap = async (a: { matchId: string; side: 1 | 2 }, b: { matchId: string; side: 1 | 2 }) => {
+        setSaving(true);
+        try {
+            await swapBracketSlots(tournament.id, a, b);
+            toast.success('Bracket updated', 'The two slots swapped places. Spectator, referee and OBS screens update now.');
+        } catch (e: any) {
+            toast.error('Couldn’t change the bracket', e?.message || 'Check your connection and try again.');
+        } finally { setSaving(false); }
+    };
     return (
-        <Card variant="panel" className="overflow-x-auto pb-4">
-            <div className="flex gap-8 min-w-max p-4">
-                {roundKeys.map(r => (
-                    <div key={r} className="flex flex-col justify-around gap-4 min-w-[200px]">
-                        <h4 className="text-center text-brand font-bold text-sm mb-2 uppercase tracking-wider">{rounds[r][0].roundName}</h4>
-                        {rounds[r].map(m => {
-                             const t1 = teams.find((t: any) => t.id === m.team1Id);
-                             const t2 = teams.find((t: any) => t.id === m.team2Id);
-                             const isMatchDone = m.status === 'COMPLETED' || String(m.status).toUpperCase() === 'FINISHED';
-                             
-                             let p1Sets = m.score?.p1Sets || 0;
-                             let p2Sets = m.score?.p2Sets || 0;
-                             if (m.score?.p1SetScores && m.score?.p2SetScores && (m.score.p1SetScores.length > 0)) {
-                                 let p1 = 0, p2 = 0;
-                                 m.score.p1SetScores.forEach((s: number, i: number) => {
-                                     const os = m.score.p2SetScores[i] || 0;
-                                     if (s > os) p1++; else if (os > s) p2++;
-                                 });
-                                 if (p1 + p2 > 0) {
-                                     p1Sets = p1;
-                                     p2Sets = p2;
-                                 }
-                             }
-                             if (isMatchDone && p1Sets === 0 && p2Sets === 0 && (!m.score?.p1Games && !m.score?.p2Games)) {
-                                 if (m.winnerTeamId === m.team1Id) p1Sets = 1;
-                                 else if (m.winnerTeamId === m.team2Id) p2Sets = 1;
-                             }
-
-                             return (
-                                 <div key={m.id} className="bg-surface-ground border border-white/10 rounded-lg p-3 text-xs relative shadow-sm">
-                                     <div className={`p-2 mb-1 rounded flex justify-between items-center ${m.winnerTeamId === m.team1Id ? 'bg-accent-success/20 text-accent-success font-bold' : 'text-content-secondary'}`}>
-                                         <span className="truncate max-w-[120px]">{t1?.name || 'TBD'}</span>
-                                         {(m.status === 'COMPLETED' || String(m.status).toUpperCase() === 'FINISHED') && <span className="font-bold">{p1Sets}</span>}
-                                     </div>
-                                     <div className={`p-2 rounded flex justify-between items-center ${m.winnerTeamId === m.team2Id ? 'bg-accent-success/20 text-accent-success font-bold' : 'text-content-secondary'}`}>
-                                         <span className="truncate max-w-[120px]">{t2?.name || 'TBD'}</span>
-                                         {(m.status === 'COMPLETED' || String(m.status).toUpperCase() === 'FINISHED') && <span className="font-bold">{p2Sets}</span>}
-                                     </div>
-                                 </div>
-                             )
-                        })}
-                    </div>
-                ))}
+        <div>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div>
+                    <h3 className="text-xl font-bold text-white">Tournament Bracket</h3>
+                    {editing && <p className="text-sm text-content-muted mt-1">Pick what fills each slot. The slot that had it takes this one’s place, so no team is lost. Matches that have started are locked.</p>}
+                </div>
+                <button onClick={() => setEditing(v => !v)} disabled={saving}
+                    className={`px-4 py-2 rounded-lg font-bold border transition-colors ${editing ? 'bg-brand text-white border-brand' : 'bg-surface-elevated text-white border-white/10 hover:bg-white/10'}`}>
+                    {saving ? 'Saving…' : editing ? 'Done' : 'Edit bracket'}
+                </button>
             </div>
-        </Card>
-    )
+            <Card variant="panel" className="spx p-4">
+                <SpectatorBracket matches={matches} teams={teams} format={tournament.format} onSwap={editing && !saving ? swap : undefined} />
+            </Card>
+        </div>
+    );
 };
 
 const StandingsTab = ({ tournament, categoryId }: any) => {
@@ -4857,6 +4848,7 @@ const ScheduleTab = ({ tournament, categoryId }: { tournament: Tournament; categ
                     <button onClick={handleDownloadPDF} className="bg-surface-elevated hover:bg-white/10 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors border border-white/5">
                         <Download size={16}/> PDF
                     </button>
+                    <PadelScheduleSheet tournament={tournament} matches={filteredMatches} />
                     {tournament.format === TournamentFormat.MEXICANO && (
                         <button onClick={handleNextMexicanoRound} disabled={generating} className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-lg shadow-purple-600/20">
                             {generating ? <Loader2 size={16} className="animate-spin"/> : <Plus size={16}/>} 

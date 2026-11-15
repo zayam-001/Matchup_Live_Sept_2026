@@ -194,6 +194,47 @@ export const promoteBracket = async (tId: string, override?: Partial<Match> & { 
     return changed.length;
 };
 
+export type BracketSlot = { matchId: string; side: 1 | 2 };
+
+/**
+ * Organiser edit: swaps what fills two knockout slots (e.g. "Winner Match 2" and
+ * "Winner Match 3", or two first-round teams), so the bracket stays complete.
+ * Both matches must not have started. Re-links the feeding matches and re-fills
+ * the bracket from current results.
+ */
+export const swapBracketSlots = async (tId: string, a: BracketSlot, b: BracketSlot): Promise<void> => {
+    if (!db) return;
+    if (a.matchId === b.matchId && a.side === b.side) return;
+    const mSnap = await getDocs(query(collection(db, "matches"), where("tournamentId", "==", tId)));
+    const all = new Map(mSnap.docs.map(d => [d.id, { ...d.data(), id: d.id } as Match]));
+    const ma = all.get(a.matchId), mb = all.get(b.matchId);
+    if (!ma || !mb) throw new Error('Match not found');
+    if ([ma, mb].some(m => String(m.status || 'SCHEDULED').toUpperCase() !== 'SCHEDULED')) throw new Error('A match that has started can’t be changed.');
+    const take = (m: Match, side: 1 | 2) => {
+        const k = `team${side}` as const;
+        return { dep: (m as any)[`${k}Dependency`] ?? null, id: (m as any)[`${k}Id`] || '', name: (m as any)[`${k}Name`] || '', players: (m as any)[`${k}PlayerNames`] || '' };
+    };
+    const sa = take(ma, a.side), sb = take(mb, b.side);
+    const updates = new Map<string, Record<string, unknown>>();
+    const put = (id: string, f: Record<string, unknown>) => updates.set(id, { ...(updates.get(id) || {}), ...f });
+    const give = (m: Match, side: 1 | 2, s: typeof sa) => put(m.id, {
+        [`team${side}Dependency`]: s.dep, [`team${side}Id`]: s.id, [`team${side}Name`]: s.name, [`team${side}PlayerNames`]: s.players,
+    });
+    give(ma, a.side, sb); give(mb, b.side, sa);
+    // A winner now plays on in the other match: point the feeding match there.
+    if (ma.id !== mb.id) {
+        if (sa.dep?.sourceType === 'MATCH_WINNER' && all.has(sa.dep.sourceId)) put(sa.dep.sourceId, { nextMatchId: mb.id });
+        if (sb.dep?.sourceType === 'MATCH_WINNER' && all.has(sb.dep.sourceId)) put(sb.dep.sourceId, { nextMatchId: ma.id });
+    }
+    const batch = writeBatch(db);
+    updates.forEach((f, id) => {
+        batch.set(doc(db, "tournaments", tId, "matches", id), f, { merge: true });
+        batch.set(doc(db, "matches", id), { ...f, tournamentId: tId, id }, { merge: true });
+    });
+    await batch.commit();
+    await promoteBracket(tId);
+};
+
 /**
  * Builds the whole knockout bracket for a category in one go (first round to the
  * final, linked), replacing knockout matches that haven't started. From group
@@ -1528,6 +1569,14 @@ export const createTournament = async (t: any) => {
         notifyMock();
         return newT.id;
     }
+};
+
+/** Organiser marks a padel tournament finished, or reopens it (it then stays open past its end date). */
+export const setTournamentFinished = async (tId: string, finished: boolean) => {
+    if (!db) return;
+    await updateDoc(doc(db, "tournaments", tId), finished
+        ? { status: 'COMPLETED', reopenedAt: deleteField() }
+        : { status: 'ACTIVE', reopenedAt: new Date().toISOString() });
 };
 
 export const updateTournament = async (tId: any, data: any, ...args: any[]) => {
