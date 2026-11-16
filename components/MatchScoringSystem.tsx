@@ -342,8 +342,9 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
 
   const advanceScore = (teamToAward: TeamId, actionDetails: PointHistory['action']) => {
     lastLocalActionTimeRef.current = Date.now();
-    // Padel sets are best of three (or fewer): once a pair has two sets the match is over, so no more points.
-    if (!isAmericano && Math.max(matchState.setsA, matchState.setsB) >= 2) {
+    // FIP is best of three: once a pair has two sets the match is over, so no more points. Normal matches
+    // (friendlies included) can go on, so the referee decides when they end.
+    if (isFip && !isAmericano && Math.max(matchState.setsA, matchState.setsB) >= 2) {
       setSelectedWinnerId(matchState.setsA > matchState.setsB ? 1 : 2);
       setResolutionType('normal');
       setWorkflowPhase('FINAL_CONFIRMATION');
@@ -664,16 +665,16 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
   // after the referee closed the end prompt or reloaded at 4-20 of 24) used
   // to sit there forever: the end check only ran on the point that crossed
   // the target. Ask again once whenever the screen holds a finished score.
-  // A match opened (or resumed) with two sets already won goes straight to the result.
+  // FIP: a match opened (or resumed) with two sets already won goes straight to the result.
   const matchWonPromptRef = useRef(false);
   useEffect(() => {
-    if (isAmericano || isMatchEnded || workflowPhase !== 'SCORING' || matchWonPromptRef.current) return;
+    if (!isFip || isAmericano || isMatchEnded || workflowPhase !== 'SCORING' || matchWonPromptRef.current) return;
     if (Math.max(matchState.setsA, matchState.setsB) < 2) return;
     matchWonPromptRef.current = true;
     setSelectedWinnerId(matchState.setsA > matchState.setsB ? 1 : 2);
     setResolutionType('normal');
     setWorkflowPhase('FINAL_CONFIRMATION');
-  }, [isAmericano, isMatchEnded, workflowPhase, matchState.setsA, matchState.setsB]);
+  }, [isFip, isAmericano, isMatchEnded, workflowPhase, matchState.setsA, matchState.setsB]);
 
   const targetPromptShownRef = useRef(false);
   useEffect(() => {
@@ -1066,7 +1067,7 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
                           </button>
                         );
                       })()}
-                      {Math.max(matchState.setsA + (pendingSetResult?.team === 'teamA' ? 1 : 0), matchState.setsB + (pendingSetResult?.team === 'teamB' ? 1 : 0)) >= 2 ? null : matchState.setsA + (pendingSetResult?.team === 'teamA' ? 1 : 0) === 1 && matchState.setsB + (pendingSetResult?.team === 'teamB' ? 1 : 0) === 1 ? (
+                      {isFip && Math.max(matchState.setsA + (pendingSetResult?.team === 'teamA' ? 1 : 0), matchState.setsB + (pendingSetResult?.team === 'teamB' ? 1 : 0)) >= 2 ? null : matchState.setsA + (pendingSetResult?.team === 'teamA' ? 1 : 0) === 1 && matchState.setsB + (pendingSetResult?.team === 'teamB' ? 1 : 0) === 1 ? (
                         <>
                           <p className="text-xs text-brand font-bold uppercase tracking-widest mb-1">Each team has won 1 set</p>
                           <button 
