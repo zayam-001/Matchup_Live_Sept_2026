@@ -441,15 +441,8 @@ export const QuickPlaySession: React.FC = () => {
                       isMatchEnded={(match.status === MatchStatus.COMPLETED || String(match.status).toUpperCase() === 'FINISHED') || session.status === 'completed'}
                       onUpdateScore={async (newScore) => {
                           const newMatches = session.matches.map((m: any) => {
-                              if (m.matchId === match.matchId) {
-                                  let status = m.status;
-                                  let winner = m.winner || null;
-                                  if (newScore.p1Sets + newScore.p2Sets === 5 && newScore._isSetCompleted) {
-                                      status = MatchStatus.COMPLETED;
-                                      winner = newScore.p1Sets > newScore.p2Sets ? 1 : 2;
-                                  }
-                                  return { ...m, score: newScore, status, ...(winner !== null ? { winner } : {}) };
-                              }
+                              // Quick Play matches end only when the host presses End Match, however many sets they play.
+                              if (m.matchId === match.matchId) return { ...m, score: newScore };
                               return m;
                           });
                           const { updateQuickplaySessionV2 } = await import('../services/storage');
