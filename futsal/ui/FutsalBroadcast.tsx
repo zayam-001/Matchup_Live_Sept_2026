@@ -59,8 +59,10 @@ const MatchCard: React.FC<{ m: FutsalMatch; cat: FutsalCategory; t: FutsalTourna
                     const el = (
                         <div key={side} className="fb-team">
                             <Crest team={team} />
-                            <b>{nameOf(teams, matches, m, side)}</b>
-                            {team?.captainName && <small>C · {team.captainName}</small>}
+                            <span className="fb-team__text">
+                                <b>{nameOf(teams, matches, m, side)}</b>
+                                {team?.captainName && <small>C · {team.captainName}</small>}
+                            </span>
                         </div>
                     );
                     if (i) return el;
@@ -215,7 +217,7 @@ const SponsorTicker: React.FC<{ sponsors: { name: string; logoUrl: string }[] }>
     const row = Array.from({ length: Math.max(2, Math.ceil(8 / sponsors.length)) }, () => sponsors).flat();
     const item = (s: { name: string; logoUrl: string }, k: string) => <span key={k} className="fb-sponsor"><img src={s.logoUrl} alt={s.name} /></span>;
     return (
-        <footer className="fb-ticker">
+        <footer className="fb-ticker fb-ticker--sponsors">
             <div style={{ overflow: 'hidden', flex: 1, display: 'flex' }}>
                 <div className="fb-ticker__track fb-ticker__track--logos">{row.map((s, i) => item(s, `a${i}`))}{row.map((s, i) => item(s, `b${i}`))}</div>
             </div>

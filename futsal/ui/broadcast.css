@@ -391,3 +391,63 @@
   .fb > * { flex-shrink: 0; }
   .fb__head { position: relative; z-index: 3; }
 }
+/* Phones: live card sized in pixels (its TV sizing follows the card's height and gets too wide) */
+@media (max-width: 760px) {
+  .fb__stage, .fb-focus-wrap, .fb-focus, .fb-focus__panels, .fb__cell, .fb-card, .fb-panel { min-width: 0; max-width: 100%; }
+  .fb-card { overflow: hidden; }
+  .fb-card__tab { padding: 5px 16px; font-size: 13px; }
+  .fb-card__comp { margin-top: 8px; font-size: 11px; gap: 2px; }
+  .fb-card__main { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; padding: 0 12px; }
+  .fb-team { gap: 6px; min-width: 0; }
+  .fb-team .fb-crest { width: 56px; height: 62px; }
+  .fb-crest span { font-size: 16px; }
+  .fb-team b { font-size: 17px; white-space: normal; line-height: 1.05; }
+  .fb-team small { margin-top: 0; font-size: 10px; letter-spacing: .08em; white-space: normal; }
+  .fb-score { gap: 6px; }
+  .fb-score__panel { font-size: 54px; gap: 6px; padding: 0; }
+  .fb-score__clock { gap: 6px; padding: 4px 10px; font-size: 15px; }
+  .fb-score__pens { font-size: 11px; }
+  .fb-card__foot { gap: 10px; padding: 8px 12px; }
+  .fb-side { gap: 4px 8px; font-size: 12px; }
+  .fb-goal svg { width: 13px; height: 13px; }
+  .fb-card:has(.fx-pens--bc) .fb-team .fb-crest { width: 46px; height: 50px; }
+  .fb-card:has(.fx-pens--bc) .fb-score__panel { font-size: 46px; }
+  .fx-pens--bc { margin: 0 10px 8px; padding: 6px 10px; }
+  .fx-pens--bc .fx-pens__title { font-size: 11px; }
+  .fx-pens--bc .fx-pens__dots i, .fb-card .fx-pens--bc .fx-pens__dots i { width: 18px; height: 18px; min-width: 18px; min-height: 18px; }
+  .fx-pens--bc .fx-pens__row em, .fb-card .fx-pens--bc .fx-pens__row em { font-size: 16px; }
+  .fb-matchlink { position: absolute; top: 8px; right: 8px; }
+  .fb__grid, .fb__grid--1 > * { grid-auto-rows: 230px; }
+  .fb__grid--1 > * { height: 230px; }
+  .fb-focus__card { height: 240px; }
+}
+@media (max-width: 760px) {
+  /* Lineups: one team under the other; the page scrolls instead of the panel */
+  .fb-lineups { max-height: none; }
+  .fb-lineups__cols { grid-template-columns: 1fr; gap: 16px; overflow: visible !important; padding: 10px 14px 14px; }
+  .fb-lineup { min-width: 0; }
+  .fb-lineup h3 { position: static; }
+  .fb-lineup__row { font-size: 14px; padding: 5px 0; }
+  .fb-lineup__name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+/* Sponsor marquee on white so every logo reads in its own colours */
+.fb-ticker--sponsors, .fb--crimson .fb-ticker--sponsors { background: #FFFFFF; border-color: rgba(255, 255, 255, .6); }
+@media (max-width: 760px) { .fb-ticker--sponsors, .fb--crimson .fb-ticker--sponsors { background: #FFFFFF; } }
+
+/* Desktop / TV: bigger team logos (crest stacked above the name) */
+@media (min-width: 761px) {
+  .fb-fixture .fb-logo { width: 5.6vh; height: 5.6vh; min-width: 36px; min-height: 36px; }
+  .fb-table .fb-logo { width: 4.6vh; height: 4.6vh; min-width: 30px; min-height: 30px; }
+  .fb-fixture__team { gap: 1vw; }
+  /* One match in focus: the card gets a bit more height so a bigger crest still fits with name and captain */
+  .fb-focus { grid-template-rows: minmax(0, 1.15fr) minmax(0, 1fr); }
+  .fb-focus .fb-team { gap: 1.6cqh; }
+  .fb-focus .fb-card__comp { margin-top: 1.4cqh; }
+  .fb-focus .fb-team .fb-crest { width: 31cqh; height: 33cqh; }
+  .fb-focus .fb-card:has(.fx-pens--bc) .fb-team .fb-crest { width: 24cqh; height: 26cqh; }
+  /* Several matches at once keep them moderate */
+  .fb__grid--1 .fb-team .fb-crest, .fb__grid--2 .fb-team .fb-crest { width: 30cqh; height: 32cqh; }
+  .fb__grid--4 .fb-team .fb-crest, .fb__grid--6 .fb-team .fb-crest { width: 26cqh; height: 28cqh; }
+}
+.fb-team__text { display: grid; justify-items: center; gap: 1.5cqh; min-width: 0; max-width: 100%; }
+.fb-team__text b { max-width: 100%; }
