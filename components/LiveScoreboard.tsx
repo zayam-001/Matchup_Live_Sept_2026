@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { TournamentDetail } from './TournamentDetail';
 import { TeamAmericanoStandings } from './TeamAmericanoStandings';
 import { isTournamentFinished } from '../lib/lifecycle';
+import { futsalSlug } from '../futsal/sport';
 import { isFipTournament } from '../lib/pointsSystems';
 import { clockText as restClock, pointTag, restTimer } from '../lib/padelMoments';
 import './spectator.css';
@@ -150,15 +151,31 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
   const [prevCategory, setPrevCategory] = useState<string | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<any | null>(null);
 
+  const [futsalTournaments, setFutsalTournaments] = useState<Tournament[]>([]);
   // New Phase 2 Hooks
-  // Futsal competitions live in their own collections and open their own detail view.
-  const futsalSelectedId = selectedTournamentId?.startsWith('futsal:') ? selectedTournamentId.slice(7) : null;
+  // Futsal competitions live in their own collections and open their own detail view. Links name them by
+  // their readable slug ("#live/iba-champions-league"); older "futsal:<id>" links still work.
+  const futsalSelectedId = React.useMemo(() => {
+    if (!selectedTournamentId) return null;
+    if (selectedTournamentId.startsWith('futsal:')) return selectedTournamentId.slice(7);
+    if (tournaments.some(x => x.id === selectedTournamentId || x.slug === selectedTournamentId)) return null; // padel first
+    const f = futsalTournaments.find(x => x.id === `futsal:${selectedTournamentId}` || futsalSlug(x.name) === selectedTournamentId);
+    return f ? String(f.id).slice(7) : null;
+  }, [selectedTournamentId, tournaments, futsalTournaments]);
   const resolvedId = React.useMemo(() => {
-    if (!selectedTournamentId || selectedTournamentId.startsWith('futsal:')) return null;
+    if (!selectedTournamentId || selectedTournamentId.startsWith('futsal:') || futsalSelectedId) return null;
     if (tournaments.length === 0) return selectedTournamentId;
     const t = tournaments.find(x => x.id === selectedTournamentId || (x.slug && x.slug === selectedTournamentId) || x.name === selectedTournamentId);
     return t ? t.id : selectedTournamentId;
-  }, [selectedTournamentId, tournaments]);
+  }, [selectedTournamentId, tournaments, futsalSelectedId]);
+
+  // An old "futsal:<id>" link: show the readable name in the address bar (no reload, no new history entry).
+  useEffect(() => {
+    if (!futsalSelectedId || !selectedTournamentId?.startsWith('futsal:')) return;
+    const f = futsalTournaments.find(x => x.id === `futsal:${futsalSelectedId}`);
+    const slug = f && futsalSlug(f.name);
+    if (slug && window.location.hash.includes(selectedTournamentId)) window.history.replaceState(null, '', window.location.hash.replace(selectedTournamentId, slug));
+  }, [futsalSelectedId, selectedTournamentId, futsalTournaments]);
 
   const { tournament: activeTournament, loading: loadingTournament } = useTournamentDoc(resolvedId);
   const { matches: tournamentMatches, loading: loadingMatches } = useTournamentMatches(resolvedId);
@@ -167,9 +184,10 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
     if (!tournId) {
        window.location.hash = 'live';
     } else {
-       // get slug if possible
+       // get slug if possible (futsal and football: the readable name instead of "futsal:<id>")
        const t = tournaments.find(x => x.id === tournId);
-       const tId = t?.slug || tournId;
+       const f = tournId.startsWith('futsal:') ? futsalTournaments.find(x => x.id === tournId) : undefined;
+       const tId = t?.slug || (f ? futsalSlug(f.name) || tournId : tournId);
        if (catId) {
            window.location.hash = `live/${tId}/${catId}`;
        } else {
@@ -202,7 +220,6 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
   }, []);
 
   // Futsal and football competitions join the same list, shaped like padel ones (id prefixed "futsal:").
-  const [futsalTournaments, setFutsalTournaments] = useState<Tournament[]>([]);
   useEffect(() => {
     let live = true;
     let unsubs: (() => void)[] = [];
@@ -870,7 +887,7 @@ const TournamentList = ({ tournaments, onSelect, searchQuery = '', dateFilter = 
                             </button>
                             <a 
                                 // Futsal events have no padel registration page; their details live in spectator mode.
-                                href={String(featuredTournament.id).startsWith('futsal:') ? `#live/${featuredTournament.id}` : `#register/${featuredTournament.slug || featuredTournament.id}`}
+                                href={String(featuredTournament.id).startsWith('futsal:') ? `#live/${futsalSlug(featuredTournament.name) || featuredTournament.id}` : `#register/${featuredTournament.slug || featuredTournament.id}`}
                                 className="spx-btn spx-btn--ghost"
                             >
                                 <Info size={14} />

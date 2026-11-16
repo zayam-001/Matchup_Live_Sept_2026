@@ -17,6 +17,8 @@ const keyFor = (id: string) => `fx-score-${id}`;
 export const Scorer: React.FC<{ tournamentId: string; matchId?: string }> = ({ tournamentId, matchId }) => {
     const { t, teams, matches, loading } = useFutsalTournament(tournamentId);
     const [authed, setAuthed] = useState(() => { try { return sessionStorage.getItem(keyFor(tournamentId)) === '1'; } catch { return false; } });
+    // The link may name the tournament by its slug; the unlock is stored under its real id.
+    useEffect(() => { try { if (t && sessionStorage.getItem(keyFor(t.id)) === '1') setAuthed(true); } catch { /* private mode */ } }, [t?.id]);
     const [code, setCode] = useState('');
     const [err, setErr] = useState('');
 

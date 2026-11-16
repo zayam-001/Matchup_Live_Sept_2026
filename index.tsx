@@ -14,6 +14,7 @@ import './index.css';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastContainer } from './components/Toast';
+import { initAnalytics } from './lib/analytics';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Failed to find the root element');
@@ -28,3 +29,6 @@ root.render(
     </ErrorBoundary>
   </React.StrictMode>
 );
+
+// Traffic and users in Google Analytics (live site only).
+initAnalytics();

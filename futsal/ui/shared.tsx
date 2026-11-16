@@ -5,7 +5,7 @@ import { clockMs, displayClock, isKnockout, phaseLabel, resolveSlots, scoreOf, s
 import { isDemo, subscribeFutsalMatches, subscribeFutsalTeams, subscribeFutsalTournament, subscribeFutsalTournaments } from '../store';
 import { CREST } from './palette';
 import type { FutsalCategory, FutsalMatch, FutsalTeam, FutsalTournament, SlotSource } from '../types';
-import { publicPath } from '../sport';
+import { matchesLink, publicPath } from '../sport';
 
 // ---------------------------------------------------------------- hooks
 
@@ -36,7 +36,22 @@ const withResolvedSlots = (tournaments: FutsalTournament[], teams: FutsalTeam[],
     return fixed.size ? matches.map(m => fixed.get(m.id) || m) : matches;
 };
 
-export const useFutsalTournament = (id?: string) => {
+/**
+ * Links name a tournament by its readable slug ("iba-champions-league") or, in older links, by its id.
+ * Returns the real id once known (undefined while looking, the key itself if nothing matches).
+ */
+export const useFutsalId = (key?: string) => {
+    const [id, setId] = useState<string | undefined>(undefined);
+    useEffect(() => {
+        if (!key) { setId(undefined); return; }
+        setId(undefined);
+        return subscribeFutsalTournaments(rows => setId(rows.find(r => matchesLink(r, key))?.id || key));
+    }, [key]);
+    return id;
+};
+
+export const useFutsalTournament = (key?: string) => {
+    const id = useFutsalId(key);
     const [t, setT] = useState<FutsalTournament | null | undefined>(undefined);
     const [teams, setTeams] = useState<FutsalTeam[] | null>(null);
     const [matches, setMatches] = useState<FutsalMatch[] | null>(null);

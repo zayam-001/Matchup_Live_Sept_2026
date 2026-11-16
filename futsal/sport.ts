@@ -25,8 +25,15 @@ export const PITCH_WORD: Record<Sport, string> = { futsal: 'Pitch', football: 'G
 
 /** Hash routes are "#futsal/..." or "#football/..."; both open the same screens. */
 export const routeRoot = (t?: Pick<FutsalTournament, 'sport'> | null) => sportOf(t);
-export const publicPath = (t: Pick<FutsalTournament, 'sport' | 'id'>) => `${routeRoot(t)}/t/${t.id}`;
-export const scorePath = (t: Pick<FutsalTournament, 'sport' | 'id'>, matchId?: string) => `${routeRoot(t)}-score/${t.id}${matchId ? `/${matchId}` : ''}`;
-export const obsPath = (t: Pick<FutsalTournament, 'sport' | 'id'>, matchId: string) => `${routeRoot(t)}-obs/${t.id}/${matchId}`;
+/** A tournament's readable link name, from its name ("IBA Champions League" -> "iba-champions-league"). */
+export const futsalSlug = (name?: string | null) => String(name || '').toLowerCase().trim()
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/['’]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+/** The tournament's part of a link: its readable name, or its id if it has no usable name. */
+export const linkId = (t: Pick<FutsalTournament, 'id'> & { name?: string }) => futsalSlug(t.name) || t.id;
+/** True when a link's tournament part (slug or old id) points at this tournament. */
+export const matchesLink = (t: Pick<FutsalTournament, 'id' | 'name'>, key: string) => t.id === key || futsalSlug(t.name) === key;
+export const publicPath = (t: Pick<FutsalTournament, 'sport' | 'id'> & { name?: string }) => `${routeRoot(t)}/t/${linkId(t)}`;
+export const scorePath = (t: Pick<FutsalTournament, 'sport' | 'id'> & { name?: string }, matchId?: string) => `${routeRoot(t)}-score/${linkId(t)}${matchId ? `/${matchId}` : ''}`;
+export const obsPath = (t: Pick<FutsalTournament, 'sport' | 'id'> & { name?: string }, matchId: string) => `${routeRoot(t)}-obs/${linkId(t)}/${matchId}`;
 /** One overlay per pitch: it follows whichever match is live there. */
-export const pitchObsPath = (t: Pick<FutsalTournament, 'sport' | 'id'>, pitch: string) => `${routeRoot(t)}-obs/${t.id}/court/${encodeURIComponent(pitch)}`;
+export const pitchObsPath = (t: Pick<FutsalTournament, 'sport' | 'id'> & { name?: string }, pitch: string) => `${routeRoot(t)}-obs/${linkId(t)}/court/${encodeURIComponent(pitch)}`;

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { track } from '../lib/analytics';
 import { isTournamentFinished } from '../lib/lifecycle';
 import { Card } from './ui/Card';
 import { sendPlayerPasswordReset, registerPlayer, loginPlayer, loginReferee, loginOrganiser, changeOrganiserPassword, skipOrganiserPasswordChange, loginWithGoogle, completeGoogleSignUp, subscribeToTournaments, setPlayerPersistence } from '../services/storage';
@@ -93,11 +94,12 @@ export const Auth: React.FC<{
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('+92');
-    const [cnic, setCnic] = useState('');
     const [gender, setGender] = useState<'male' | 'female' | 'other'>('male');
+    // No promo field any more; a promo link (?promo=CODE) still applies its code at sign-up.
     const [promoCode, setPromoCode] = useState('');
-    const [promoCodeReadOnly, setPromoCodeReadOnly] = useState(false);
-    const [skillLevel, setSkillLevel] = useState<SkillLevel>(SkillLevel.INTERMEDIATE);
+    // Sign-up no longer asks for CNIC or skill level: new players start with the default level.
+    const cnic = '';
+    const skillLevel = SkillLevel.INTERMEDIATE;
 
     useEffect(() => {
         const queryParams = new URLSearchParams(window.location.search);
@@ -109,7 +111,6 @@ export const Auth: React.FC<{
 
         if (foundPromo) {
             setPromoCode(foundPromo);
-            setPromoCodeReadOnly(true);
             setIsLogin(false); // Force signup mode if promo code is present
         }
     }, []);
@@ -166,21 +167,6 @@ export const Auth: React.FC<{
         setPhone('+92' + numericPart);
     };
 
-    const handleCnicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        let val = e.target.value.replace(/\D/g, ''); // Remove non-numeric
-        if (val.length > 13) val = val.substring(0, 13); // Max 13 digits
-        
-        // Format as XXXXX-XXXXXXX-X
-        let formatted = val;
-        if (val.length > 5) {
-            formatted = val.substring(0, 5) + '-' + val.substring(5);
-        }
-        if (val.length > 12) {
-            formatted = formatted.substring(0, 13) + '-' + val.substring(12);
-        }
-        setCnic(formatted);
-    };
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
@@ -191,12 +177,6 @@ export const Auth: React.FC<{
                 const phoneRegex = /^\+92\d{10}$/; // +92 followed by 10 digits
                 if (!phoneRegex.test(phone)) {
                     setError('Phone number must be in the format +92XXXXXXXXXX (10 digits after +92)');
-                    setIsLoading(false);
-                    return;
-                }
-                const cnicRegex = /^\d{5}-\d{7}-\d{1}$/;
-                if (!cnicRegex.test(cnic)) {
-                    setError('CNIC must be in the format XXXXX-XXXXXXX-X');
                     setIsLoading(false);
                     return;
                 }
@@ -216,6 +196,7 @@ export const Auth: React.FC<{
                 await setPlayerPersistence(rememberMe);
                 if (googleUser) {
                     await completeGoogleSignUp(googleUser, { name, phone, cnic, gender, skillLevel, password, promoCode });
+                    track('sign_up', { method: 'google' });
                     if (rememberMe) {
                         localStorage.setItem('deviceId', crypto.randomUUID ? crypto.randomUUID() : Date.now().toString());
                     } else {
@@ -224,6 +205,7 @@ export const Auth: React.FC<{
                     onAuthSuccess('player');
                 } else if (isLogin) {
                     await loginPlayer(email, password);
+                    track('login', { method: 'email' });
                     if (rememberMe) {
                         localStorage.setItem('deviceId', crypto.randomUUID ? crypto.randomUUID() : Date.now().toString());
                     } else {
@@ -232,6 +214,7 @@ export const Auth: React.FC<{
                     onAuthSuccess('player');
                 } else {
                     await registerPlayer({ name, email, phone, cnic, gender, skillLevel, password, promoCode });
+                    track('sign_up', { method: 'email' });
                     if (rememberMe) {
                         localStorage.setItem('deviceId', crypto.randomUUID ? crypto.randomUUID() : Date.now().toString());
                     } else {
@@ -653,7 +636,6 @@ export const Auth: React.FC<{
                                         <>
                                             {field('Full name', <input required type="text" value={name} onChange={(e) => setName(e.target.value)} className="auth__input" placeholder="e.g. Ali Hassan" />)}
                                             {field('Phone number', <input required type="tel" value={phone} onChange={handlePhoneChange} className="auth__input" placeholder="+923000000000" />)}
-                                            {field('CNIC', <input required type="text" value={cnic} onChange={(e) => { if (/^[\d-]*$/.test(e.target.value)) handleCnicChange(e); }} className="auth__input" placeholder="XXXXX-XXXXXXX-X" />)}
                                             {field('Gender', (
                                                 <select value={gender} onChange={(e) => setGender(e.target.value as 'male' | 'female' | 'other')} className="auth__input auth__select">
                                                     <option value="male">Male</option>
@@ -661,16 +643,6 @@ export const Auth: React.FC<{
                                                     <option value="other">Other</option>
                                                 </select>
                                             ))}
-                                            {field('Skill level', (
-                                                <select value={skillLevel} onChange={(e) => setSkillLevel(e.target.value as SkillLevel)} className="auth__input auth__select">
-                                                    <option value={SkillLevel.NEWCOMER}>Newcomer</option>
-                                                    <option value={SkillLevel.BEGINNER}>Beginner</option>
-                                                    <option value={SkillLevel.INTERMEDIATE}>Intermediate</option>
-                                                    <option value={SkillLevel.ADVANCED}>Advanced</option>
-                                                    <option value={SkillLevel.PROFESSIONAL}>Professional</option>
-                                                </select>
-                                            ))}
-                                            {field('Promo code (optional)', <input type="text" value={promoCode} onChange={(e) => { if (!promoCodeReadOnly) setPromoCode(e.target.value.toUpperCase()); }} readOnly={promoCodeReadOnly} className={`auth__input uppercase ${promoCodeReadOnly ? 'is-readonly' : ''}`} placeholder="e.g. PADEL24" maxLength={6} />)}
                                         </>
                                     )}
                                     {field('Email address', (

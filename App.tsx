@@ -112,6 +112,17 @@ const App: React.FC = () => {
       const fullHash = rawHash.replace(/^#\/?/, '').replace(/\/$/, '');
       const pathPart = fullHash.split('?')[0];
       const segments = pathPart.split('/').filter(Boolean);
+      // Friendly addresses: "#login", "#admin-login", and plain matchup.com.pk for home. The older names
+      // ("#auth-player", "#auth-admin", "#landing") still work and are shown with the friendly one.
+      const ALIAS: Record<string, string> = { login: 'auth-player', 'admin-login': 'auth-admin', home: 'landing' };
+      const FRIENDLY: Record<string, string> = { 'auth-player': 'login', 'auth-admin': 'admin-login', landing: '' };
+      if (segments[0] && segments[0] in FRIENDLY) {
+        const query = fullHash.includes('?') ? fullHash.slice(fullHash.indexOf('?')) : '';
+        const rest = segments.slice(1).map(encodeURIComponent).join('/');
+        const friendly = FRIENDLY[segments[0]];
+        window.history.replaceState(null, '', friendly ? `#${[friendly, rest].filter(Boolean).join('/')}${query}` : `${window.location.pathname}${window.location.search}`);
+      }
+      if (segments[0] && ALIAS[segments[0]]) segments[0] = ALIAS[segments[0]];
       const hash = segments[0] || 'landing';
       
       // Handle dynamic routes
