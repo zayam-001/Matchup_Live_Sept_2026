@@ -1540,3 +1540,10 @@
 }
 .qx-tabs--sm button { padding: 5px 10px; font-size: 13px; }
 .qx-mypos--bar { display: block; margin: 10px 14px 0; text-align: center; }
+
+/* Quick Play scoring: is every point saved? */
+.qx-sync { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 8px 12px; border-radius: 10px; font-size: 13px; font-weight: 700; }
+.qx-sync::before { content: ''; flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.qx-sync.is-ok { background: rgba(59, 227, 155, .1); color: #6EE7A0; }
+.qx-sync.is-wait { background: rgba(255, 210, 77, .12); color: #FFD24D; }
+.qx-sync.is-off { background: rgba(255, 77, 77, .15); color: #FF9A9A; }

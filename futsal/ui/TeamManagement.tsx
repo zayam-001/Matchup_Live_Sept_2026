@@ -42,7 +42,7 @@ export const TeamManagement: React.FC<{
     if (creating) return <div className="tm">{chips}<NewSquad sport={sport} myName={myName} onCancel={squads.length || tournament ? () => setCreating(false) : undefined} onCreate={async (name, onPitch, rows) => {
         try {
             // The captain leads the squad, then everyone typed in; shirt numbers fill in order.
-            const me: SquadMember = { id: memberId(), name: myName, email: myEmail || undefined, rating: 75, position: (['GK', 'DEF', 'MID', 'FWD'].includes(account.position || '') ? account.position : 'MID') as SquadPosition, number: 1 };
+            const me: SquadMember = { id: memberId(), name: myName, email: myEmail || undefined, rating: 0, position: (['GK', 'DEF', 'MID', 'FWD'].includes(account.position || '') ? account.position : 'MID') as SquadPosition, number: 1 };
             const players = [me, ...rows.map((r, i) => ({ ...r, id: memberId(), number: i + 2 }))];
             const s = await createSquad({ sport, name, onPitch, ownerUid: uid, ownerEmail: myEmail, ownerName: myName, players });
             const invited = players.filter(p => p.email && p.email !== myEmail);
@@ -92,7 +92,7 @@ export const TeamManagement: React.FC<{
 
 type Row = Omit<SquadMember, 'id' | 'number'> & { key: number };
 let rowKey = 0;
-const blankRow = (): Row => ({ key: ++rowKey, name: '', rating: 70, position: 'MID', email: '' });
+const blankRow = (): Row => ({ key: ++rowKey, name: '', rating: 0, position: 'MID', email: '' });
 
 /** Name the squad, pick the size, and type in the players (only names are required). */
 const NewSquad: React.FC<{ sport: 'futsal' | 'football'; myName: string; onCreate: (name: string, onPitch: number, rows: Omit<SquadMember, 'id' | 'number'>[]) => Promise<void>; onCancel?: () => void }> = ({ sport, myName, onCreate, onCancel }) => {
@@ -105,8 +105,8 @@ const NewSquad: React.FC<{ sport: 'futsal' | 'football'; myName: string; onCreat
     const filled = rows.filter(r => r.name.trim());
     const submit = async () => {
         if (!name.trim()) { toast.error('Give your squad a name'); return; }
-        const bad = filled.find(r => !Number.isInteger(r.rating) || r.rating < 1 || r.rating > 99);
-        if (bad) { toast.error(`${bad.name}: rating must be 1 to 99`); return; }
+        const bad = filled.find(r => !Number.isInteger(r.rating) || r.rating < 0 || r.rating > 99);
+        if (bad) { toast.error(`${bad.name}: rating must be 0 to 99`); return; }
         const badMail = filled.find(r => r.email && !EMAIL.test(r.email.trim()));
         if (badMail) { toast.error(`${badMail.name}: check the email`); return; }
         setBusy(true);
@@ -124,21 +124,21 @@ const NewSquad: React.FC<{ sport: 'futsal' | 'football'; myName: string; onCreat
             </div>
             <div className="tm-rows">
                 <div className="tm-row tm-row--head"><span>#</span><span>Player name</span><span>Rating</span><span>Position</span><span>Email (optional)</span><span /></div>
-                <div className="tm-row tm-row--me"><span>1</span><span className="tm-row__me">{myName} <em>Captain · you</em></span><span>75</span><span>–</span><span className="qp-muted">Edit later on the pitch</span><span /></div>
+                <div className="tm-row tm-row--me"><span>1</span><span className="tm-row__me">{myName} <em>Captain · you</em></span><span>0</span><span>–</span><span className="qp-muted">Edit later on the pitch</span><span /></div>
                 {rows.map((r, i) => (
                     <div key={r.key} className="tm-row">
                         <span>{i + 2}</span>
                         <input className="qp-input" placeholder="Name" aria-label={`Player ${i + 2} name`} value={r.name} onChange={e => set(r.key, { name: e.target.value })} />
-                        <input className="qp-input tm-row__rating" type="number" min={1} max={99} aria-label={`Player ${i + 2} rating`} value={r.rating || ''} onChange={e => set(r.key, { rating: Number(e.target.value.slice(0, 2)) })} />
+                        <input className="qp-input tm-row__rating" type="number" min={0} max={99} placeholder="0" aria-label={`Player ${i + 2} rating`} value={r.rating || ''} onChange={e => set(r.key, { rating: Number(e.target.value.slice(0, 2)) })} />
                         <span className="qp-seg tm-row__pos">{POSITIONS.map(x => <button key={x} type="button" className={r.position === x ? 'is-on' : ''} onClick={() => set(r.key, { position: x })}>{x}</button>)}</span>
-                        <input className="qp-input" type="email" placeholder="We'll send an invite" aria-label={`Player ${i + 2} email`} value={r.email || ''} onChange={e => set(r.key, { email: e.target.value })} />
+                        <input className="qp-input" type="email" placeholder="Email (optional)" aria-label={`Player ${i + 2} email`} value={r.email || ''} onChange={e => set(r.key, { email: e.target.value })} />
                         <button type="button" className="tm-row__del" aria-label={`Remove row ${i + 2}`} onClick={() => setRows(rs => rs.filter(x => x.key !== r.key))}><X size={14} /></button>
                     </div>
                 ))}
                 <button type="button" className="tm-rows__add" onClick={() => setRows(rs => [...rs, blankRow()])}><Plus size={14} /> Add another player</button>
             </div>
             <div className="tm-create__foot">
-                <span className="qp-muted">{filled.length + 1} players · the first {onPitch} start, the rest go to subs. Change it all on the pitch after.</span>
+                <span className="qp-muted">{filled.length + 1} players · the first {onPitch} start, the rest go to subs. Players with an email get their invite when you press Create squad.</span>
                 {onCancel && <button type="button" className="qp-btn" onClick={onCancel}>Cancel</button>}
                 <button type="button" className="qp-btn qp-btn--primary" disabled={busy || !name.trim()} onClick={submit}><Plus size={16} /> {busy ? 'Creating…' : 'Create squad'}</button>
             </div>
@@ -168,7 +168,8 @@ const OwnerPanel: React.FC<{ roster: Roster; selectedId?: string }> = ({ roster,
     );
 };
 
-const validRating = (v: string) => { const r = Number(v); return Number.isInteger(r) && r >= 1 && r <= 99 ? r : null; };
+// A new player starts unrated (0) until the captain rates them; 0 to 99 is accepted, blank counts as 0.
+const validRating = (v: string) => { const r = Number(v || 0); return Number.isInteger(r) && r >= 0 && r <= 99 ? r : null; };
 const PADEL_SIDES: SquadPosition[] = ['LEFT', 'RIGHT'];
 const sideName = (p: SquadPosition) => (p === 'LEFT' ? 'Left · backhand' : p === 'RIGHT' ? 'Right · forehand' : p);
 const PosSeg: React.FC<{ value: SquadPosition; onChange: (p: SquadPosition) => void; padel?: boolean }> = ({ value, onChange, padel }) => (
@@ -189,7 +190,7 @@ const PlayerEditor: React.FC<{ roster: Roster; p: SquadMember }> = ({ roster, p 
     const save = async () => {
         const r = validRating(rating);
         const e = email.trim().toLowerCase();
-        if (r == null) { toast.error('Rating must be 1 to 99'); return; }
+        if (r == null) { toast.error('Rating must be 0 to 99'); return; }
         if (num != null && (!Number.isInteger(num) || num < 0 || num > 99)) { toast.error('Shirt number must be 0 to 99'); return; }
         if (num != null && roster.players.some(x => x.id !== p.id && x.number === num)) { toast.info(`#${num} is taken`, 'Pick another shirt number.'); return; }
         if (e && !EMAIL.test(e)) { toast.error('Check the email address'); return; }
@@ -222,7 +223,7 @@ const PlayerEditor: React.FC<{ roster: Roster; p: SquadMember }> = ({ roster, p 
         <section className="tm-owner">
             <span className="fxs-label">Edit {p.name.split(' ')[0]}{isCaptain ? ' · captain' : ''}</span>
             <div className={`tm-owner__form ${padel ? '' : 'tm-owner__form--3'}`}>
-                <label className="tm-field tm-field--rating">Rating<input className="qp-input" type="number" min={1} max={99} value={rating} onChange={e => setRating(e.target.value.slice(0, 2))} /></label>
+                <label className="tm-field tm-field--rating">Rating<input className="qp-input" type="number" min={0} max={99} placeholder="0" value={rating} onChange={e => setRating(e.target.value.slice(0, 2))} /></label>
                 {!padel && <label className="tm-field tm-field--rating">Shirt<input className="qp-input" type="number" min={0} max={99} placeholder="#" value={number} onChange={e => setNumber(e.target.value.slice(0, 2))} /></label>}
                 <label className="tm-field">{padel ? 'Side' : 'Position'}<PosSeg padel={padel} value={position} onChange={setPosition} /></label>
                 <label className="tm-field tm-field--wide">Email {!p.email && <small>· optional, sends an invite</small>}
@@ -240,7 +241,7 @@ const PlayerEditor: React.FC<{ roster: Roster; p: SquadMember }> = ({ roster, p 
 const AddPlayer: React.FC<{ roster: Roster; onClose: () => void }> = ({ roster, onClose }) => {
     const padel = roster.sport === 'padel';
     const [name, setName] = useState('');
-    const [rating, setRating] = useState('70');
+    const [rating, setRating] = useState('');
     const [position, setPosition] = useState<SquadPosition>(padel ? (roster.players.some(p => p.position === 'RIGHT') ? 'LEFT' : 'RIGHT') : 'MID');
     const [email, setEmail] = useState('');
     const [busy, setBusy] = useState(false);
@@ -248,9 +249,14 @@ const AddPlayer: React.FC<{ roster: Roster; onClose: () => void }> = ({ roster, 
         const r = validRating(rating);
         const e = email.trim().toLowerCase();
         if (!name.trim()) { toast.error('Add the player’s name'); return; }
-        if (r == null) { toast.error('Rating must be 1 to 99'); return; }
+        if (r == null) { toast.error('Rating must be 0 to 99'); return; }
         if (e && !EMAIL.test(e)) { toast.error('Check the email address'); return; }
-        if (e && roster.players.some(p => p.email?.toLowerCase() === e)) { toast.info('That player is already in the squad'); return; }
+        const sameEmail = e ? roster.players.find(p => p.email?.toLowerCase() === e) : undefined;
+        if (sameEmail) {
+            const cap = sameEmail.id === roster.captainId;
+            toast.info(cap ? 'That’s the captain’s email' : `${sameEmail.name} already has that email`, cap ? 'The captain is already in. Add the new player with their own email.' : 'Each player needs their own email.');
+            return;
+        }
         if (roster.players.some(p => p.name.trim().toLowerCase() === name.trim().toLowerCase())) { toast.info('There’s already a player with that name', 'Add a surname or initial.'); return; }
         if (roster.max && roster.players.length >= roster.max) { toast.info('Squad is full', `The most is ${roster.max} players.`); return; }
         const used = new Set(roster.players.map(p => p.number));
@@ -261,7 +267,7 @@ const AddPlayer: React.FC<{ roster: Roster; onClose: () => void }> = ({ roster, 
             await roster.save([...roster.players, member]);
             if (e) await mailAddedToSquad(ctxOf(roster), member).catch(() => {});
             toast.success(padel ? `${member.name} added` : `${member.name} added to the subs`, e ? `Invite sent to ${e}.` : undefined);
-            setName(''); setEmail(''); setRating('70');
+            setName(''); setEmail(''); setRating('');
         } catch (err: any) { toast.error('Couldn’t add the player', err?.code === 'permission-denied' ? 'Only the captain can change this squad.' : 'Check your connection and try again.'); }
         finally { setBusy(false); }
     };
@@ -270,9 +276,9 @@ const AddPlayer: React.FC<{ roster: Roster; onClose: () => void }> = ({ roster, 
             <span className="tm-owner__head"><span className="fxs-label">Add player</span><button type="button" aria-label="Close" onClick={onClose}><X size={14} /></button></span>
             <div className="tm-owner__form">
                 <label className="tm-field tm-field--wide">Name<input className="qp-input" autoFocus placeholder="Full name" value={name} onChange={e => setName(e.target.value)} /></label>
-                <label className="tm-field tm-field--rating">Rating<input className="qp-input" type="number" min={1} max={99} value={rating} onChange={e => setRating(e.target.value.slice(0, 2))} /></label>
+                <label className="tm-field tm-field--rating">Rating<input className="qp-input" type="number" min={0} max={99} placeholder="0" value={rating} onChange={e => setRating(e.target.value.slice(0, 2))} /></label>
                 <label className="tm-field">{padel ? 'Side' : 'Position'}<PosSeg padel={padel} value={position} onChange={setPosition} /></label>
-                <label className="tm-field tm-field--wide">Email <small>· optional, sends an invite</small><input className="qp-input" type="email" placeholder="player@email.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add(); }} /></label>
+                <label className="tm-field tm-field--wide">Email <small>· optional, the invite goes out when you press Add</small><input className="qp-input" type="email" placeholder="player@email.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add(); }} /></label>
             </div>
             <button type="button" className="qp-btn qp-btn--primary" disabled={busy} onClick={add}><UserPlus size={16} /> {busy ? 'Adding…' : 'Add to squad'}</button>
         </section>
@@ -303,9 +309,10 @@ export const PadelSquads: React.FC<{ account: Account }> = ({ account }) => {
             <button type="button" className={`tm-new ${creating ? 'is-on' : ''}`} onClick={() => setCreating(true)}><Plus size={14} /> New pair</button>
         </div>
     );
-    if (creating) return <div className="tm">{chips}<NewPadelSquad myName={myName} onCancel={squads.length ? () => setCreating(false) : undefined} onCreate={async (name, partner) => {
+    if (creating) return <div className="tm">{chips}<NewPadelSquad myName={myName} myEmail={myEmail} onCancel={squads.length ? () => setCreating(false) : undefined} onCreate={async (name, partner) => {
         try {
-            const players: SquadMember[] = [{ id: memberId(), name: myName, email: myEmail || undefined, rating: 75, position: partner?.position === 'RIGHT' ? 'LEFT' : 'RIGHT' }];
+            // The captain takes the left (backhand) side unless they put their partner there.
+            const players: SquadMember[] = [{ id: memberId(), name: myName, email: myEmail || undefined, rating: 0, position: partner?.position === 'LEFT' ? 'RIGHT' : 'LEFT' }];
             if (partner) players.push({ ...partner, id: memberId() });
             const s = await createSquad({ sport: 'padel', name, onPitch: 2, ownerUid: uid, ownerEmail: myEmail, ownerName: myName, players });
             if (partner?.email && partner.email !== myEmail) await emailSquadInvite(s, players[1]).catch(() => {});
@@ -360,38 +367,40 @@ export const PadelSquads: React.FC<{ account: Account }> = ({ account }) => {
     );
 };
 
-const NewPadelSquad: React.FC<{ myName: string; onCreate: (name: string, partner?: Omit<SquadMember, 'id'>) => Promise<void>; onCancel?: () => void }> = ({ myName, onCreate, onCancel }) => {
+const NewPadelSquad: React.FC<{ myName: string; myEmail?: string; onCreate: (name: string, partner?: Omit<SquadMember, 'id'>) => Promise<void>; onCancel?: () => void }> = ({ myName, myEmail, onCreate, onCancel }) => {
     const [name, setName] = useState('');
     const [pName, setPName] = useState('');
     const [pEmail, setPEmail] = useState('');
-    const [pRating, setPRating] = useState('70');
-    const [pSide, setPSide] = useState<SquadPosition>('LEFT');
+    const [pRating, setPRating] = useState('');
+    // You start on the left (backhand); your partner fills the right (forehand).
+    const [pSide, setPSide] = useState<SquadPosition>('RIGHT');
     const [busy, setBusy] = useState(false);
     const submit = async () => {
         if (!name.trim()) { toast.error('Give your pair a name'); return; }
         const r = validRating(pRating);
-        if (pName.trim() && r == null) { toast.error('Rating must be 1 to 99'); return; }
+        if (pName.trim() && r == null) { toast.error('Rating must be 0 to 99'); return; }
         if (pEmail.trim() && !EMAIL.test(pEmail.trim())) { toast.error('Check your partner’s email'); return; }
+        if (pEmail.trim() && myEmail && pEmail.trim().toLowerCase() === myEmail) { toast.info('That’s your email', 'You’re already in the pair as captain. Enter your partner’s own email.'); return; }
         setBusy(true);
-        try { await onCreate(name.trim(), pName.trim() ? { name: pName.trim(), email: pEmail.trim().toLowerCase() || undefined, rating: r || 70, position: pSide } : undefined); }
+        try { await onCreate(name.trim(), pName.trim() ? { name: pName.trim(), email: pEmail.trim().toLowerCase() || undefined, rating: r ?? 0, position: pSide } : undefined); }
         finally { setBusy(false); }
     };
     return (
         <div className="tm-create">
             <div className="tm-create__top"><label className="tm-field tm-create__name">Pair name<input className="qp-input" autoFocus placeholder="e.g. Smash Brothers" value={name} onChange={e => setName(e.target.value)} /></label></div>
             <div className="tm-rows">
-                <div className="tm-row tm-row--me"><span>1</span><span className="tm-row__me">{myName} <em>Captain · you</em></span><span>75</span><span>{pSide === 'LEFT' ? 'Right' : 'Left'}</span><span className="qp-muted">Edit later</span><span /></div>
+                <div className="tm-row tm-row--me"><span>1</span><span className="tm-row__me">{myName} <em>Captain · you</em></span><span>0</span><span>{pSide === 'LEFT' ? 'Right' : 'Left'}</span><span className="qp-muted">Rate yourself later</span><span /></div>
                 <div className="tm-row">
                     <span>2</span>
                     <input className="qp-input" placeholder="Partner’s name (optional)" value={pName} onChange={e => setPName(e.target.value)} />
-                    <input className="qp-input tm-row__rating" type="number" min={1} max={99} value={pRating} onChange={e => setPRating(e.target.value.slice(0, 2))} />
+                    <input className="qp-input tm-row__rating" type="number" min={0} max={99} placeholder="0" value={pRating} onChange={e => setPRating(e.target.value.slice(0, 2))} />
                     <span className="qp-seg tm-row__pos tm-row__pos--2">{PADEL_SIDES.map(x => <button key={x} type="button" className={pSide === x ? 'is-on' : ''} onClick={() => setPSide(x)}>{x === 'LEFT' ? 'Left' : 'Right'}</button>)}</span>
-                    <input className="qp-input" type="email" placeholder="We'll send an invite" value={pEmail} onChange={e => setPEmail(e.target.value)} />
+                    <input className="qp-input" type="email" placeholder="Partner’s email (optional)" value={pEmail} onChange={e => setPEmail(e.target.value)} />
                     <span />
                 </div>
             </div>
             <div className="tm-create__foot">
-                <span className="qp-muted">You can add up to two reserves after.</span>
+                <span className="qp-muted">If you add an email, your partner gets the invite when you press Create pair. You can add up to two reserves after.</span>
                 {onCancel && <button type="button" className="qp-btn" onClick={onCancel}>Cancel</button>}
                 <button type="button" className="qp-btn qp-btn--primary" disabled={busy || !name.trim()} onClick={submit}><Plus size={16} /> {busy ? 'Creating…' : 'Create pair'}</button>
             </div>

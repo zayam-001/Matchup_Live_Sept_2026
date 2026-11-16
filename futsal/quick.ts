@@ -297,9 +297,11 @@ export const subscribeMyQuickMatches = (email: string | undefined, cb: (rows: Qu
         snap => cb(snap.docs.map(d => ({ ...d.data(), id: d.id }) as QuickMatch).sort((a, b) => b.startAt.localeCompare(a.startAt))),
         err => { console.error('Quick matches', err); cb([]); });
 };
-export const subscribeQuickMatch = (id: string, cb: (m: QuickMatch | null) => void) => {
+/** The live match; `pending` is true while this phone has changes the server hasn't confirmed yet. */
+export const subscribeQuickMatch = (id: string, cb: (m: QuickMatch | null, pending?: boolean) => void) => {
     if (!db) { cb(null); return () => {}; }
-    return onSnapshot(doc(db, 'quickMatches', id), d => cb(d.exists() ? ({ ...d.data(), id: d.id } as QuickMatch) : null), () => cb(null));
+    return onSnapshot(doc(db, 'quickMatches', id), { includeMetadataChanges: true },
+        d => cb(d.exists() ? ({ ...d.data(), id: d.id } as QuickMatch) : null, d.metadata.hasPendingWrites), () => cb(null));
 };
 /** The match a referee code belongs to. */
 export const findByCode = async (code: string): Promise<string | null> => {

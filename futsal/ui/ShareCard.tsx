@@ -88,18 +88,25 @@ export const ScoreShareCard: React.FC<{ m: QuickMatch; me?: { uid?: string; emai
     const [h, a] = padel ? setsWon(m) : (m.score.goals || [0, 0]);
     const pens = (m.score.pens || []).length ? pensTally(m.score.pens) : null;
     const result = me ? playerGames(m, me)[0]?.result : undefined;
+    // Who won: the saved winner, or the sets / goals (and penalties) for a finished match.
+    const done = m.status === 'COMPLETED';
+    const winSide: 'home' | 'away' | null = (m.winner === 'home' || m.winner === 'away') ? m.winner
+        : !done ? null : pens && pens.h !== pens.a ? (pens.h > pens.a ? 'home' : 'away') : h > a ? 'home' : a > h ? 'away' : null;
+    const winnerName = winSide ? (winSide === 'home' ? m.home : m.away).name : '';
     const scorers = (side: 'home' | 'away') => m.events.filter(e => e.kind === 'goal' && e.side === side && e.playerName).map(e => `${e.playerName}${e.minute ? ` ${e.minute}′` : ''}${e.pen ? ' (p)' : ''}`);
     return (
         <div className="shc shc--score">
             <div className="shc-top"><Brand /><span className="shc-tag">{SPORT_NAMES[m.sport]} · {m.status === 'COMPLETED' ? 'Full time' : 'Live'}</span></div>
             {result && <span className={`shc-result is-${result}`}>{result === 'W' ? 'Victory' : result === 'D' ? 'Draw' : 'Defeat'}</span>}
+            {done && <div className={`shc-winner ${winSide ? '' : 'is-draw'}`}>{winSide ? <><span aria-hidden="true">🏆</span><b>{winnerName}</b><em>win</em></> : <b>Draw</b>}</div>}
             <div className="shc-score">
                 {(['home', 'away'] as const).map((side, k) => {
                     const t = side === 'home' ? m.home : m.away;
                     return (
                         <React.Fragment key={side}>
                             {k === 1 && <span className="shc-score__mid"><b>{h}</b><i>–</i><b>{a}</b>{pens && <small>{pens.h}–{pens.a} on penalties</small>}{padel && <small>sets</small>}</span>}
-                            <div className={`shc-team ${m.winner === side ? 'is-win' : ''}`}>
+                            <div className={`shc-team ${winSide === side ? 'is-win' : winSide ? 'is-lose' : ''}`}>
+                                {winSide === side && <span className="shc-team__badge">Winner</span>}
                                 <b>{t.name}</b>
                                 <small>{t.players.map(p => p.name.split(' ')[0]).join(' · ')}</small>
                             </div>
@@ -107,7 +114,7 @@ export const ScoreShareCard: React.FC<{ m: QuickMatch; me?: { uid?: string; emai
                     );
                 })}
             </div>
-            {padel ? <div className="shc-sets">{setsOf(m).filter(s => s.h + s.a > 0).map((s, i) => <span key={i}><small>Set {i + 1}</small><b>{s.h}–{s.a}</b></span>)}</div>
+            {padel ? <div className="shc-sets">{setsOf(m).filter(s => s.h + s.a > 0).map((s, i) => <span key={i}><small>Set {i + 1}</small><b><em className={s.h > s.a ? 'is-won' : ''}>{s.h}</em>–<em className={s.a > s.h ? 'is-won' : ''}>{s.a}</em></b></span>)}</div>
                 : (scorers('home').length > 0 || scorers('away').length > 0) && <div className="shc-scorers"><div>{scorers('home').map((s, i) => <span key={i}>⚽ {s}</span>)}</div><div>{scorers('away').map((s, i) => <span key={i}>⚽ {s}</span>)}</div></div>}
             <p className="shc-foot">{new Date(m.startAt).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}{m.venue ? ` · ${m.venue}` : ''} · {scoreText(m)}</p>
         </div>

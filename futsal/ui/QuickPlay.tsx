@@ -641,7 +641,15 @@ const mmss = (ms: number) => { const t = Math.floor(ms / 1000); return `${String
 export const QuickMatchView: React.FC<{ id: string; account?: Account; onBack?: () => void; onNew?: () => void; asReferee?: boolean }> = ({ id, account, onBack, onNew, asReferee }) => {
     const [m, setM] = useState<QuickMatch | null | undefined>(undefined);
     const [settings, setSettings] = useState(false);
-    useEffect(() => subscribeQuickMatch(id, setM), [id]);
+    // Save status for whoever is scoring: points the server hasn't confirmed yet, and whether we're online.
+    const [pending, setPending] = useState(false);
+    const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine);
+    useEffect(() => subscribeQuickMatch(id, (next, p) => { setM(next); setPending(!!p); }), [id]);
+    useEffect(() => {
+        const on = () => setOnline(true), off = () => setOnline(false);
+        window.addEventListener('online', on); window.addEventListener('offline', off);
+        return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+    }, []);
     // When the host's own match finishes, publish its points to the community leaderboard.
     const doneKey = m && m.status === 'COMPLETED' && !asReferee && m.hostUid === auth?.currentUser?.uid ? `${m.id}-${m.updatedAt || 0}` : '';
     useEffect(() => { if (doneKey && m) publishBoard(m).catch(() => {}); }, [doneKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -666,6 +674,12 @@ export const QuickMatchView: React.FC<{ id: string; account?: Account; onBack?: 
     return (
         <div className={`qx qx--match ${asReferee ? 'qx--ref' : ''}`}>
             {onBack && <button type="button" className="qx-back" onClick={onBack}><ArrowLeft size={16} /> All quick matches</button>}
+            {canScore && m.status !== 'COMPLETED' && (
+                <div className={`qx-sync ${!online ? 'is-off' : pending ? 'is-wait' : 'is-ok'}`} role="status">
+                    {!online ? 'No connection · points are kept on this phone and saved when you’re back online. Keep this page open.'
+                        : pending ? 'Saving…' : 'All points saved · everyone sees this score'}
+                </div>
+            )}
             <Board m={m} canScore={canScore} save={save} {...tools} />
             {m.status !== 'SCHEDULED' && !isRotation(m) && (
                 <div className="qx-sharebar">
