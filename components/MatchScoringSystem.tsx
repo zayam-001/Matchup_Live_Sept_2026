@@ -282,8 +282,13 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
     if (isTiebreak) {
       const isDeuce = pA === pB && pA > 0;
       let label = isDeuce ? "Tie" : "";
-      if (!isDeuce && (pA >= 6 || pB >= 6)) {
-        label = pA > pB ? "Set Point A" : "Set Point B";
+      // Tie-break at 6-6 is a race to 7; a super tie-break (deciding set played from 0-0) is a race to 10.
+      // Either way it's won by two, so the leader has the point once one more wins it.
+      const target = matchState.gamesA === 6 && matchState.gamesB === 6 ? 7 : 10;
+      const lead = pA > pB ? 'A' : pB > pA ? 'B' : null;
+      if (lead && Math.max(pA, pB) >= target - 1) {
+        const leaderSets = lead === 'A' ? matchState.setsA : matchState.setsB;
+        label = `${leaderSets + 1 >= 2 ? 'Match' : 'Set'} Point ${lead}`;
       }
       return { a: pA.toString(), b: pB.toString(), label, isDeuce, advTeam: pA > pB ? 'A' : (pB > pA ? 'B' : null) };
     }
