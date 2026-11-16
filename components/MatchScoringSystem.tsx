@@ -28,6 +28,8 @@ interface MatchState {
   setsA: number;
   setsB: number;
   server: PlayerId | null;
+  /** Who served the game before this one: the next server is that player's partner (padel order A1, B1, A2, B2). */
+  prevServer?: PlayerId | null;
   goldenPoint: boolean;
   isTiebreak: boolean;
   setScoresA: number[];
@@ -135,6 +137,7 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
     setsA: score?.p1Sets || 0,
     setsB: score?.p2Sets || 0,
     server: (score?.server as PlayerId | null) || null,
+    prevServer: ((score as any)?.prevServer as PlayerId | null) || null,
     goldenPoint: score?.goldenPoint || false,
     isTiebreak: score?.isTiebreak || false,
     setScoresA: score?.p1SetScores || [],
@@ -176,6 +179,7 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
         ) {
           return {
             server: (score.server as PlayerId) || 'p1',
+            prevServer: ((score as any).prevServer as PlayerId | null) ?? prev.prevServer ?? null,
             pointsA: isAmericano ? externalPointsA : (score.rawPointsA ?? prev.pointsA),
             pointsB: isAmericano ? externalPointsB : (score.rawPointsB ?? prev.pointsB),
             gamesA: score.p1Games ?? 0,
@@ -250,6 +254,7 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
       goldenPoint: matchState.goldenPoint,
       isTiebreak: matchState.isTiebreak,
       server: matchState.server,
+      prevServer: matchState.prevServer ?? null,
       history: stringHistory,
       // Only Americano matches carry the rally-points settings.
       ...(isAmericano ? ({ americanoTargetPoints, americanoMode } as any) : {})
@@ -424,6 +429,17 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
       nextState.pointsB = 0;
     }
 
+    // The serve passes after every game, alternating pairs and partners (A1, B1, A2, B2): the next server is
+    // the partner of whoever served the game before this one, or the other pair's first player at the start
+    // of a set. The referee can still tap a player's serve button to correct it.
+    if (gWinner && matchState.server) {
+      const partner: Record<PlayerId, PlayerId> = { p1: 'p2', p2: 'p1', p3: 'p4', p4: 'p3' };
+      const onA = (id: PlayerId) => id === 'p1' || id === 'p2';
+      const prev = matchState.prevServer;
+      nextState.server = prev && onA(prev) !== onA(matchState.server) ? partner[prev] : (onA(matchState.server) ? 'p3' : 'p1');
+      nextState.prevServer = matchState.server;
+    }
+
     // FIP: deuce 1 and 2 are played with advantage; the third deuce (5-5 in raw points) is a single
     // deciding star point. It only lasts for that game. A set goes to a tie-break at 6-6.
     let fipSetEnd: { team: TeamId; scoreA: number; scoreB: number } | null = null;
@@ -476,6 +492,7 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
     nextState.pointsA = 0;
     nextState.pointsB = 0;
     nextState.server = null;
+    nextState.prevServer = null;
     nextState.isTiebreak = isTiebreakForNext;
 
     isLocalUpdateRef.current = true;
