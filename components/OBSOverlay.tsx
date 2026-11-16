@@ -175,7 +175,7 @@ export default function OBSOverlay({
       gsap.fromTo(
         p1GameRef.current,
         { scale: 1.3, color: "#facc15" },
-        { scale: 1, color: "#ffffff", duration: 0.35, ease: "back.out(2)" }
+        { scale: 1, color: "#ffffff", duration: 0.35, ease: "back.out(2)", clearProps: "color" }
       );
     }
 
@@ -183,7 +183,7 @@ export default function OBSOverlay({
       gsap.fromTo(
         p2GameRef.current,
         { scale: 1.3, color: "#facc15" },
-        { scale: 1, color: "#ffffff", duration: 0.35, ease: "back.out(2)" }
+        { scale: 1, color: "#ffffff", duration: 0.35, ease: "back.out(2)", clearProps: "color" }
       );
     }
 
@@ -191,7 +191,7 @@ export default function OBSOverlay({
       gsap.fromTo(
         points1Ref.current,
         { scale: 1.3, color: "#facc15" },
-        { scale: 1, color: "#ffffff", duration: 0.3, ease: "back.out(2)" }
+        { scale: 1, color: "#ffffff", duration: 0.3, ease: "back.out(2)", clearProps: "color" }
       );
     }
 
@@ -199,7 +199,7 @@ export default function OBSOverlay({
       gsap.fromTo(
         points2Ref.current,
         { scale: 1.3, color: "#facc15" },
-        { scale: 1, color: "#ffffff", duration: 0.3, ease: "back.out(2)" }
+        { scale: 1, color: "#ffffff", duration: 0.3, ease: "back.out(2)", clearProps: "color" }
       );
     }
 
