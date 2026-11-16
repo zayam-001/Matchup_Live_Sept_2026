@@ -20,6 +20,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { TournamentDetail } from './TournamentDetail';
 import { TeamAmericanoStandings } from './TeamAmericanoStandings';
 import { isTournamentFinished } from '../lib/lifecycle';
+import { isFipTournament } from '../lib/pointsSystems';
+import { clockText as restClock, pointTag, restTimer } from '../lib/padelMoments';
 import './spectator.css';
 import { getActiveFormat, isTeamAmericanoFormat, isPointsScoredFormat } from '../lib/teamAmericano';
 
@@ -2401,6 +2403,9 @@ const BroadcastMatchCard = ({ match: initialMatch, tournament, theme }: { match:
     const [flashOverlayTitle, setFlashOverlayTitle] = useState<string | null>(null);
     const [flashOverlaySubtitle, setFlashOverlaySubtitle] = useState<string | null>(null);
     const [lastHistoryLength, setLastHistoryLength] = useState(0);
+    // One-second tick for the changeover / set-break countdown.
+    const [nowTick, setNowTick] = useState(Date.now());
+    useEffect(() => { const id = setInterval(() => setNowTick(Date.now()), 1000); return () => clearInterval(id); }, []);
 
     const effectiveHistory = getEffectiveEvents(match.score?.history || []);
     const finished = isMatchFinished(match);
@@ -2478,6 +2483,10 @@ const BroadcastMatchCard = ({ match: initialMatch, tournament, theme }: { match:
     const teamLabel = (t: any, fallback?: string) => formatCleanName(t?.name || fallback).toUpperCase() || 'TBA';
 
     const live = isMatchLive(match);
+    // FIP moments, as on the OBS scorebug: SET / MATCH / BREAK POINT, then changeover and set-break countdowns.
+    const fipMoments = isFipTournament(tournament as any) && live && !isPointsMatch;
+    const momentLabel = fipMoments && setInProgress ? pointTag(score, servingSlot ? (servingSlot[0] === 1 ? 'A' : 'B') : null) : null;
+    const rest = fipMoments ? restTimer(score, nowTick) : null;
     const statusLabel = finished ? 'Completed' : live ? 'Live' : 'Upcoming';
     const roundLabel = [match.roundName, category?.name].filter(Boolean).join(' - ');
     const courtLabel = match.courtName || match.court || '';
@@ -2537,7 +2546,11 @@ const BroadcastMatchCard = ({ match: initialMatch, tournament, theme }: { match:
                     {live && <span className="rounded-full bg-[#ff3b3b] animate-pulse" style={{ width: 'min(2.4cqh, 1cqw)', height: 'min(2.4cqh, 1cqw)' }} />}
                     {statusLabel}
                 </span>
-                <span className="text-center truncate">{courtLabel}</span>
+                {momentLabel || rest ? (
+                    <span className="justify-self-center inline-flex items-center whitespace-nowrap" style={{ gap: '0.8cqw', padding: '0.7cqh 1.6cqw', borderRadius: '0.7cqh', background: momentLabel ? '#FFFFFF' : theme.statusBg, color: momentLabel ? '#17253F' : theme.footText, letterSpacing: '0.12em', boxShadow: momentLabel ? '0 0.6cqh 1.6cqh rgba(0,0,0,0.25)' : undefined }}>
+                        {momentLabel || <>{rest!.label} <b className="tabular-nums">{restClock(rest!.secondsLeft)}</b></>}
+                    </span>
+                ) : <span className="text-center truncate">{courtLabel}</span>}
                 {roundLabel ? (
                     <span className="justify-self-end truncate max-w-full" style={{ padding: '0.7cqh 1.4cqw', borderRadius: '0.7cqh', background: theme.roundBg, color: theme.roundText }}>
                         {roundLabel}
