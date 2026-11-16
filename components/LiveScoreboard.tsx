@@ -2169,25 +2169,26 @@ const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClos
                 </>
             )}
 
-            {/* Header: Matchup logo | brand logo · tournament title · live count, pages, close */}
-            <header className="relative z-10 shrink-0 grid grid-cols-[1fr_auto_1fr] items-center gap-4 min-h-[max(10vh,56px)]">
-                <div className="flex items-center h-full min-w-0 gap-[1.2vw]">
-                    <Logo size={84} variant="white" color={theme.logoColor} className="shrink-0 !w-[clamp(48px,8vh,84px)] !h-auto aspect-[800/586]" />
+            {/* Header: Matchup logo | brand logo · tournament title · live count, pages, close.
+                On phones the logos and buttons sit on top and the full title wraps underneath. */}
+            <header className="relative z-10 shrink-0 grid grid-cols-[1fr_auto] md:grid-cols-[1fr_auto_1fr] items-center gap-x-4 gap-y-2 min-h-[max(10vh,56px)]">
+                <div className="order-1 flex items-center h-full min-w-0 gap-[10px] md:gap-[1.2vw]">
+                    <Logo size={84} variant="white" color={theme.logoColor} className="shrink-0 !w-[46px] md:!w-[clamp(48px,8vh,84px)] !h-auto aspect-[800/586]" />
                     {tournament.organizerLogo && (
                         <>
                             <span className="w-px h-[clamp(28px,5.5vh,64px)] shrink-0" style={{ background: theme.pageMuted }} />
                             <img
                                 src={tournament.organizerLogo}
                                 alt={tournament.organizer || 'Organiser'}
-                                className="h-[clamp(36px,7vh,80px)] w-auto max-w-[16vw] object-contain rounded-[0.6vh]"
+                                className="h-[40px] md:h-[clamp(36px,7vh,80px)] w-auto max-w-[120px] md:max-w-[16vw] object-contain rounded-[0.6vh]"
                             />
                         </>
                     )}
                 </div>
-                <div className="text-center min-w-0">
+                <div className="order-3 col-span-2 md:order-2 md:col-span-1 text-center min-w-0">
                     {/* Italic (slanted) text overhangs its box: the padding keeps
                         the last glyph from being clipped by truncate's overflow. */}
-                    <div className={`italic font-bold uppercase tracking-tight whitespace-nowrap truncate leading-[1.1] px-[0.2em] text-[clamp(22px,5.4vh,72px)] ${theme.decor ? 'drop-shadow-[0_3px_10px_rgba(0,0,0,0.35)]' : ''}`}>
+                    <div className={`italic font-bold uppercase tracking-tight md:whitespace-nowrap md:truncate leading-[1.1] px-[0.2em] text-[28px] md:text-[clamp(22px,5.4vh,72px)] ${theme.decor ? 'drop-shadow-[0_3px_10px_rgba(0,0,0,0.35)]' : ''}`}>
                         {tournament.name}
                         {showYear && (
                             <>
@@ -2212,7 +2213,7 @@ const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClos
                         </div>
                     )}
                 </div>
-                <div className="flex flex-col items-end justify-center gap-[0.8vh]">
+                <div className="order-2 md:order-3 flex flex-col items-end justify-center gap-[0.8vh]">
                     <div className="flex items-center gap-2">
                         {liveMatches.length > 0 && (
                             <div className="inline-flex items-center gap-2 rounded-md border px-3 py-1 text-[clamp(11px,1.6vh,20px)] font-bold uppercase tracking-widest" style={chipStyle}>
