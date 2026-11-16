@@ -22,6 +22,7 @@ import { TeamAmericanoStandings } from './TeamAmericanoStandings';
 import { isTournamentFinished } from '../lib/lifecycle';
 import { futsalSlug } from '../futsal/sport';
 import { isFipTournament } from '../lib/pointsSystems';
+import { trackBroadcast } from '../lib/analytics';
 import { clockText as restClock, pointTag, restTimer } from '../lib/padelMoments';
 import './spectator.css';
 import { getActiveFormat, isTeamAmericanoFormat, isPointsScoredFormat } from '../lib/teamAmericano';
@@ -1997,6 +1998,8 @@ const describePoint = (finisher?: string, tag?: string) => {
 };
 
 const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClose: () => void }) => {
+    // Counted in Analytics as its own screen ("/live/<tournament>/broadcast").
+    useEffect(() => { trackBroadcast(tournament.name, 'padel'); }, [tournament.id]); // eslint-disable-line react-hooks/exhaustive-deps
     const { matches: globalMatches } = useTournamentMatches(tournament.id);
     const [selectedMatchId, setSelectedMatchId] = useState<string | 'ALL'>('ALL');
     const [page, setPage] = useState(0);

@@ -11,6 +11,7 @@ import type { FutsalCategory, FutsalMatch, FutsalTeam, FutsalTournament } from '
 import { clockText, playerName, ShootoutTrack, stageText, useNow } from './shared';
 import { CREST, NEUTRAL, SIDE_FILL, SIDE_LINE } from './palette';
 import { publicPath } from '../sport';
+import { trackBroadcast } from '../../lib/analytics';
 import './broadcast.css';
 
 const PAGE = 6;
@@ -244,6 +245,8 @@ const Ticker: React.FC<{ teams: FutsalTeam[]; matches: FutsalMatch[] }> = ({ tea
 };
 
 export const FutsalBroadcast: React.FC<{ t: FutsalTournament; teams: FutsalTeam[]; matches: FutsalMatch[]; onClose: () => void }> = ({ t, teams, matches, onClose }) => {
+    // Counted in Analytics as its own screen ("/live/<tournament>/broadcast").
+    useEffect(() => { trackBroadcast(t.name, t.sport === 'football' ? 'football' : 'futsal'); }, [t.id]); // eslint-disable-line react-hooks/exhaustive-deps
     const live = useMemo(() => matches.filter(m => m.status === 'LIVE'), [matches]);
     const now = useNow(250, live.length > 0);
     const [selected, setSelected] = useState<string | 'ALL'>('ALL');
