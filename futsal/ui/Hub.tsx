@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { CalendarDays, MapPin, Trophy as TrophyIcon, Users } from 'lucide-react';
-import { tierLabel } from '../../lib/pointsSystems';
+import { FUTSAL_RANKING } from '../../lib/pointsSystems';
 import { PRESETS } from '../presets';
 import { Ball, dateRange, Empty, Loading, MatchRow, Shell, Star, useAllFutsal, useNow } from './shared';
 
@@ -55,7 +55,7 @@ export const Hub: React.FC = () => {
                                                 : t.status === 'COMPLETED' ? <span className="fx-pill">Finished</span>
                                                     : t.status === 'REGISTRATION' ? <span className="fx-pill fx-pill--ok">Registration open</span>
                                                         : <span className="fx-pill">Upcoming</span>}
-                                            <span className="fx-pill fx-pill--gold">{tierLabel(t.tier)}</span>
+                                            <span className="fx-pill fx-pill--gold">{FUTSAL_RANKING.label}</span>
                                             {formats.map(f => <span key={f} className="fx-pill">{f}</span>)}
                                         </div>
                                         <h3>{t.name}</h3>

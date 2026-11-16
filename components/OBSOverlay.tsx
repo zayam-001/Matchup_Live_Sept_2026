@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { isFipTournament } from '../lib/pointsSystems';
+import { clockText, pointTag, restTimer } from '../lib/padelMoments';
 import { gsap } from "gsap";
 import styles from "./obs.module.css";
 import { Match, MatchStatus } from "../types";
@@ -51,6 +52,24 @@ function getTeamDisplayName(
     return playerNames.trim();
   }
   return teamId ? fallbackLabel : "TBD";
+}
+
+/** FIP scorebug: one surname per player ("ALTHAGIB / ALSHAHRANI"), whatever the tournament's name setting. */
+function fipTeamName(teamId?: string, playerNames?: string, teamObj?: any, tournament?: any): string | null {
+  const tData = tournament?.teams?.find((t: any) => String(t.id) === String(teamId));
+  const players = teamPlayerNames(tData || teamObj);
+  if (players.length > 0) return surnamePair(players);
+  const fromMatch = String(playerNames || '').split(/\s*(?:&|\/)\s*/).filter(Boolean);
+  return fromMatch.length > 0 ? surnamePair(fromMatch) : null;
+}
+
+/** Flag image for the scorebug: a PNG (OBS browser sources render it reliably), 2x for sharpness. */
+const flagPng = (code: string) => `https://flagcdn.com/w80/${code.toLowerCase()}.png`;
+
+/** The pair's nation flags (one when both partners share a country). */
+function teamFlags(teamId?: string, teamObj?: any, tournament?: any): string[] {
+  const tData = tournament?.teams?.find((t: any) => String(t.id) === String(teamId)) || teamObj;
+  return [...new Set([tData?.player1?.country, tData?.player2?.country].filter(Boolean).map((c: string) => c.toUpperCase()))];
 }
 
 export interface OBSDiagnosticsState {
@@ -122,6 +141,10 @@ export default function OBSOverlay({
   useEffect(() => {
     if (liveMatch) setMatch(liveMatch as Match);
   }, [liveMatch]);
+
+  // One-second tick so a changeover / set-break countdown runs between score updates.
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
 
   // Entrance animation
   useEffect(() => {
@@ -213,7 +236,8 @@ export default function OBSOverlay({
   const validOverlays = ["scoreboard", "team_vs_team", "player_profiles", "winner_result"];
   const activeOverlay = rawOverlay && validOverlays.includes(rawOverlay) ? rawOverlay : "scoreboard";
 
-  const t1Formatted = getTeamDisplayName(
+  const fipNames = isFipTournament(tournament as any);
+  const t1Formatted = (fipNames && fipTeamName(match.team1Id, match.team1PlayerNames, (match as any)?.team1, tournament)) || getTeamDisplayName(
     match.team1Id,
     match.team1Name,
     match.team1PlayerNames,
@@ -221,7 +245,7 @@ export default function OBSOverlay({
     tournament,
     "TEAM 1"
   );
-  const t2Formatted = getTeamDisplayName(
+  const t2Formatted = (fipNames && fipTeamName(match.team2Id, match.team2PlayerNames, (match as any)?.team2, tournament)) || getTeamDisplayName(
     match.team2Id,
     match.team2Name,
     match.team2PlayerNames,
@@ -299,6 +323,9 @@ export default function OBSOverlay({
   const p2Games = match.score?.p2Games ?? 0;
   const p1Points = match.score?.p1Points ?? "0";
   const p2Points = match.score?.p2Points ?? "0";
+  // FIP broadcast moments: SET / MATCH / BREAK POINT above the scores, changeover and set-break timers below.
+  const moment = isFip && hasActiveSet && !isPointsMatch ? pointTag(match.score as any, isT1Serving ? 'A' : isT2Serving ? 'B' : null) : null;
+  const rest = isFip && !isMatchCompleted && !isPointsMatch ? restTimer(match.score as any, now) : null;
 
   return (
     <div className={styles.obsPage}>
@@ -320,10 +347,13 @@ export default function OBSOverlay({
       {/* Primary Scoreboard Scorebug */}
       {activeOverlay === "scoreboard" && (
         <div className={`${styles.obsCard} ${themeClass}`} ref={cardRef}>
+          {moment && <div className={styles.momentTag}>{moment}</div>}
+          {rest && <div className={styles.restBar}>{rest.label} <b>{clockText(rest.secondsLeft)}</b></div>}
           {/* Left Column: Team 1 & Team 2 Names + Server Indicator */}
           <div className={styles.obsLeftCol}>
             {/* Row 1: Team 1 */}
             <div className={styles.obsRow}>
+              {isFip && teamFlags(match.team1Id, (match as any)?.team1, tournament).map(c => <img key={c} className={styles.obsFlag} src={flagPng(c)} alt={c} />)}
               <span className={styles.obsPlayerName}>{t1Formatted}</span>
               {showT1Ball ? (
                 <div className={styles.servingBall} title="Serving" />
@@ -337,6 +367,7 @@ export default function OBSOverlay({
 
             {/* Row 2: Team 2 */}
             <div className={styles.obsRow}>
+              {isFip && teamFlags(match.team2Id, (match as any)?.team2, tournament).map(c => <img key={c} className={styles.obsFlag} src={flagPng(c)} alt={c} />)}
               <span className={styles.obsPlayerName}>{t2Formatted}</span>
               {showT2Ball ? (
                 <div className={styles.servingBall} title="Serving" />

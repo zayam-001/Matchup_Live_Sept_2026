@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Archive, Check, ChevronLeft, ChevronRight, Edit3, Image as ImageIcon, Loader2, MapPin, Plus, Trash2 } from 'lucide-react';
 import { subscribeToVenues, uploadSystemImage, auth } from '../../services/storage';
-import { POINTS_SYSTEM_LIST, STAGE_LABELS, STAGE_ORDER, getPointsSystem } from '../../lib/pointsSystems';
+import { FUTSAL_RANKING, STAGE_LABELS, STAGE_ORDER } from '../../lib/pointsSystems';
 import type { Venue } from '../../types';
 import { DEFAULT_SCHEDULE, FORMAT_LABELS, matchMinutes, newCategory, newId, PRESETS } from '../presets';
 import { CATEGORY_NAMES, CUSTOM_PRESET, DEFAULT_PRESET, PITCH_WORD, PRESETS_BY_SPORT, SPORT_LABEL, sportOf, type Sport } from '../sport';
@@ -137,7 +137,7 @@ export const FutsalCreateWizard: React.FC<{ initial?: FutsalTournament | null; s
         </div>
     );
 
-    const plan = getPointsSystem(t.tier);
+    const plan = FUTSAL_RANKING;
     const stages = STAGE_ORDER.filter(st => plan.placement[st] > 0);
 
     return (
@@ -291,16 +291,8 @@ export const FutsalCreateWizard: React.FC<{ initial?: FutsalTournament | null; s
 
                         <div className="space-y-3">
                             <div className="flex items-end justify-between gap-3">
-                                <label className="block text-content-secondary text-sm font-bold uppercase tracking-wider">Tournament Category</label>
-                                <span className="text-[11px] text-content-muted text-right">How players earn ranking points in this tournament.</span>
-                            </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                {POINTS_SYSTEM_LIST.map(p => (
-                                    <button key={p.id} type="button" onClick={() => setT({ ...t, tier: p.id })} className={`text-left rounded-xl border px-3 py-2.5 transition-all ${t.tier === p.id ? 'border-brand ring-2 ring-brand/40 bg-brand/5' : 'border-white/10 hover:border-white/30 bg-surface-panel'}`}>
-                                        <span className="inline-block px-2 py-0.5 rounded text-[11px] font-black italic uppercase tracking-wide text-white" style={{ background: p.color }}>{p.label}</span>
-                                        <span className="block text-[10px] text-content-muted mt-1.5">{`Winner ${p.placement.CHAMPION} pts`}</span>
-                                    </button>
-                                ))}
+                                <label className="block text-content-secondary text-sm font-bold uppercase tracking-wider">Ranking points</label>
+                                <span className="text-[11px] text-content-muted text-right">Standard points: what each finishing place earns on the leaderboard. FIP tiers are for padel only.</span>
                             </div>
                             <div className="rounded-xl border border-white/10 overflow-x-auto">
                                 <table className="w-full text-xs text-center">

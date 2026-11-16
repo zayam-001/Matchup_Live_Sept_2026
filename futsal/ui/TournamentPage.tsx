@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, MapPin, Share2 } from 'lucide-react';
-import { tierLabel } from '../../lib/pointsSystems';
+import { FUTSAL_RANKING } from '../../lib/pointsSystems';
 import { computeStandings, hasKnockoutStage, isKnockout, playerStats } from '../engine';
 import { TIEBREAKER_LABELS } from '../presets';
 import type { FutsalCategory, FutsalMatch, FutsalTeam } from '../types';
@@ -53,7 +53,7 @@ export const TournamentPage: React.FC<{ id: string; tab?: string }> = ({ id, tab
                 <header className="fx-thead fx-thead--compact">
                     <div className="fx-thead__row">
                         <div>
-                            <span className="fx-eyebrow"><Star /> {tierLabel(t.tier)} · {t.city}</span>
+                            <span className="fx-eyebrow"><Star /> {FUTSAL_RANKING.label} · {t.city}</span>
                             <h1 className="fx-silver fx-thead__title">{t.name}</h1>
                             <div className="fx-thead__meta">
                                 <span className="fx-pill"><CalendarDays size={13} />{dateRange(t)}</span>

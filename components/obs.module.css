@@ -294,3 +294,26 @@
 .themeFip .colLabelPoints { color: #fff; }
 .colLabel.spBadge { position: static; background: linear-gradient(135deg, #FDE68A, #F59E0B); color: #1A1200; }
 .themeFip .colLabel.spBadge { font-size: 10px; line-height: 12px; padding: 0 2px; }
+
+/* FIP moments: point tag above the scores, rest countdown under the names */
+.momentTag { position: absolute; right: 0; bottom: calc(100% + 6px); padding: 4px 12px; border-radius: 2px; background: #fff; color: #0B1A3D; font-size: 15px; font-weight: 900; letter-spacing: .08em; line-height: 1.2; text-transform: uppercase; box-shadow: 0 4px 14px rgba(0, 0, 0, .45); animation: momentIn .25s ease-out; }
+.restBar { position: absolute; left: 0; top: calc(100% + 6px); padding: 5px 12px; border-radius: 2px; background: rgba(22, 42, 88, .95); border-left: 2px solid rgba(255, 255, 255, .85); color: #fff; font-size: 14px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
+.restBar b { margin-left: 6px; font-variant-numeric: tabular-nums; }
+@keyframes momentIn { from { opacity: 0; transform: translateY(4px); } }
+
+/* FIP scorebug v2: FIP blue (#17253f) with white, top-left, flags + one surname per player */
+.themeFip { top: 48px; bottom: auto; left: 48px; }
+.themeFip .obsLeftCol { background: #17253F; border-left: 0; padding: 6px 20px 6px 14px; }
+.themeFip .obsRow { gap: 10px; }
+.themeFip .obsPlayerName { font-size: 19px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
+.obsFlag { flex: 0 0 auto; width: 24px; height: 16px; object-fit: cover; border-radius: 1px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .25); }
+.obsFlag + .obsFlag { margin-left: -4px; }
+.themeFip .servingBall { background: #fff; box-shadow: 0 0 6px rgba(255, 255, 255, .7); }
+.themeFip .obsSetCol, .themeFip .activeGameBox { border-color: rgba(255, 255, 255, .25); background: #17253F; }
+.themeFip .obsSetNum, .themeFip .activeGameNum { border: 0; background: transparent; color: #fff; }
+.themeFip .colLabel { color: rgba(255, 255, 255, .6); }
+.themeFip .pointsCol { background: #fff; border-color: #fff; }
+.themeFip .pointsNum { border: 0; background: #fff; color: #17253F; }
+.themeFip .colLabelPoints { color: #17253F; }
+.themeFip ~ .momentTag, .themeFip .momentTag { color: #17253F; }
+.themeFip .restBar { background: #17253F; border-left: 0; }

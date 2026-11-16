@@ -1,7 +1,7 @@
 // Futsal rankings, worked out live from results like the padel ones: placement
 // points by tournament tier, plus small bonuses for individual awards. Kept apart
 // from padel, and juniors apart from seniors.
-import { placementPoints, rankingSystemFor, STAGE_WEIGHT, tierLabel, type KnockoutStage } from '../lib/pointsSystems';
+import { FUTSAL_RANKING, placementPoints, STAGE_WEIGHT, type KnockoutStage } from '../lib/pointsSystems';
 import { normalizeEmail, normalizeName, normalizePhone } from '../lib/playerIdentity';
 import { computeAwards, computeStandings, placements, playerStats } from './engine';
 import type { Division, FutsalMatch, FutsalTeam, FutsalTournament } from './types';
@@ -52,7 +52,7 @@ export const computeFutsalRankings = (tournaments: FutsalTournament[], teams: Fu
 
     for (const t of tournaments) {
         if (t.status === 'DRAFT') continue;
-        const system = rankingSystemFor(t.tier);
+        const system = FUTSAL_RANKING;
         for (const cat of t.categories) {
             const cTeams = teams.filter(x => x.tournamentId === t.id && x.categoryId === cat.id && x.status === 'ACCEPTED');
             const cMatches = matches.filter(m => m.tournamentId === t.id && m.categoryId === cat.id);
@@ -71,7 +71,7 @@ export const computeFutsalRankings = (tournaments: FutsalTournament[], teams: Fu
                 const tr = teamRows.get(tk) || { key: tk, name: team.name, division: div, points: 0, goals: 0, assists: 0, apps: 0, titles: 0, results: [], rank: 0 };
                 const teamGoals = [...lines.values()].filter(l => l.teamId === team.id).reduce((n, l) => n + l.goals, 0);
                 tr.points += pts; tr.goals += teamGoals; tr.titles += stage === 'CHAMPION' ? 1 : 0;
-                tr.results.push({ tournamentId: t.id, tournamentName: t.name, categoryName: cat.name, division: div, tier: tierLabel(t.tier), teamName: team.name, stage, points: pts, bonus: 0, goals: teamGoals, assists: 0, apps: 0, date: t.startDate });
+                tr.results.push({ tournamentId: t.id, tournamentName: t.name, categoryName: cat.name, division: div, tier: FUTSAL_RANKING.label, teamName: team.name, stage, points: pts, bonus: 0, goals: teamGoals, assists: 0, apps: 0, date: t.startDate });
                 teamRows.set(tk, tr);
 
                 for (const p of team.players) {
@@ -86,7 +86,7 @@ export const computeFutsalRankings = (tournaments: FutsalTournament[], teams: Fu
                     row.titles += stage === 'CHAMPION' ? 1 : 0;
                     if (p.name.length > row.name.length) row.name = p.name;
                     row.uid = row.uid || p.uid;
-                    row.results.push({ tournamentId: t.id, tournamentName: t.name, categoryName: cat.name, division: div, tier: tierLabel(t.tier), teamName: team.name, stage, points: pts, bonus, goals: l.goals, assists: l.assists, apps: l.apps, date: t.startDate });
+                    row.results.push({ tournamentId: t.id, tournamentName: t.name, categoryName: cat.name, division: div, tier: FUTSAL_RANKING.label, teamName: team.name, stage, points: pts, bonus, goals: l.goals, assists: l.assists, apps: l.apps, date: t.startDate });
                     players.set(k, row);
                 }
             }

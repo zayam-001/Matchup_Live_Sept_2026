@@ -437,8 +437,10 @@ export const MatchScoringSystem: React.FC<MatchScoringSystemProps> = ({
         }
       } else if (nextState.isTiebreak) {
         const { pointsA: pa, pointsB: pb } = nextState;
-        // Tie-break: first to 7 by two; the set is recorded 7-6.
-        if (Math.max(pa, pb) >= 7 && Math.abs(pa - pb) >= 2) {
+        // Tie-break at 6-6: first to 7 by two, the set is recorded 7-6. A super tie-break (deciding set
+        // played as a tie-break from 0-0) goes to 10 by two.
+        const target = nextState.gamesA === 6 && nextState.gamesB === 6 ? 7 : 10;
+        if (Math.max(pa, pb) >= target && Math.abs(pa - pb) >= 2) {
           fipSetEnd = pa > pb
             ? { team: 'teamA', scoreA: nextState.gamesA + 1, scoreB: nextState.gamesB }
             : { team: 'teamB', scoreA: nextState.gamesA, scoreB: nextState.gamesB + 1 };

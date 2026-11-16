@@ -155,6 +155,9 @@ export const rankingSystemFor = (id?: string | null): PointsSystem => {
 };
 
 /** Short tier name for badges and leaderboard breakdowns. */
+/** Futsal and football always earn standard ranking points (the Local scale); FIP tiers are padel only. */
+export const FUTSAL_RANKING: PointsSystem = { ...POINTS_SYSTEMS.local, label: 'Standard', description: 'Standard placement points' };
+
 export const tierLabel = (id?: string | null) => rankingSystemFor(id).label.replace(/^FIP /, '');
 
 // A tournament's leaderboard category. Kept in its own field so setting it never
