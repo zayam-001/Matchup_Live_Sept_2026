@@ -2388,6 +2388,11 @@ const BroadcastTicker = ({ tournament, liveMatches, allMatches, theme }: { tourn
     });
     allMatches.filter(isMatchFinished).slice(0, 5).forEach((m: any) => {
         const winner = m.winnerTeamId === m.team1Id ? teamName(m, 1) : m.winnerTeamId === m.team2Id ? teamName(m, 2) : null;
+        // A bye or walkover has no score: say who goes through instead of "(0-0)".
+        if (m.isWalkover || /^bye$/i.test(String(teamName(m, 1))) || /^bye$/i.test(String(teamName(m, 2)))) {
+            if (winner) events.push(`Walkover • ${winner} advance to the next round`);
+            return;
+        }
         events.push(`Result • ${teamName(m, 1)} vs ${teamName(m, 2)}${winner ? ` • Winner: ${winner}` : ''} (${tally(m)})`);
     });
     if (events.length === 0) {
@@ -2509,6 +2514,10 @@ const BroadcastMatchCard = ({ match: initialMatch, tournament, theme }: { match:
     const fipMoments = isFipTournament(tournament as any) && live && !isPointsMatch;
     const momentLabel = fipMoments && setInProgress ? pointTag(score, servingSlot ? (servingSlot[0] === 1 ? 'A' : 'B') : null) : null;
     const rest = fipMoments ? restTimer(score, nowTick) : null;
+    // On the big screen the moment takes over the card's header bar in a colour you can read from across the venue.
+    const momentLook = momentLabel
+        ? /MATCH/.test(momentLabel) ? { bg: '#DC2626', fg: '#FFFFFF' } : /SET/.test(momentLabel) ? { bg: '#F59E0B', fg: '#17253F' } : { bg: '#EA580C', fg: '#FFFFFF' }
+        : rest ? (rest.label === 'SET BREAK' ? { bg: '#7C3AED', fg: '#FFFFFF' } : { bg: '#2563EB', fg: '#FFFFFF' }) : null;
     const statusLabel = finished ? 'Completed' : live ? 'Live' : 'Upcoming';
     const roundLabel = [match.roundName, category?.name].filter(Boolean).join(' - ');
     const courtLabel = match.courtName || match.court || '';
@@ -2526,9 +2535,13 @@ const BroadcastMatchCard = ({ match: initialMatch, tournament, theme }: { match:
             )}
             <div
                 className="grid items-center shrink-0 font-bold uppercase tracking-wider"
-                style={{ gridTemplateColumns: isPointsMatch ? FIP_COLS_POINTS : FIP_COLS, height: '11cqh', fontSize: 'min(6.4cqh, 2.6cqw)', background: theme.headBg, color: theme.headText }}
+                style={{ gridTemplateColumns: isPointsMatch ? FIP_COLS_POINTS : FIP_COLS, height: momentLook ? '17cqh' : '11cqh', fontSize: 'min(6.4cqh, 2.6cqw)', background: momentLook?.bg || theme.headBg, color: momentLook?.fg || theme.headText, transition: 'background 0.3s, height 0.3s' }}
             >
-                <span className="pl-[3cqw]">Players</span>
+                {momentLook ? (
+                    <span className="pl-[3cqw] inline-flex items-center whitespace-nowrap font-black" style={{ fontSize: 'min(11cqh, 4.4cqw)', letterSpacing: '0.08em', gap: '1.6cqw', animation: momentLabel ? 'pulse 1.6s ease-in-out infinite' : undefined }}>
+                        {momentLabel || <>{rest!.label} <span className="tabular-nums">{restClock(rest!.secondsLeft)}</span></>}
+                    </span>
+                ) : <span className="pl-[3cqw]">Players</span>}
                 {!isPointsMatch && <span className="text-center">S1</span>}
                 {!isPointsMatch && <span className="text-center">S2</span>}
                 {!isPointsMatch && <span className="text-center">S3</span>}
@@ -2568,11 +2581,7 @@ const BroadcastMatchCard = ({ match: initialMatch, tournament, theme }: { match:
                     {live && <span className="rounded-full bg-[#ff3b3b] animate-pulse" style={{ width: 'min(2.4cqh, 1cqw)', height: 'min(2.4cqh, 1cqw)' }} />}
                     {statusLabel}
                 </span>
-                {momentLabel || rest ? (
-                    <span className="justify-self-center inline-flex items-center whitespace-nowrap" style={{ gap: '0.8cqw', padding: '0.7cqh 1.6cqw', borderRadius: '0.7cqh', background: momentLabel ? '#FFFFFF' : theme.statusBg, color: momentLabel ? '#17253F' : theme.footText, letterSpacing: '0.12em', boxShadow: momentLabel ? '0 0.6cqh 1.6cqh rgba(0,0,0,0.25)' : undefined }}>
-                        {momentLabel || <>{rest!.label} <b className="tabular-nums">{restClock(rest!.secondsLeft)}</b></>}
-                    </span>
-                ) : <span className="text-center truncate">{courtLabel}</span>}
+                <span className="text-center truncate">{courtLabel}</span>
                 {roundLabel ? (
                     <span className="justify-self-end truncate max-w-full" style={{ padding: '0.7cqh 1.4cqw', borderRadius: '0.7cqh', background: theme.roundBg, color: theme.roundText }}>
                         {roundLabel}
