@@ -18,6 +18,17 @@ const realName = (name?: string | null) => {
 export const teamPlayerNames = (team: any): string[] =>
     [team?.player1?.name, team?.player2?.name].map(realName).filter(Boolean);
 
+/**
+ * A player's full surname for the FIP scorebug: the stored `lastName` (from the FIP entry list, so
+ * "Melero Bernal" stays whole), else the part before the comma of "Surname, First", else the last word.
+ */
+export const fullSurname = (player: any): string => {
+    if (player?.lastName && String(player.lastName).trim()) return String(player.lastName).trim().toUpperCase();
+    const n = realName(player?.name);
+    if (!n) return '';
+    return (n.includes(',') ? n.split(',')[0] : n.split(/\s+/).pop() || n).trim().toUpperCase();
+};
+
 /** Surnames for tight spaces like the OBS scorebug: "Ali Khan / Bilal Ahmed" -> "KHAN / AHMED". */
 export const surnamePair = (names: string[]) =>
     names.map(n => n.split(/\s+/).filter(Boolean).pop() || n).join(' / ').toUpperCase();

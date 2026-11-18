@@ -300,9 +300,10 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
 
             {activeTab === 'schedule' && (
               <div className="animate-in fade-in duration-500">
-                <SpectatorSchedule 
-                  matches={matchesToDisplay} 
-                  teams={tournament.teams || []} 
+                <SpectatorSchedule
+                  matches={matchesToDisplay}
+                  teams={tournament.teams || []}
+                  flags={!!tournament.showNationFlags}
                   onSelectTab={(tab) => {
                     const mappedTab = tab === 'timelines' ? 'timeline' : tab;
                     setActiveTab(mappedTab as any);
@@ -336,7 +337,7 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
 
             {activeTab === 'bracket' && (
               <div className="animate-in fade-in duration-500">
-                <SpectatorBracket matches={matchesToDisplay} teams={tournament.teams || []} format={tournament.format} />
+                <SpectatorBracket matches={matchesToDisplay} teams={tournament.teams || []} format={tournament.format} flags={!!tournament.showNationFlags} />
               </div>
             )}
 

@@ -317,9 +317,9 @@
 .themeFip .colLabelPoints { color: #17253F; }
 .themeFip ~ .momentTag, .themeFip .momentTag { color: #17253F; }
 .themeFip .restBar { background: #17253F; border-left: 0; }
-/* FIP v3: score column, point tag and rest bar all in FIP blue with white text, like the set columns */
-.themeFip .pointsCol { background: #17253F; border-color: rgba(255, 255, 255, .25); }
-.themeFip .pointsNum { background: transparent; color: #fff; }
-.themeFip .colLabelPoints { color: rgba(255, 255, 255, .6); }
-.themeFip .momentTag { background: #17253F; color: #fff; border: 1px solid rgba(255, 255, 255, .25); }
+/* Rest bar (changeover / set break) in FIP blue; the score column and point tag stay white */
 .themeFip .restBar { background: #17253F; color: #fff; border: 1px solid rgba(255, 255, 255, .25); }
+
+/* FIP: the serving player is marked by a white ball right after their surname. */
+.themeFip .fipServer { display: inline-flex; align-items: center; }
+.themeFip .fipServer::after { content: ''; width: 9px; height: 9px; margin-left: 9px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px rgba(255, 255, 255, .7); flex-shrink: 0; }

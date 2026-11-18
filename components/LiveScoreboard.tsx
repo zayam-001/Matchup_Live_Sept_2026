@@ -6,7 +6,7 @@ import { useMatchResult } from '../hooks/useMatchResult';
 import { useTournamentDoc } from '../hooks/useTournamentDoc';
 import { useTournamentMatches } from '../hooks/useTournamentMatches';
 import { MatchStatus, Tournament, TournamentFormat, RoundRobinType, Team, Match, SponsorTier, MatchEvent, BroadcastTheme } from '../types';
-import { CountryFlag } from './CountrySelect';
+import { CountryFlag, TeamFlags } from './CountrySelect';
 import { Search, Filter, ChevronRight, ChevronLeft, Play, Info, Trophy, History, Timer, MapPin, Award, X, Activity, ChevronDown, Users, Mic, DollarSign, Tv, Calendar, Check, LayoutGrid, List } from 'lucide-react';
 import { Avatar } from './ui/Avatar';
 import { Card } from './ui/Card';
@@ -1595,6 +1595,7 @@ export const StandingsTable = ({ tournamentId, categoryId, initialTeams, onTeamS
                                                 <td className="px-1.5 sm:px-3 md:px-6 py-3 flex items-center gap-1.5 md:gap-3 relative">
                                                     
 {i === 0 ? ( <span className="w-5 h-5 md:w-6 md:h-6 rounded-full flex items-center justify-center text-[9px] md:text-[10px] font-bold shrink-0 bg-[#FFD700] text-[#8B6508] shadow-[0_0_10px_rgba(255,215,0,0.5)]">{i + 1}</span> ) : i === 1 ? ( <span className="w-5 h-5 md:w-6 md:h-6 rounded-full flex items-center justify-center text-[9px] md:text-[10px] font-bold shrink-0 bg-[#C0C0C0] text-[#4A4A4A] shadow-[0_0_10px_rgba(192,192,192,0.4)]">{i + 1}</span> ) : i === 2 ? ( <span className="w-5 h-5 md:w-6 md:h-6 rounded-full flex items-center justify-center text-[9px] md:text-[10px] font-bold shrink-0 bg-[#CD7F32] text-[#5C3A16] shadow-[0_0_10px_rgba(205,127,50,0.4)]">{i + 1}</span> ) : ( <span className="w-5 h-5 md:w-6 md:h-6 rounded-full flex items-center justify-center text-[9px] md:text-[10px] font-bold shrink-0 bg-white/10 text-gray-400">{i + 1}</span> )}
+                                                    <TeamFlags team={tournament?.teams?.find((t: any) => t.id === s.id) || s} show={!!tournament?.showNationFlags} />
                                                     <span className="font-black tracking-[0.05em] md:tracking-[0.15em] text-xs md:text-base truncate max-w-[95px] xs:max-w-[130px] sm:max-w-[200px] md:max-w-none text-white">
                                                         {s.name || 'TBA'}
                                                     </span>
@@ -2758,7 +2759,7 @@ const sortMatchesAscendingHelper = (matchesList: Match[]) => {
     });
 };
 
-const ResultsTable = ({ title, icon, matchesToRender, teams }: { title: string; icon: React.ReactNode; matchesToRender: Match[]; teams: Team[] }) => {
+const ResultsTable = ({ title, icon, matchesToRender, teams, flags }: { title: string; icon: React.ReactNode; matchesToRender: Match[]; teams: Team[]; flags?: boolean }) => {
     if (matchesToRender.length === 0) return null;
     return (
         <div className="space-y-3">
@@ -2824,6 +2825,7 @@ const ResultsTable = ({ title, icon, matchesToRender, teams }: { title: string; 
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-2">
                                                 <Trophy size={14} className="text-[#E65C31] fill-amber-400 shrink-0" />
+                                                <TeamFlags team={winner} show={flags} />
                                                 <span className="font-black text-sm text-white truncate max-w-[150px]">{winnerName}</span>
                                             </div>
                                             {winnerPlayers && (
@@ -2854,7 +2856,7 @@ const ResultsTable = ({ title, icon, matchesToRender, teams }: { title: string; 
                                             )}
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="font-medium text-xs text-gray-400 truncate max-w-[150px]">{loserName}</div>
+                                            <div className="flex items-center gap-2"><TeamFlags team={loser} show={flags} /><span className="font-medium text-xs text-gray-400 truncate max-w-[150px]">{loserName}</span></div>
                                             {loserPlayers && (
                                                 <div className="text-[10px] text-content-muted mt-0.5 truncate max-w-[150px]">{loserPlayers}</div>
                                             )}
@@ -2999,7 +3001,7 @@ export const SpectatorResults = ({ matches, teams, tournament }: { matches: Matc
             {filteredMatches.length > 0 && viewMode === 'table' && (
                 <div className="space-y-8">
                     {(activeStageTab === 'all' || activeStageTab === 'knockout') && playoffMatches.length > 0 && (
-                        <ResultsTable 
+                        <ResultsTable flags={!!tournament?.showNationFlags}
                             title="Knockout & Playoff Stage Results" 
                             icon={<Trophy className="text-[#4D78FF]" size={16} />} 
                             matchesToRender={playoffMatches} 
@@ -3007,7 +3009,7 @@ export const SpectatorResults = ({ matches, teams, tournament }: { matches: Matc
                         />
                     )}
                     {(activeStageTab === 'all' || activeStageTab === 'group') && groupMatches.length > 0 && (
-                        <ResultsTable 
+                        <ResultsTable flags={!!tournament?.showNationFlags}
                             title="Group Stage Results" 
                             icon={<Users className="text-[#4D78FF]" size={16} />} 
                             matchesToRender={groupMatches} 
@@ -3227,7 +3229,7 @@ export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Matc
                                         <div className="flex items-center gap-2 min-w-0 pr-2">
                                             <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isT1Serving ? 'bg-[#E65C31] shadow-[0_0_6px_#E65C31]' : 'opacity-0'}`} />
                                             <div className="flex flex-col min-w-0 leading-tight">
-                                                <span className="text-white font-black text-xs sm:text-sm uppercase tracking-wider truncate">{t1TeamName}</span>
+                                                <span className="flex items-center gap-1.5 min-w-0"><TeamFlags team={teams.find(t => t.id === m.team1Id)} show={!!tournament?.showNationFlags} /><span className="text-white font-black text-xs sm:text-sm uppercase tracking-wider truncate">{t1TeamName}</span></span>
                                             </div>
                                         </div>
                                         <div className="text-center font-mono font-bold text-gray-400 text-xs sm:text-sm">{score.p1Sets}</div>
@@ -3240,7 +3242,7 @@ export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Matc
                                         <div className="flex items-center gap-2 min-w-0 pr-2">
                                             <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isT2Serving ? 'bg-[#E65C31] shadow-[0_0_6px_#E65C31]' : 'opacity-0'}`} />
                                             <div className="flex flex-col min-w-0 leading-tight">
-                                                <span className="text-white font-black text-xs sm:text-sm uppercase tracking-wider truncate">{t2TeamName}</span>
+                                                <span className="flex items-center gap-1.5 min-w-0"><TeamFlags team={teams.find(t => t.id === m.team2Id)} show={!!tournament?.showNationFlags} /><span className="text-white font-black text-xs sm:text-sm uppercase tracking-wider truncate">{t2TeamName}</span></span>
                                             </div>
                                         </div>
                                         <div className="text-center font-mono font-bold text-gray-400 text-xs sm:text-sm">{score.p2Sets}</div>
@@ -3291,6 +3293,7 @@ export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Matc
                                         {/* Team 1 Details */}
                                         <div className="flex-1 text-center space-y-2">
                                             <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                                <TeamFlags team={teams.find(t => t.id === activeModalMatch.team1Id)} show={!!tournament?.showNationFlags} className="w-5 h-[14px] rounded-[2px]" />
                                                 <h3 className="text-white font-black text-base md:text-lg uppercase tracking-wider">
                                                     {getTeamNamesAndPlayers(activeModalMatch.team1Id, activeModalMatch.team1Name, activeModalMatch.team1PlayerNames).teamName}
                                                 </h3>
@@ -3328,6 +3331,7 @@ export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Matc
                                                 {(activeModalMatch.score?.server === 'p3' || activeModalMatch.score?.server === 'p4') && (
                                                     <span className="w-2 h-2 bg-[#E65C31] rounded-full shadow-[0_0_8px_#E65C31]" />
                                                 )}
+                                                <TeamFlags team={teams.find(t => t.id === activeModalMatch.team2Id)} show={!!tournament?.showNationFlags} className="w-5 h-[14px] rounded-[2px]" />
                                                 <h3 className="text-white font-black text-base md:text-lg uppercase tracking-wider">
                                                     {getTeamNamesAndPlayers(activeModalMatch.team2Id, activeModalMatch.team2Name, activeModalMatch.team2PlayerNames).teamName}
                                                 </h3>
@@ -3417,7 +3421,7 @@ export const LiveMatchesTable = ({ matches, teams, tournament }: { matches: Matc
     );
 };
 
-export const SpectatorSchedule = ({ matches, teams, onSelectTab }: { matches: Match[]; teams: Team[]; onSelectTab: (tab: 'live' | 'timelines' | 'standings' | 'results' | 'schedule') => void }) => {
+export const SpectatorSchedule = ({ matches, teams, onSelectTab, flags }: { matches: Match[]; teams: Team[]; flags?: boolean; onSelectTab: (tab: 'live' | 'timelines' | 'standings' | 'results' | 'schedule') => void }) => {
     // Upcoming matches are (status !== 'COMPLETED' && String(status).toUpperCase() !== 'FINISHED')
     const upcomingMatches = matches.filter(m => {
         const isCompleted = (m.status === MatchStatus.COMPLETED || String(m.status).toUpperCase() === 'FINISHED' || String(m.status).toUpperCase() === 'COMPLETED') || !!m.winnerTeamId;
@@ -3461,9 +3465,9 @@ export const SpectatorSchedule = ({ matches, teams, onSelectTab }: { matches: Ma
                         )}
                     </div>
                     <div className="text-white font-medium text-lg flex items-center justify-center md:justify-start gap-3">
-                        <span>{t1}</span>
+                        <span className="inline-flex items-center gap-1.5"><TeamFlags team={teams.find(t => t.id === m.team1Id)} show={flags} />{t1}</span>
                         <span className="text-content-muted text-sm">vs</span>
-                        <span>{t2}</span>
+                        <span className="inline-flex items-center gap-1.5"><TeamFlags team={teams.find(t => t.id === m.team2Id)} show={flags} />{t2}</span>
                     </div>
                 </div>
                 <div className="flex items-center justify-between w-full md:w-auto gap-4 text-sm text-content-secondary">

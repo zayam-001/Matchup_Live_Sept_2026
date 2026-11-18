@@ -3754,7 +3754,7 @@ const BracketTab = ({ tournament, categoryId }: { tournament: Tournament; catego
                 </button>
             </div>
             <Card variant="panel" className="spx p-4">
-                <SpectatorBracket matches={matches} teams={teams} format={tournament.format} onSwap={editing && !saving ? swap : undefined} />
+                <SpectatorBracket matches={matches} teams={teams} format={tournament.format} flags={!!tournament.showNationFlags} onSwap={editing && !saving ? swap : undefined} />
             </Card>
         </div>
     );

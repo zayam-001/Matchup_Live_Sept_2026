@@ -16,6 +16,14 @@ export const CountryFlag = ({ code, className = '', style }: { code?: string | n
     );
 };
 
+/** A pair's nation flags (one per country, so two Spaniards show one flag), for tournaments with flags on. */
+export const TeamFlags = ({ team, show = true, className = 'w-4 h-3 rounded-[1px]' }: { team?: any; show?: boolean; className?: string }) => {
+    if (!show || !team) return null;
+    const codes = [...new Set([team.player1?.country, team.player2?.country].filter(Boolean).map((c: string) => c.toUpperCase()))];
+    if (!codes.length) return null;
+    return <span className="inline-flex items-center gap-0.5 shrink-0">{codes.map(c => <CountryFlag key={c} code={c} className={className} />)}</span>;
+};
+
 interface CountrySelectProps {
     value?: string;
     onChange: (code: string) => void;

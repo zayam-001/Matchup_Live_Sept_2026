@@ -6,7 +6,7 @@ import styles from "./obs.module.css";
 import { Match, MatchStatus } from "../types";
 import { useMatchResult } from "../hooks/useMatchResult";
 import { useTournamentDoc } from "../hooks/useTournamentDoc";
-import { surnamePair, teamPlayerNames } from "../lib/nameDisplay";
+import { fullSurname, surnamePair, teamPlayerNames } from "../lib/nameDisplay";
 import { getActiveFormat, isPointsScoredFormat } from "../lib/teamAmericano";
 
 /**
@@ -61,6 +61,14 @@ function fipTeamName(teamId?: string, playerNames?: string, teamObj?: any, tourn
   if (players.length > 0) return surnamePair(players);
   const fromMatch = String(playerNames || '').split(/\s*(?:&|\/)\s*/).filter(Boolean);
   return fromMatch.length > 0 ? surnamePair(fromMatch) : null;
+}
+
+/** FIP scorebug: each player's full surname, in court order (player 1, player 2), so the server can be marked. */
+function fipSurnames(teamId?: string, playerNames?: string, teamObj?: any, tournament?: any): string[] {
+  const tData = tournament?.teams?.find((t: any) => String(t.id) === String(teamId)) || teamObj;
+  const fromTeam = [tData?.player1, tData?.player2].map(fullSurname).filter(Boolean);
+  if (fromTeam.length) return fromTeam;
+  return String(playerNames || '').split(/\s*(?:&|\/)\s*/).filter(Boolean).map(n => fullSurname({ name: n })).filter(Boolean);
 }
 
 /** Flag image for the scorebug: a PNG (OBS browser sources render it reliably), 2x for sharpness. */
@@ -283,6 +291,9 @@ export default function OBSOverlay({
     !isMatchCompleted &&
     (isT2Serving || (!isT1Serving && match.status === MatchStatus.IN_PROGRESS));
 
+  // Which player of the serving pair is serving: p1/p3 are each pair's player 1, p2/p4 their player 2.
+  const servingIndex = rawServer === "p1" || rawServer === "p3" ? 0 : rawServer === "p2" || rawServer === "p4" ? 1 : null;
+
   const p1SetScores = match.score?.p1SetScores || [];
   const p2SetScores = match.score?.p2SetScores || [];
   const completedSetsCount = Math.min(p1SetScores.length, p2SetScores.length);
@@ -308,7 +319,9 @@ export default function OBSOverlay({
   }
 
   // Active set box and points column should only show when a set is actively being played and match is not over
-  const hasActiveSet = !isMatchCompleted && !isSetCompleted;
+  // A match that hasn't started shows no set at all (FIP: sets not yet started are never displayed).
+  const notStarted = String(match.status || '').toUpperCase() === 'SCHEDULED' && !(match.score?.history?.length) && !p1SetScores.length;
+  const hasActiveSet = !isMatchCompleted && !isSetCompleted && !notStarted;
 
   // Americano formats are one running points total: show a single score box.
   const isPointsMatch = isPointsScoredFormat(getActiveFormat(tournament as any, match.categoryId));
@@ -354,8 +367,17 @@ export default function OBSOverlay({
             {/* Row 1: Team 1 */}
             <div className={styles.obsRow}>
               {isFip && teamFlags(match.team1Id, (match as any)?.team1, tournament).map(c => <img key={c} className={styles.obsFlag} src={flagPng(c)} alt={c} />)}
-              <span className={styles.obsPlayerName}>{t1Formatted}</span>
-              {showT1Ball ? (
+              {isFip ? (
+                <span className={styles.obsPlayerName}>
+                  {fipSurnames(match.team1Id, match.team1PlayerNames, (match as any)?.team1, tournament).map((n, i, all) => (
+                    <React.Fragment key={i}>
+                      <span className={showT1Ball && servingIndex === i ? styles.fipServer : undefined}>{n}</span>
+                      {i < all.length - 1 && ' / '}
+                    </React.Fragment>
+                  ))}
+                </span>
+              ) : <span className={styles.obsPlayerName}>{t1Formatted}</span>}
+              {showT1Ball && !(isFip && servingIndex !== null) ? (
                 <div className={styles.servingBall} title="Serving" />
               ) : (
                 <div className={styles.servingBallPlaceholder} />
@@ -368,8 +390,17 @@ export default function OBSOverlay({
             {/* Row 2: Team 2 */}
             <div className={styles.obsRow}>
               {isFip && teamFlags(match.team2Id, (match as any)?.team2, tournament).map(c => <img key={c} className={styles.obsFlag} src={flagPng(c)} alt={c} />)}
-              <span className={styles.obsPlayerName}>{t2Formatted}</span>
-              {showT2Ball ? (
+              {isFip ? (
+                <span className={styles.obsPlayerName}>
+                  {fipSurnames(match.team2Id, match.team2PlayerNames, (match as any)?.team2, tournament).map((n, i, all) => (
+                    <React.Fragment key={i}>
+                      <span className={showT2Ball && servingIndex === i ? styles.fipServer : undefined}>{n}</span>
+                      {i < all.length - 1 && ' / '}
+                    </React.Fragment>
+                  ))}
+                </span>
+              ) : <span className={styles.obsPlayerName}>{t2Formatted}</span>}
+              {showT2Ball && !(isFip && servingIndex !== null) ? (
                 <div className={styles.servingBall} title="Serving" />
               ) : (
                 <div className={styles.servingBallPlaceholder} />

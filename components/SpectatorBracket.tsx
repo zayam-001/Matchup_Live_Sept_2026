@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 import type { Match, Team } from '../types';
 import { isDone, isKnockoutMatch } from '../lib/padelBracket';
+import { TeamFlags } from './CountrySelect';
 
 const isLive = (m: Match) => ['IN_PROGRESS', 'LIVE'].includes(String(m.status).toUpperCase());
 
@@ -48,7 +49,7 @@ const slotLabel = (m: Match, side: 1 | 2, all: Match[]) => {
 type Slot = { matchId: string; side: 1 | 2 };
 
 /** `onSwap` turns on organiser editing: each slot of a match not started yet becomes a picker of the round's slots. */
-export const SpectatorBracket: React.FC<{ matches: Match[]; teams: Team[]; format?: string; onSwap?: (a: Slot, b: Slot) => void }> = ({ matches, teams, format, onSwap }) => {
+export const SpectatorBracket: React.FC<{ matches: Match[]; teams: Team[]; format?: string; flags?: boolean; onSwap?: (a: Slot, b: Slot) => void }> = ({ matches, teams, format, flags, onSwap }) => {
     const rounds = useMemo(() => orderRounds(bracketMatches(matches, format)), [matches, format]);
     const all = rounds.flat();
     if (!rounds.length) return <p className="spx-bracket__empty">The bracket appears here once the knockout matches are drawn.</p>;
@@ -93,7 +94,10 @@ export const SpectatorBracket: React.FC<{ matches: Match[]; teams: Team[]; forma
                                     }
                                     return (
                                         <div className={`spx-bracket__team${won ? ' is-win' : ''}${done && !won ? ' is-out' : ''}`}>
-                                            <span className={id ? '' : 'is-tbd'}>{name || slotLabel(m, side, all)}</span>
+                                            <span className={`spx-bracket__name${id ? '' : ' is-tbd'}`}>
+                                                <TeamFlags team={teams.find(t => t.id === id)} show={flags} />
+                                                <span>{name || slotLabel(m, side, all)}</span>
+                                            </span>
                                             <span className="spx-bracket__sets">
                                                 {sets.map((g, i) => <b key={i}>{g}</b>)}
                                                 {live && <b className="is-now">{side === 1 ? m.score?.p1Games ?? 0 : m.score?.p2Games ?? 0}</b>}

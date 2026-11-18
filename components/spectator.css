@@ -222,6 +222,8 @@
 .spx-bracket__team { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 10px; font-size: 13px; font-weight: 700; color: #E5E7EB; }
 .spx-bracket__team + .spx-bracket__team { border-top: 1px solid rgba(255, 255, 255, .07); }
 .spx-bracket__team > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spx-bracket__name { display: flex; align-items: center; gap: 6px; }
+.spx-bracket__name > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .spx-bracket__team .is-tbd { color: #6B7280; font-style: italic; font-weight: 600; font-size: 12px; }
 .spx-bracket__team.is-win { color: #fff; background: linear-gradient(90deg, rgba(77, 120, 255, .28), transparent); }
 .spx-bracket__team.is-out { color: #6B7280; }

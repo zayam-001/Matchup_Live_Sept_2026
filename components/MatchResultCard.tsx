@@ -3,6 +3,7 @@ import { Match, Team, MatchStatus } from '../types';
 import { Avatar } from './ui/Avatar';
 import { Trophy, CalendarDays, MapPin, Copy, Check } from 'lucide-react';
 import { WinnerBanner } from './WinnerBanner';
+import { TeamFlags } from './CountrySelect';
 
 export const formatCleanName = (name: string | undefined | null): string => { if (!name) return ''; return name.replace(/^&\s*/, '').replace(/\s*&$/, '').trim(); };
 export const MatchResultCard = ({ match, teams, tournament, onEdit }: { match: Match; teams: Team[]; tournament?: any; onEdit?: () => void }) => {
@@ -118,7 +119,8 @@ export const MatchResultCard = ({ match, teams, tournament, onEdit }: { match: M
                         )}
                     </div>
                     
-                    <div className={`text-lg sm:text-xl font-black tracking-tight text-center mb-5 ${isT1Winner ? 'text-white' : 'text-gray-400'}`}>
+                    <div className={`text-lg sm:text-xl font-black tracking-tight text-center mb-5 flex items-center justify-center gap-2 ${isT1Winner ? 'text-white' : 'text-gray-400'}`}>
+                        <TeamFlags team={t1} show={!!tournament?.showNationFlags} className="w-5 h-[14px] rounded-[2px]" />
                         {t1Name}
                     </div>
                     
@@ -195,7 +197,8 @@ export const MatchResultCard = ({ match, teams, tournament, onEdit }: { match: M
                         )}
                     </div>
                     
-                    <div className={`text-lg sm:text-xl font-black tracking-tight text-center mb-5 ${isT2Winner ? 'text-white' : 'text-gray-400'}`}>
+                    <div className={`text-lg sm:text-xl font-black tracking-tight text-center mb-5 flex items-center justify-center gap-2 ${isT2Winner ? 'text-white' : 'text-gray-400'}`}>
+                        <TeamFlags team={t2} show={!!tournament?.showNationFlags} className="w-5 h-[14px] rounded-[2px]" />
                         {t2Name}
                     </div>
                     
