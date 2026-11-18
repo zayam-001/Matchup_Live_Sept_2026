@@ -28,7 +28,7 @@ import { TournamentLeaderboardTab } from './TournamentLeaderboardTab';
 import { EditTeamSheet } from './EditTeamSheet';
 import { StandingsOverlayExporter } from './StandingsOverlayExporter';
 import { SponsorLogoCropper } from './SponsorLogoCropper';
-import { POINTS_SYSTEM_LIST, getPointsSystem, tournamentTier, STAGE_ORDER, STAGE_LABELS } from '../lib/pointsSystems';
+import { POINTS_SYSTEM_LIST, getPointsSystem, tournamentTier, STAGE_ORDER, STAGE_LABELS, isFipTournament } from '../lib/pointsSystems';
 import { formatLabel, getActiveFormat, isTeamAmericanoFormat, summarizeTeamAmericano } from '../lib/teamAmericano';
 import './admin.css';
 import { TeamAmericanoSetup } from './TeamAmericanoSetup';
@@ -3754,7 +3754,7 @@ const BracketTab = ({ tournament, categoryId }: { tournament: Tournament; catego
                 </button>
             </div>
             <Card variant="panel" className="spx p-4">
-                <SpectatorBracket matches={matches} teams={teams} format={tournament.format} flags={!!tournament.showNationFlags} onSwap={editing && !saving ? swap : undefined} />
+                <SpectatorBracket matches={matches} teams={teams} format={tournament.format} flags={!!tournament.showNationFlags} fip={isFipTournament(tournament as any)} onSwap={editing && !saving ? swap : undefined} />
             </Card>
         </div>
     );

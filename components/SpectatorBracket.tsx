@@ -3,7 +3,7 @@
 import React, { useMemo } from 'react';
 import type { Match, Team } from '../types';
 import { isDone, isKnockoutMatch } from '../lib/padelBracket';
-import { TeamFlags } from './CountrySelect';
+import { CountryFlag, TeamFlags } from './CountrySelect';
 
 const isLive = (m: Match) => ['IN_PROGRESS', 'LIVE'].includes(String(m.status).toUpperCase());
 
@@ -48,8 +48,18 @@ const slotLabel = (m: Match, side: 1 | 2, all: Match[]) => {
 
 type Slot = { matchId: string; side: 1 | 2 };
 
+/** FIP draw style: "Surname" then first name ("MELERO BERNAL Miguel"), using the official lastName when stored. */
+const surnameFirst = (p?: { name?: string; lastName?: string }) => {
+    const name = String(p?.name || '').trim();
+    if (!name || name.toUpperCase() === 'TBD') return null;
+    const last = String(p?.lastName || '').trim() || (name.includes(',') ? name.split(',')[0].trim() : name.split(/\s+/).pop()!);
+    const first = name.includes(',') ? name.split(',').slice(1).join(' ').trim()
+        : name.toLowerCase().endsWith(last.toLowerCase()) ? name.slice(0, name.length - last.length).trim() : name.split(/\s+/).slice(0, -1).join(' ');
+    return { last: last.toUpperCase(), first };
+};
+
 /** `onSwap` turns on organiser editing: each slot of a match not started yet becomes a picker of the round's slots. */
-export const SpectatorBracket: React.FC<{ matches: Match[]; teams: Team[]; format?: string; flags?: boolean; onSwap?: (a: Slot, b: Slot) => void }> = ({ matches, teams, format, flags, onSwap }) => {
+export const SpectatorBracket: React.FC<{ matches: Match[]; teams: Team[]; format?: string; flags?: boolean; fip?: boolean; onSwap?: (a: Slot, b: Slot) => void }> = ({ matches, teams, format, flags, fip, onSwap }) => {
     const rounds = useMemo(() => orderRounds(bracketMatches(matches, format)), [matches, format]);
     const all = rounds.flat();
     if (!rounds.length) return <p className="spx-bracket__empty">The bracket appears here once the knockout matches are drawn.</p>;
@@ -95,8 +105,22 @@ export const SpectatorBracket: React.FC<{ matches: Match[]; teams: Team[]; forma
                                     return (
                                         <div className={`spx-bracket__team${won ? ' is-win' : ''}${done && !won ? ' is-out' : ''}`}>
                                             <span className={`spx-bracket__name${id ? '' : ' is-tbd'}`}>
-                                                <TeamFlags team={teams.find(t => t.id === id)} show={flags} />
-                                                <span>{name || slotLabel(m, side, all)}</span>
+                                                {(() => {
+                                                    const team = teams.find(t => t.id === id) as any;
+                                                    // FIP: one line per player, each with their own flag.
+                                                    const pair = fip && team && team.name !== 'Bye'
+                                                        ? [team.player1, team.player2].map(pl => ({ pl, n: surnameFirst(pl) })).filter(x => x.n) as { pl: any; n: { last: string; first: string } }[] : [];
+                                                    return pair.length ? (
+                                                        <span className="spx-bracket__fip">
+                                                            {pair.map(({ pl, n }, i) => (
+                                                                <span key={i}>
+                                                                    {flags && pl?.country && <CountryFlag code={pl.country} className="w-4 h-3 rounded-[1px] mr-1.5 align-[-1px]" />}
+                                                                    <b>{n.last}</b> {n.first}
+                                                                </span>
+                                                            ))}
+                                                        </span>
+                                                    ) : <><TeamFlags team={team} show={flags} /><span>{name || slotLabel(m, side, all)}</span></>;
+                                                })()}
                                             </span>
                                             <span className="spx-bracket__sets">
                                                 {sets.map((g, i) => <b key={i}>{g}</b>)}

@@ -20,6 +20,7 @@ import { Tournament, Match, Team, MatchStatus, SponsorTier } from '../types';
 import { isMatchInCategory, isTeamInCategory } from '../services/storage';
 import { formatLabel } from '../lib/teamAmericano';
 import { isTournamentFinished } from '../lib/lifecycle';
+import { isFipTournament } from '../lib/pointsSystems';
 import { Badge } from './ui/Badge';
 import { 
   LiveMatchesTable, 
@@ -337,7 +338,7 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
 
             {activeTab === 'bracket' && (
               <div className="animate-in fade-in duration-500">
-                <SpectatorBracket matches={matchesToDisplay} teams={tournament.teams || []} format={tournament.format} flags={!!tournament.showNationFlags} />
+                <SpectatorBracket matches={matchesToDisplay} teams={tournament.teams || []} format={tournament.format} flags={!!tournament.showNationFlags} fip={isFipTournament(tournament as any)} />
               </div>
             )}
 
