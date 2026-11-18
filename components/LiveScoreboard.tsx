@@ -22,6 +22,7 @@ import { TeamAmericanoStandings } from './TeamAmericanoStandings';
 import { isTournamentFinished } from '../lib/lifecycle';
 import { futsalSlug } from '../futsal/sport';
 import { isFipTournament } from '../lib/pointsSystems';
+import { isByeMatch, isByeTeam } from '../lib/byes';
 import { trackBroadcast } from '../lib/analytics';
 import { clockText as restClock, pointTag, restTimer } from '../lib/padelMoments';
 import './spectator.css';
@@ -1449,7 +1450,7 @@ const RecentMatchSummary = ({ match, teams }: any) => {
 
 export const StandingsTable = ({ tournamentId, categoryId, initialTeams, onTeamSelect, tournament, matches = [] }: { tournamentId: string, categoryId: string | null, initialTeams: any[], onTeamSelect?: (team: any) => void, tournament?: any, matches?: any[] }) => {
     const filterAccepted = (teams: any[]) => {
-        return (teams || []).filter((t: any) => t.status === 'ACCEPTED' || t.status === 'accepted');
+        return (teams || []).filter((t: any) => (t.status === 'ACCEPTED' || t.status === 'accepted') && !isByeTeam(t));
     };
 
     const [standings, setStandings] = useState<any[]>(() => {
@@ -1468,7 +1469,7 @@ export const StandingsTable = ({ tournamentId, categoryId, initialTeams, onTeamS
         // totals and spectators cannot self-heal them), so re-derive the stat columns from matches.
         const overlayDerivedStats = (teams: any[]) => {
             if (!tournament || !matches || matches.length === 0 || teams.length === 0) return teams;
-            const derived = calculateStats(teams, matches, tournament.format, tournament.categories, tournament.pointsSystem);
+            const derived = calculateStats(teams, matches.filter((m: any) => !isByeMatch(m, tournament.teams || [])), tournament.format, tournament.categories, tournament.pointsSystem);
             const byId = new Map(derived.map((d: any) => [d.id, d]));
             return teams.map((t: any) => {
                 const d: any = byId.get(t.id);
@@ -1488,7 +1489,7 @@ export const StandingsTable = ({ tournamentId, categoryId, initialTeams, onTeamS
             if ((filtered.length === 0 || allZeroes) && matches && matches.length > 0 && tournament) {
                 const categoryTeams = (tournament.teams || source).filter((t: any) => isTeamInCategory(t, categoryId, tournament));
                 if (categoryTeams.length > 0) {
-                    const computed = calculateStats(categoryTeams, matches, tournament.format, tournament.categories, tournament.pointsSystem);
+                    const computed = calculateStats(categoryTeams, matches.filter((m: any) => !isByeMatch(m, tournament.teams || [])), tournament.format, tournament.categories, tournament.pointsSystem);
                     setStandings(filterAccepted(computed));
                     return;
                 }

@@ -21,6 +21,7 @@ import { isMatchInCategory, isTeamInCategory } from '../services/storage';
 import { formatLabel } from '../lib/teamAmericano';
 import { isTournamentFinished } from '../lib/lifecycle';
 import { isFipTournament } from '../lib/pointsSystems';
+import { isByeMatch, isByeTeam } from '../lib/byes';
 import { Badge } from './ui/Badge';
 import { 
   LiveMatchesTable, 
@@ -152,6 +153,7 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
     let list = (tournament.categories && tournament.categories.length > 0) && selectedCategoryId
       ? (tournament.teams || []).filter((t: any) => isTeamInCategory(t, selectedCategoryId, tournament))
       : (tournament.teams || []);
+    list = list.filter((t: any) => !isByeTeam(t));
 
     if (searchQuery && searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -169,6 +171,8 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
     return list;
   }, [tournament, selectedCategoryId, searchQuery]);
 
+  // Everything except walkovers against a bye: the bracket keeps those, the rest of the page doesn't.
+  const playedMatches = React.useMemo(() => matchesToDisplay.filter((m: any) => !isByeMatch(m, tournament.teams || [])), [matchesToDisplay, tournament.teams]);
   const liveMatches = matchesToDisplay.filter((m: any) => 
     (m.status === MatchStatus.IN_PROGRESS || String(m.status).toUpperCase() === 'LIVE' || String(m.status).toUpperCase() === 'IN_PROGRESS') && 
     !m.winnerTeamId
@@ -185,7 +189,7 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
   ];
 
   // Hero facts.
-  const finishedCount = matchesToDisplay.filter((m: any) => m.status === MatchStatus.COMPLETED || String(m.status).toUpperCase() === 'COMPLETED' || String(m.status).toUpperCase() === 'FINISHED').length;
+  const finishedCount = playedMatches.filter((m: any) => m.status === MatchStatus.COMPLETED || String(m.status).toUpperCase() === 'COMPLETED' || String(m.status).toUpperCase() === 'FINISHED').length;
   const now = Date.now();
   const startTs = tournament.startDate ? new Date(tournament.startDate).getTime() : 0;
   const finished = isTournamentFinished(tournament, matches);
@@ -264,7 +268,7 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
         <div className="spx-stats">
           <div className="spx-stat"><span className="spx-stat__icon"><Activity size={16} /></span><strong>{liveMatches.length}</strong><small>Live now</small></div>
           <div className="spx-stat"><span className="spx-stat__icon"><Users size={16} /></span><strong>{(teamsToDisplay || []).length}</strong><small>Teams</small></div>
-          <div className="spx-stat"><span className="spx-stat__icon"><Layers size={16} /></span><strong>{finishedCount}<em>/{matchesToDisplay.length}</em></strong><small>Matches played</small></div>
+          <div className="spx-stat"><span className="spx-stat__icon"><Layers size={16} /></span><strong>{finishedCount}<em>/{playedMatches.length}</em></strong><small>Matches played</small></div>
           <div className="spx-stat spx-stat--prize"><span className="spx-stat__icon"><Trophy size={16} /></span><strong>{tournament.currency === 'USD' ? '$' : 'Rs'} {prize.toLocaleString()}</strong><small>{selectedCategoryId ? 'Category prize' : 'Prize pool'}</small></div>
         </div>
       </section>
@@ -302,7 +306,7 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
             {activeTab === 'schedule' && (
               <div className="animate-in fade-in duration-500">
                 <SpectatorSchedule
-                  matches={matchesToDisplay}
+                  matches={playedMatches}
                   teams={tournament.teams || []}
                   flags={!!tournament.showNationFlags}
                   onSelectTab={(tab) => {
@@ -315,14 +319,14 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
 
             {activeTab === 'results' && (
               <div className="animate-in fade-in duration-500">
-                <SpectatorResults matches={matchesToDisplay} teams={tournament.teams || []} tournament={tournament} />
+                <SpectatorResults matches={playedMatches} teams={tournament.teams || []} tournament={tournament} />
               </div>
             )}
 
             {activeTab === 'timeline' && (
               <div className="animate-in fade-in duration-500">
                 {(() => {
-                  const timelineMatches = matchesToDisplay.filter((m: any) => m.score?.history && m.score.history.length > 0);
+                  const timelineMatches = playedMatches.filter((m: any) => m.score?.history && m.score.history.length > 0);
                   if (timelineMatches.length === 0) {
                     return (
                       <div className="py-20 flex flex-col items-center justify-center text-center">
@@ -350,7 +354,7 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
                   categoryId={selectedCategoryId} 
                   initialTeams={teamsToDisplay} 
                   onTeamSelect={setSelectedTeam} 
-                  matches={matchesToDisplay}
+                  matches={playedMatches}
                 />
               </div>
             )}
