@@ -1,5 +1,6 @@
 // ISO 3166-1 alpha-2 country codes. Names come from the browser's Intl data
-// so there's no translation table to maintain; flags are SVGs from flagcdn.
+// so there's no translation table to maintain; flags are PNGs served from our own site (public/flags),
+// since some mobile networks block outside image hosts.
 const CODES = [
     'AD', 'AE', 'AF', 'AG', 'AI', 'AL', 'AM', 'AO', 'AR', 'AS', 'AT', 'AU', 'AW', 'AX', 'AZ',
     'BA', 'BB', 'BD', 'BE', 'BF', 'BG', 'BH', 'BI', 'BJ', 'BL', 'BM', 'BN', 'BO', 'BQ', 'BR', 'BS', 'BT', 'BW', 'BY', 'BZ',
@@ -50,7 +51,7 @@ export const COUNTRIES: CountryOption[] = (() => {
 })();
 
 export const getFlagUrl = (code?: string | null): string =>
-    code ? `https://flagcdn.com/${code.toLowerCase()}.svg` : '';
+    code ? `/flags/${code.toLowerCase()}.png` : '';
 
 // Accepts a code ("PK"), a name ("Pakistan") or a common alias, as typed in a
 // bulk-upload sheet. Returns the ISO code or '' if it can't be matched.

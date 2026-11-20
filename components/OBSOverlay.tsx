@@ -71,8 +71,8 @@ function fipSurnames(teamId?: string, playerNames?: string, teamObj?: any, tourn
   return String(playerNames || '').split(/\s*(?:&|\/)\s*/).filter(Boolean).map(n => fullSurname({ name: n })).filter(Boolean);
 }
 
-/** Flag image for the scorebug: a PNG (OBS browser sources render it reliably), 2x for sharpness. */
-const flagPng = (code: string) => `https://flagcdn.com/w80/${code.toLowerCase()}.png`;
+/** Flag image for the scorebug: a PNG from our own site (OBS browser sources render it reliably). */
+const flagPng = (code: string) => `/flags/${code.toLowerCase()}.png`;
 
 /** The pair's nation flags (one when both partners share a country). */
 function teamFlags(teamId?: string, teamObj?: any, tournament?: any): string[] {
