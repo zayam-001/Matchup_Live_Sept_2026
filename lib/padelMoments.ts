@@ -54,19 +54,29 @@ export const pointTag = (s: ScoreLike | undefined, server: Side | null): string 
     return best.kind === 'BREAK' && best.n > 1 ? `${best.n} BREAK POINTS` : `${best.kind} POINT`;
 };
 
-/** A running changeover or set-break countdown, or null. `now` in ms. */
-export const restTimer = (s: ScoreLike | undefined, now: number): { label: string; secondsLeft: number } | null => {
+// When this screen first saw each game score, per match. Point times come from the scorer's phone clock;
+// if that clock is ahead (one court's phone ran an hour fast, so the changeover showed 60:01), the countdown
+// runs from when the score reached this screen instead.
+const firstSeen = new Map<string, number>();
+const CLOCK_SLACK_MS = 5000;
+
+/** A running changeover or set-break countdown, or null. `now` in ms; `matchKey` identifies the match. */
+export const restTimer = (s: ScoreLike | undefined, now: number, matchKey = ''): { label: string; secondsLeft: number } | null => {
     if (!s || s.isTiebreak) return null;
     if (idx(s.p1Points) || idx(s.p2Points)) return null; // a point has been played since
     const last = s.history?.[s.history.length - 1];
-    const at = last ? Number(String(last).split('|')[1]) : NaN;
+    let at = last ? Number(String(last).split('|')[1]) : NaN;
     if (!Number.isFinite(at)) return null;
+    const seenKey = `${matchKey}|${s.p1Sets ?? 0}-${s.p2Sets ?? 0}|${s.p1Games ?? 0}-${s.p2Games ?? 0}|${s.history?.length ?? 0}`;
+    if (!firstSeen.has(seenKey)) firstSeen.set(seenKey, now);
+    if (at > now + CLOCK_SLACK_MS) at = firstSeen.get(seenKey)!;
     const games = (s.p1Games ?? 0) + (s.p2Games ?? 0);
     const setsPlayed = s.p1SetScores?.length ?? 0;
     const rest = games === 0 && setsPlayed > 0 ? { label: 'SET BREAK', total: SET_BREAK_SECONDS }
         : games % 2 === 1 && games >= 3 ? { label: 'CHANGEOVER', total: CHANGEOVER_SECONDS } : null;
     if (!rest) return null;
-    const secondsLeft = Math.ceil(rest.total - (now - at) / 1000);
+    // Never more than the full rest, whatever the clocks say.
+    const secondsLeft = Math.min(rest.total, Math.ceil(rest.total - (now - at) / 1000));
     return secondsLeft > 0 ? { label: rest.label, secondsLeft } : null;
 };
 

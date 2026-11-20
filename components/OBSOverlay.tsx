@@ -338,7 +338,7 @@ export default function OBSOverlay({
   const p2Points = match.score?.p2Points ?? "0";
   // FIP broadcast moments: SET / MATCH / BREAK POINT above the scores, changeover and set-break timers below.
   const moment = isFip && hasActiveSet && !isPointsMatch ? pointTag(match.score as any, isT1Serving ? 'A' : isT2Serving ? 'B' : null) : null;
-  const rest = isFip && !isMatchCompleted && !isPointsMatch ? restTimer(match.score as any, now) : null;
+  const rest = isFip && !isMatchCompleted && !isPointsMatch ? restTimer(match.score as any, now, match.id) : null;
 
   return (
     <div className={styles.obsPage}>

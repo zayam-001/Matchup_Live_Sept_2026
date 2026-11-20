@@ -2514,7 +2514,7 @@ const BroadcastMatchCard = ({ match: initialMatch, tournament, theme }: { match:
     // FIP moments, as on the OBS scorebug: SET / MATCH / BREAK POINT, then changeover and set-break countdowns.
     const fipMoments = isFipTournament(tournament as any) && live && !isPointsMatch;
     const momentLabel = fipMoments && setInProgress ? pointTag(score, servingSlot ? (servingSlot[0] === 1 ? 'A' : 'B') : null) : null;
-    const rest = fipMoments ? restTimer(score, nowTick) : null;
+    const rest = fipMoments ? restTimer(score, nowTick, match.id) : null;
     // On the big screen the moment takes over the card's header bar in a colour you can read from across the venue.
     const momentLook = momentLabel
         ? /MATCH/.test(momentLabel) ? { bg: '#DC2626', fg: '#FFFFFF' } : /SET/.test(momentLabel) ? { bg: '#F59E0B', fg: '#17253F' } : { bg: '#EA580C', fg: '#FFFFFF' }
