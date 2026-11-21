@@ -57,6 +57,10 @@
 .spx-btn:active { transform: scale(.97); }
 .spx-btn--primary { background: var(--spx-grad); color: #fff; box-shadow: 0 14px 36px rgba(229, 92, 48, .35), inset 0 1px 0 rgba(255, 255, 255, .3); border: 0; }
 .spx-btn--primary:hover { transform: translateY(-2px); box-shadow: 0 20px 46px rgba(229, 92, 48, .45); }
+/* "Watch Live" (court video): red, with a pulsing dot, so it reads apart from Broadcast mode. */
+.spx-btn--live, .spx-btn--live:hover { background: #DC2626; box-shadow: 0 14px 36px rgba(220, 38, 38, .35), inset 0 1px 0 rgba(255, 255, 255, .25); }
+.spx-btn__dot { width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: spxLiveDot 1.4s ease-in-out infinite; }
+@keyframes spxLiveDot { 50% { opacity: .35; } }
 .spx-btn--ghost { background: rgba(255, 255, 255, .08); color: #fff; border: 1px solid rgba(255, 255, 255, .2); backdrop-filter: blur(10px); }
 .spx-btn--ghost:hover { background: rgba(255, 255, 255, .14); border-color: rgba(229, 92, 48, .5); }
 .spx-btn--icon { width: 48px; padding: 0; justify-content: center; background: rgba(255, 255, 255, .08); color: #fff; border: 1px solid rgba(255, 255, 255, .2); }

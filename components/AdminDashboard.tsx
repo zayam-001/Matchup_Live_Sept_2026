@@ -36,6 +36,7 @@ import { NAME_DISPLAY_OPTIONS } from '../lib/nameDisplay';
 import { TeamAmericanoPanel } from './TeamAmericanoPanel';
 import { TeamAmericanoStandings } from './TeamAmericanoStandings';
 import { Tv } from 'lucide-react';
+import { youtubeLinkProblem } from '../lib/youtube';
 import { Logo } from './ui/Logo';
 import { FutsalCreateWizard, FutsalWorkspace, type FutsalView } from '../futsal/ui/AdminFutsal';
 import { GLOBAL_ADMINS as FUTSAL_ADMINS, SECTIONS as FUTSAL_SECTIONS, STATUS_LABEL as FUTSAL_STATUS } from '../futsal/ui/Admin';
@@ -1810,7 +1811,23 @@ const CourtObsLinks = ({ tournament }: { tournament: Tournament }) => {
         return () => { live = false; };
     }, [venueIds.join('|'), (tournament.courts || []).join('|')]);
     const link = (c: { id: string }) => `${window.location.origin}/#obs/${tournament.id}/court/${encodeURIComponent(c.id)}`;
+    // Each court's YouTube Live link (e.g. Maidan TV), keyed by court name like matches are.
+    const [streams, setStreams] = useState<Record<string, string>>(tournament.courtStreams || {});
+    const [savingStreams, setSavingStreams] = useState(false);
+    useEffect(() => { setStreams(tournament.courtStreams || {}); }, [tournament.id, JSON.stringify(tournament.courtStreams || {})]);
+    const streamsChanged = JSON.stringify(streams) !== JSON.stringify(tournament.courtStreams || {});
+    const problems = Object.values(streams).map(youtubeLinkProblem).filter(Boolean);
+    const saveStreams = async () => {
+        setSavingStreams(true);
+        try {
+            const { setCourtStreams } = await import('../services/storage');
+            await setCourtStreams(tournament.id, streams);
+            toast.success('Live streams saved', 'Watch live and broadcast mode now play each court\'s stream');
+        } catch (e: any) { toast.error('Could not save', e?.message || 'Try again'); }
+        setSavingStreams(false);
+    };
     return (
+        <>
         <Card variant="panel" className="p-5 mt-6">
             <div className="flex items-start justify-between gap-4 mb-4">
                 <div>
@@ -1831,6 +1848,37 @@ const CourtObsLinks = ({ tournament }: { tournament: Tournament }) => {
                 </div>
             ) : <p className="text-content-muted text-sm">Add courts to this tournament's venue to get a link per court.</p>}
         </Card>
+        {courts.length > 0 && (
+            <Card variant="panel" className="p-5 mt-6">
+                <div className="mb-4">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2"><PlayCircle size={18} className="text-[#E65C31]" /> Live video per court</h3>
+                    <p className="text-content-secondary text-sm mt-1">Paste each court's YouTube Live link (the live video, or the channel's youtube.com/channel/UC… link to always show what it's streaming). Spectators see it under Watch live, and broadcast mode plays it full screen with the scorebug on top. The stream must allow embedding in YouTube Studio.</p>
+                </div>
+                <div className="grid gap-2">
+                    {courts.map(c => {
+                        const v = streams[c.name] || '';
+                        const problem = youtubeLinkProblem(v);
+                        return (
+                            <div key={c.id}>
+                                <div className="flex items-center gap-2">
+                                    <span className="w-32 shrink-0 text-sm font-bold text-white truncate">{c.name}</span>
+                                    <input value={v} placeholder="https://www.youtube.com/live/…" onChange={e => setStreams(s => ({ ...s, [c.name]: e.target.value }))}
+                                        className={`flex-1 min-w-0 bg-surface-dark border rounded-lg p-2 text-xs text-white font-mono outline-none ${problem ? 'border-red-500/60' : 'border-white/10 focus:border-brand'}`} />
+                                </div>
+                                {problem && <p className="text-[11px] text-red-400 mt-1 ml-[8.5rem]">{problem}</p>}
+                            </div>
+                        );
+                    })}
+                </div>
+                <div className="flex justify-end mt-4">
+                    <button onClick={saveStreams} disabled={!streamsChanged || savingStreams || problems.length > 0}
+                        className="px-4 py-2 rounded-lg bg-brand text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed">
+                        {savingStreams ? 'Saving…' : 'Save live links'}
+                    </button>
+                </div>
+            </Card>
+        )}
+        </>
     );
 };
 

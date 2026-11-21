@@ -385,6 +385,8 @@ export interface Tournament {
   venueIds?: string[];
   sponsors?: Sponsor[]; 
   showNationFlags?: boolean; // Ask each player's country and show flags on broadcast
+  oldSlugs?: string[]; // Links from before a rename, still accepted
+  courtStreams?: Record<string, string>; // Court name -> YouTube Live link, played in Watch live and broadcast mode
   broadcastTheme?: BroadcastTheme;
   // What the broadcast screen and OBS overlay show for each side. Unset keeps
   // the original behaviour: player names on broadcast, team name on OBS.

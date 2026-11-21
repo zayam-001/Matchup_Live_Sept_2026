@@ -1572,6 +1572,13 @@ export const createTournament = async (t: any) => {
 };
 
 /** Organiser marks a padel tournament finished, or reopens it (it then stays open past its end date). */
+/** Saves the YouTube Live link of each court (court name -> link); an empty link removes that court's stream. */
+export const setCourtStreams = async (tId: string, streams: Record<string, string>) => {
+    if (!db) return;
+    const clean = Object.fromEntries(Object.entries(streams).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v));
+    await updateDoc(doc(db, "tournaments", tId), { courtStreams: clean });
+};
+
 export const setTournamentFinished = async (tId: string, finished: boolean) => {
     if (!db) return;
     await updateDoc(doc(db, "tournaments", tId), finished
@@ -1591,6 +1598,9 @@ export const updateTournament = async (tId: any, data: any, ...args: any[]) => {
             const updateObj: any = { ...cleanData(mainData), sponsors: deleteField() };
             if (mainData.name) {
                 updateObj.slug = slugify(mainData.name);
+                // Renaming changes the link; keep the old one so links already shared still open the tournament.
+                const before = (await getDoc(tRef)).data() as any;
+                if (before?.slug && before.slug !== updateObj.slug) updateObj.oldSlugs = arrayUnion(before.slug);
             }
             await updateDoc(tRef, updateObj);
         } else {

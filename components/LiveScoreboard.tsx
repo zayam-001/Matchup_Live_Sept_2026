@@ -160,16 +160,26 @@ export const LiveScoreboard: React.FC<{ initialTournamentId?: string, initialCat
   const futsalSelectedId = React.useMemo(() => {
     if (!selectedTournamentId) return null;
     if (selectedTournamentId.startsWith('futsal:')) return selectedTournamentId.slice(7);
-    if (tournaments.some(x => x.id === selectedTournamentId || x.slug === selectedTournamentId)) return null; // padel first
+    if (tournaments.some(x => x.id === selectedTournamentId || x.slug === selectedTournamentId || x.oldSlugs?.includes(selectedTournamentId))) return null; // padel first
     const f = futsalTournaments.find(x => x.id === `futsal:${selectedTournamentId}` || futsalSlug(x.name) === selectedTournamentId);
     return f ? String(f.id).slice(7) : null;
   }, [selectedTournamentId, tournaments, futsalTournaments]);
   const resolvedId = React.useMemo(() => {
     if (!selectedTournamentId || selectedTournamentId.startsWith('futsal:') || futsalSelectedId) return null;
     if (tournaments.length === 0) return selectedTournamentId;
-    const t = tournaments.find(x => x.id === selectedTournamentId || (x.slug && x.slug === selectedTournamentId) || x.name === selectedTournamentId);
+    const t = tournaments.find(x => x.id === selectedTournamentId || (x.slug && x.slug === selectedTournamentId) || x.name === selectedTournamentId)
+      || tournaments.find(x => x.oldSlugs?.includes(selectedTournamentId));
     return t ? t.id : selectedTournamentId;
   }, [selectedTournamentId, tournaments, futsalSelectedId]);
+
+  // A link from before the tournament was renamed: show the current one in the address bar.
+  useEffect(() => {
+    if (!selectedTournamentId || !resolvedId) return;
+    const t = tournaments.find(x => x.id === resolvedId);
+    if (t?.slug && t.oldSlugs?.includes(selectedTournamentId) && window.location.hash.includes(selectedTournamentId)) {
+      window.history.replaceState(null, '', window.location.hash.replace(selectedTournamentId, t.slug));
+    }
+  }, [selectedTournamentId, resolvedId, tournaments]);
 
   // An old "futsal:<id>" link: show the readable name in the address bar (no reload, no new history entry).
   useEffect(() => {

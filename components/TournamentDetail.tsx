@@ -22,6 +22,7 @@ import { formatLabel } from '../lib/teamAmericano';
 import { isTournamentFinished } from '../lib/lifecycle';
 import { isFipTournament } from '../lib/pointsSystems';
 import { isByeMatch, isByeTeam } from '../lib/byes';
+import { WatchLivePlayer, tournamentStreams } from './LiveVideo';
 import { Badge } from './ui/Badge';
 import { 
   LiveMatchesTable, 
@@ -206,6 +207,9 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
       else { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1800); }
     } catch { /* cancelled */ }
   };
+  // Organiser-set YouTube Live streams per court: the "Watch Live" player.
+  const hasStreams = tournamentStreams(tournament).length > 0;
+  const [showStreams, setShowStreams] = useState(false);
   const watchLive = () => {
     setActiveTab('live');
     contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -260,7 +264,12 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
                 <Tv size={16} /> {broadcastDisabled ? 'Broadcast ended' : 'Broadcast mode'}
               </button>
             )}
-            <button type="button" className={`spx-btn ${onEnterBroadcastMode ? 'spx-btn--ghost' : 'spx-btn--primary'}`} onClick={watchLive}><Play size={16} /> {liveMatches.length ? 'Watch live' : 'View matches'}</button>
+            {hasStreams && (
+              <button type="button" className="spx-btn spx-btn--primary spx-btn--live" onClick={() => setShowStreams(true)}>
+                <span className="spx-btn__dot" /> Watch Live
+              </button>
+            )}
+            <button type="button" className={`spx-btn ${onEnterBroadcastMode || hasStreams ? 'spx-btn--ghost' : 'spx-btn--primary'}`} onClick={watchLive}><Play size={16} /> View matches</button>
             <a className="spx-btn spx-btn--ghost" href={`#tournament/${(tournament as any).slug || tournament.id}`} target="_blank" rel="noopener noreferrer">Open tournament page <ArrowUpRight size={16} /></a>
             <button type="button" className="spx-btn spx-btn--icon" onClick={share} aria-label="Share tournament"><Share2 size={16} />{copied && <span className="spx-copied">Link copied</span>}</button>
           </div>
@@ -361,6 +370,8 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
           </div>
         </div>
       </div>
+
+      {showStreams && <WatchLivePlayer tournament={tournament} liveMatches={liveMatches} onClose={() => setShowStreams(false)} />}
 
       {/* Team details overlays */}
       {selectedTeam && (
