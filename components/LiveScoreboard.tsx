@@ -2206,6 +2206,7 @@ const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClos
             <header className="relative z-10 shrink-0 grid grid-cols-[1fr_auto] md:grid-cols-[1fr_auto_1fr] items-center gap-x-4 gap-y-2 min-h-[max(10vh,56px)]">
                 <div className="order-1 flex items-center h-full min-w-0 gap-[10px] md:gap-[1.2vw]">
                     <Logo size={84} variant="white" color={theme.logoColor} className="shrink-0 !w-[46px] md:!w-[clamp(48px,8vh,84px)] !h-auto aspect-[800/586]" />
+                    <span className="shrink-0 font-bold italic uppercase leading-none tracking-tight text-[18px] md:text-[clamp(20px,3.6vh,40px)]" style={{ color: theme.pageText }}>Matchup</span>
                     {tournament.organizerLogo && (
                         <>
                             <span className="w-px h-[clamp(28px,5.5vh,64px)] shrink-0" style={{ background: theme.pageMuted }} />
@@ -2622,6 +2623,11 @@ const BroadcastMatchCard = ({ match: initialMatch, tournament, theme }: { match:
                         >
                             {flashOverlayTitle}
                         </motion.span>
+                        {/* Match Up branding under the moment, as on TV graphics. */}
+                        <span className="flex items-center opacity-80" style={{ gap: '1cqw', marginTop: '3.5cqh' }}>
+                            <Logo size={48} variant="white" color={theme.logoColor} className="!w-[min(7cqh,3.2cqw)] !h-auto aspect-[800/586]" />
+                            <span className="font-bold italic uppercase leading-none" style={{ fontSize: 'min(5cqh, 2.2cqw)', letterSpacing: '0.12em' }}>Matchup</span>
+                        </span>
                     </motion.div>
                 )}
             </AnimatePresence>
