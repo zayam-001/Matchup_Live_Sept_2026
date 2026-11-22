@@ -26,6 +26,7 @@ const QuickPlaySession = named(() => import('./components/QuickPlaySession'), 'Q
 const OBSOverlay = lazy(() => import('./components/OBSOverlay'));
 const CourtOBS = lazy(() => import('./components/CourtOBS'));
 const FutsalApp = lazy(() => import('./futsal/FutsalApp'));
+const PadelTournamentPage = lazy(() => import('./components/PadelTournamentPage'));
 const FutsalPortal = lazy(() => import('./futsal/ui/FutsalPortal'));
 const QuickReferee = lazy(() => import('./futsal/ui/QuickPlay'));
 
@@ -93,7 +94,7 @@ const App: React.FC = () => {
       // Check if it's a dynamic tournament path route like /register/tournament-slug or /tournament/slug
       if (currentPath.startsWith('/register/') || currentPath.startsWith('/tournament/')) {
          const slug = currentPath.split('/').pop();
-         window.location.replace(`${window.location.origin}/#tournament/${slug}`);
+         window.location.replace(`${window.location.origin}/#${currentPath.startsWith('/register/') ? 'register' : 'tournament'}/${slug}`);
          return;
       }
       
@@ -129,8 +130,8 @@ const App: React.FC = () => {
       if ((hash === 'register' || hash === 'tournament') && segments[1]) {
         setRegistrationTournamentId(segments[1]);
         if (hash === 'tournament') {
-            // We use standard registration component for tournament details
-            setActiveTab('register');
+            // The public tournament page (like the futsal one); registration stays at #register/<slug>.
+            setActiveTab('padelTournament');
             return;
         }
       } else if (hash === 'register') {
@@ -285,6 +286,10 @@ const App: React.FC = () => {
 
   if (loading) {
     return <BootSplash />;
+  }
+
+  if (activeTab === 'padelTournament' && registrationTournamentId) {
+    return <Suspense fallback={<BootSplash />}><PadelTournamentPage id={registrationTournamentId} /></Suspense>;
   }
 
   if (activeTab === 'futsal') {

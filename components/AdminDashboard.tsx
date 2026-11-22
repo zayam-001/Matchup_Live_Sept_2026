@@ -3599,7 +3599,7 @@ const OverviewTab = ({ tournament, categoryId, onEdit, venues = [] }: { tourname
     const maxTeams = category ? category.maxTeams : tournament.maxTeams;
     
     const tournamentDisplayId = tournament.slug || tournament.id;
-    const registrationUrl = `${window.location.origin}${window.location.pathname}#/tournament/${tournamentDisplayId}`;
+    const registrationUrl = `${window.location.origin}${window.location.pathname}#register/${tournamentDisplayId}`;
     const refereeUrl = `${window.location.origin}${window.location.pathname}#/referee/${tournamentDisplayId}`;
 
     // Resolve venue name correctly
