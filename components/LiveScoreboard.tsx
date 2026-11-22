@@ -11,6 +11,7 @@ import { Search, Filter, ChevronRight, ChevronLeft, Play, Info, Trophy, History,
 import { Avatar } from './ui/Avatar';
 import { Card } from './ui/Card';
 import { Logo } from './ui/Logo';
+import { QRCodeSVG } from 'qrcode.react';
 import { Badge } from './ui/Badge';
 import { getEffectiveEvents } from '../services/scoreEngine';
 import { MatchResultCard } from './MatchResultCard';
@@ -2331,13 +2332,31 @@ const BroadcastMode = ({ tournament, onClose }: { tournament: Tournament, onClos
                         </div>
                     </div>
                 ) : (
-                    <div className="h-full flex flex-col items-center justify-center gap-3 text-center">
-                        <Tv size={44} style={{ color: theme.pageMuted }} />
-                        <div className="font-bold uppercase tracking-[0.25em] text-[clamp(16px,3vh,36px)]">
-                            No live matches right now
+                    // Between matches the big screen invites the crowd to join: a QR to sign up and follow
+                    // stats and scores (tagged so Analytics can count sign-ups from the venue screen).
+                    <div className="h-full flex flex-col md:flex-row items-center justify-center gap-[4vh] md:gap-[5vw] text-center md:text-left">
+                        <div className="shrink-0 bg-white rounded-[2vh] p-[2.2vh] shadow-2xl">
+                            <QRCodeSVG
+                                value={`https://matchup.com.pk/?utm_source=broadcast&utm_medium=qr&utm_campaign=${encodeURIComponent(tournament.slug || tournament.id)}#login`}
+                                size={512}
+                                level="M"
+                                className="block !w-[min(42vh,70vw)] md:!w-[min(46vh,34vw)] !h-auto"
+                                imageSettings={{ src: '/apple-touch-icon.png', height: 72, width: 72, excavate: true }}
+                            />
                         </div>
-                        <div className="font-bold uppercase tracking-[0.2em] text-[clamp(11px,1.6vh,18px)]" style={{ color: theme.pageMuted }}>
-                            Scores appear here as soon as a referee starts a match
+                        <div className="max-w-[min(90vw,46vw)] md:max-w-[42vw]">
+                            <div className="font-bold uppercase tracking-[0.25em] text-[clamp(12px,2vh,24px)]" style={{ color: theme.pageMuted }}>
+                                No live matches right now
+                            </div>
+                            <div className="italic font-bold uppercase leading-[1.05] mt-[1.2vh] text-[clamp(30px,7vh,88px)]">
+                                Scan to join<br />Match Up
+                            </div>
+                            <div className="font-semibold mt-[2vh] leading-snug text-[clamp(14px,2.6vh,30px)]" style={{ color: theme.pageText }}>
+                                Sign up free to see your stats, live scores and results{tournament.name ? ` from ${tournament.name}` : ''}.
+                            </div>
+                            <div className="font-bold uppercase tracking-[0.18em] mt-[2vh] text-[clamp(12px,2vh,24px)]" style={{ color: theme.pageMuted }}>
+                                matchup.com.pk
+                            </div>
                         </div>
                     </div>
                 )}
