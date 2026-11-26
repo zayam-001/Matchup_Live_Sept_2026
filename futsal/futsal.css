@@ -363,22 +363,77 @@
 .fx-player-btn.is-on { border-color: rgba(255, 138, 91, .7); background: rgba(229, 92, 48, .16); }
 .fx-player-btn span { overflow: hidden; text-overflow: ellipsis; }
 
-/* OBS scorebug */
-.fx-obs { position: fixed; inset: 0; background: transparent; font-family: var(--fx-head); }
-.fx-bug { position: absolute; left: 40px; top: 36px; display: flex; align-items: stretch; height: 52px; border-radius: 10px; overflow: hidden; color: #fff; box-shadow: 0 10px 40px rgba(0, 0, 0, .45); }
-.fx-bug__brand { display: grid; place-items: center; width: 52px; background: var(--fx-grad); }
-.fx-bug__brand svg { width: 28px; height: 28px; color: #fff; }
-.fx-bug__team { display: flex; align-items: center; gap: 10px; padding: 0 14px; background: linear-gradient(180deg, #0C1B61, #020D45); font-style: italic; font-size: 26px; font-weight: 800; letter-spacing: .06em; }
-.fx-bug__team i { width: 6px; align-self: stretch; margin: 10px 0; border-radius: 3px; background: var(--c); }
-.fx-bug__score { display: grid; place-items: center; min-width: 96px; padding: 0 12px; background: #fff; color: #C23F18; font-style: italic; font-size: 32px; font-weight: 800; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
-.fx-bug__clock { display: grid; place-items: center; min-width: 92px; padding: 0 12px; background: #01082E; color: #fff; font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.fx-bug__sub { position: absolute; left: 40px; top: 92px; display: flex; gap: 8px; }
-.fx-bug__sub span { padding: 4px 10px; border-radius: 6px; background: rgba(3, 9, 38, .85); color: #fff; font-size: 16px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-.fx-pop { position: absolute; left: 50%; bottom: 70px; display: flex; align-items: center; gap: 18px; padding: 18px 34px; border-radius: 16px; transform: translateX(-50%); background: linear-gradient(100deg, #D24B22, #8c2f24 58%, #2a2a78); color: #fff; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); animation: fx-pop-in .6s cubic-bezier(.22, 1, .36, 1); }
-.fx-pop b { font-size: 54px; font-style: italic; font-weight: 800; letter-spacing: .02em; }
-.fx-pop small { display: block; color: #FFD0B8; font-size: 18px; font-weight: 700; letter-spacing: .3em; }
-.fx-pop span { font-size: 30px; font-weight: 700; text-transform: uppercase; }
-@keyframes fx-pop-in { from { opacity: 0; transform: translate(-50%, 30px) scale(.95); } }
+/* OBS overlay: flat European-night scorebug and bottom panels. Sized for a 1920x1080 browser source. */
+.obs {
+  --ob-bar: linear-gradient(180deg, #1F2BB8, #141C8C); --ob-panel: rgba(28, 36, 150, .86); --ob-clock: #EEF1FA; --ob-ink: #141C8C;
+  --ob-head: #7FB4FF; --ob-edge: #E2453A; --ob-text: #fff;
+  position: fixed; inset: 0; background: transparent; color: var(--ob-text);
+  font-family: 'Barlow Condensed', var(--font-display, Poppins), sans-serif; font-style: normal;
+}
+.obs--crimson { --ob-bar: linear-gradient(180deg, #B3152F, #7E0E22); --ob-panel: rgba(110, 12, 32, .86); --ob-clock: #F8EEF0; --ob-ink: #7E0E22; --ob-head: #FFB3C0; --ob-edge: #fff; }
+.obs b, .obs em { font-style: normal; }
+
+/* Bar shared by the scorebug and panels: HOME > 2 | 1 < AWAY */
+.obs-bar { display: flex; align-items: center; background: var(--ob-bar); font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.obs-bar__name { display: flex; align-items: center; gap: 10px; flex: 1 1 0; justify-content: center; min-width: 0; overflow: hidden; white-space: nowrap; font-weight: 500; }
+.obs-bar__score { display: flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+.obs-bar__score i { width: 1.5px; align-self: stretch; margin: 18% 0; background: rgba(255, 255, 255, .35); }
+.obs-bar__score small { margin-left: 14px; font-size: .5em; letter-spacing: .1em; opacity: .85; }
+.obs-bar__score em { font-size: .8em; letter-spacing: .1em; opacity: .85; }
+.obs-chev { flex: none; height: 62%; width: auto; color: rgba(255, 255, 255, .35); }
+.obs-reds { display: inline-flex; gap: 3px; }
+.obs-reds i { width: 10px; height: 15px; border-radius: 2px; background: #FF2D2D; box-shadow: 0 0 0 1px rgba(255, 255, 255, .7); }
+
+/* Scorebug */
+.obs-bug { position: absolute; left: 56px; top: 44px; animation: obs-slide .7s cubic-bezier(.22, 1, .36, 1); }
+.obs-bug__main { display: flex; align-items: stretch; height: 64px; box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
+.obs-bug__comp { display: grid; place-items: center; width: 64px; padding: 6px; background: var(--ob-bar); }
+.obs-bug__comp img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.obs-bug__comp > svg, .obs-bug__comp > span { max-width: 100%; }
+.obs-bug__clock { display: grid; place-items: center; min-width: 176px; padding: 0 18px; background: var(--ob-clock); color: var(--ob-ink); font-size: 46px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: .06em; }
+.obs-bug__clock.is-phase { font-size: 38px; letter-spacing: .14em; }
+.obs-bug__gap { width: 8px; background: var(--ob-clock); margin-left: 10px; }
+.obs-bug .obs-bar { gap: 14px; min-width: 520px; padding: 0 22px; font-size: 46px; }
+.obs-bug .obs-bar__score { gap: 18px; min-width: 120px; }
+.obs-bug .obs-bar__score span { min-width: 30px; text-align: center; }
+.obs-bug__edge { width: 7px; background: var(--ob-edge); }
+.obs-bug__added { align-self: center; display: grid; place-items: center; height: 44px; margin-left: 10px; padding: 0 14px; background: var(--ob-clock); color: var(--ob-ink); font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+.obs-bug__strip { display: flex; gap: 6px; margin-top: 6px; margin-left: 64px; }
+.obs-bug__strip > span { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; background: rgba(0, 0, 0, .6); font-size: 17px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+.obs-bug__strip > span.is-alert { background: #E2453A; }
+.obs-bug__brand > * { width: 20px !important; height: auto !important; }
+.obs-pens { left: 56px !important; top: 150px !important; }
+
+/* Bottom panels: kick-off, half-time, full-time and goal */
+.obs-card { position: absolute; left: 50%; bottom: 64px; width: min(1560px, calc(100% - 112px)); transform: translateX(-50%); animation: obs-up .7s cubic-bezier(.22, 1, .36, 1); }
+.obs-card__panel { margin: 0 70px; padding: 12px 40px 16px; background: var(--ob-panel); backdrop-filter: blur(6px); text-align: center; }
+.obs-card__head { color: var(--ob-head); font-size: 30px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; }
+.obs-card__scorers { display: grid; grid-template-columns: 1fr 1fr; gap: 150px; margin-top: 4px; font-size: 32px; font-weight: 500; letter-spacing: .06em; line-height: 1.35; text-transform: uppercase; }
+.obs-card__scorers ul { margin: 0; padding: 0; list-style: none; text-align: right; }
+.obs-card__scorers ul + ul { text-align: left; }
+.obs-card__note { margin-top: 2px; font-size: 26px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; opacity: .9; }
+.obs-card__goal { margin-top: 2px; font-size: 44px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.obs-card__goal span { color: var(--ob-head); font-weight: 500; }
+.obs-card--goal .obs-card__head { font-size: 38px; font-weight: 700; letter-spacing: .3em; }
+.obs-card__row { position: relative; display: flex; align-items: center; height: 74px; }
+.obs-card__row .obs-bar { flex: 1; align-self: stretch; margin: 0 40px; padding: 0 80px; font-size: 48px; border-top: 3px solid var(--ob-edge); }
+.obs-card__row .obs-bar__score { gap: 26px; min-width: 150px; }
+.obs-card__row .obs-bar__name { font-weight: 500; letter-spacing: .1em; }
+.obs-card__crest { position: absolute; top: 50%; z-index: 1; display: grid; place-items: center; width: 116px; height: 116px; border-radius: 50%; background: #fff; transform: translateY(-50%); box-shadow: 0 8px 24px rgba(0, 0, 0, .35); }
+.obs-card__row > .obs-card__crest:first-child { left: 0; }
+.obs-card__row > .obs-card__crest:last-child { right: 0; }
+
+/* Booking */
+.obs-booking { position: absolute; left: 50%; bottom: 80px; display: flex; align-items: center; transform: translateX(-50%); animation: obs-up .6s cubic-bezier(.22, 1, .36, 1); }
+.obs-booking .obs-card__crest { position: relative; top: auto; width: 92px; height: 92px; transform: none; }
+.obs-booking__bar { display: flex; align-items: center; gap: 22px; height: 70px; margin-left: -20px; padding: 0 40px 0 46px; background: var(--ob-bar); border-right: 7px solid var(--ob-edge); font-size: 42px; letter-spacing: .08em; text-transform: uppercase; }
+.obs-booking__bar b { font-weight: 500; }
+.obs-booking__bar small { color: var(--ob-head); font-size: 32px; }
+.obs-booking__card { width: 30px; height: 42px; border-radius: 4px; background: #FFD21F; box-shadow: 0 4px 12px rgba(0, 0, 0, .35); }
+.obs-booking__card.is-red { background: #FF2D2D; }
+
+@keyframes obs-slide { from { opacity: 0; transform: translateX(-40px); } }
+@keyframes obs-up { from { opacity: 0; transform: translate(-50%, 40px); } }
 
 /* Rankings */
 .fx-rank { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto auto; align-items: center; gap: 14px; width: 100%; min-height: 64px; padding: 7px calc(18px + var(--fx-cut)); border: 0; background: var(--fx-row); color: #fff; text-align: left; clip-path: polygon(var(--fx-cut) 0, 100% 0, calc(100% - var(--fx-cut)) 100%, 0 100%); transition: transform .22s ease, filter .22s ease; }
@@ -396,7 +451,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .fx-hero__ring, .fx-pill--live::before, .fx h1 em { animation: none; }
-  .fx-pop { animation: none; }
+  .obs-bug, .obs-card, .obs-booking { animation: none; }
 }
 @media print {
   .fx { background: #fff; color: #000; }

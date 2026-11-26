@@ -45,6 +45,8 @@ export const TournamentPage: React.FC<{ id: string; tab?: string }> = ({ id, tab
     const champion = final ? teams.find(x => x.id === final.winnerId) : undefined;
     const accepted = teams.filter(x => x.categoryId === cat.id && x.status === 'ACCEPTED');
     const hasKo = catMatches.some(m => isKnockout(m.stage));
+    // Once a ball has been kicked, the page is about the competition, not sign-ups.
+    const openForTeams = t.status === 'REGISTRATION' && !matches.some(m => m.status !== 'SCHEDULED');
     const visibleTabs = TABS.filter(x => x.id !== 'leaderboard' && (x.id !== 'bracket' || hasKo || hasKnockoutStage(cat.format)) && (x.id !== 'standings' || cat.format !== 'KNOCKOUT'));
 
     return (
@@ -63,7 +65,7 @@ export const TournamentPage: React.FC<{ id: string; tab?: string }> = ({ id, tab
                             </div>
                         </div>
                         <div className="fx-row">
-                            {t.status === 'REGISTRATION' && <a className="fx-btn fx-btn--primary" href={`#${publicPath(t)}/register`}>Register a team</a>}
+                            {openForTeams && <a className="fx-btn fx-btn--primary" href={`#${publicPath(t)}/register`}>Register a team</a>}
                             <button type="button" className="fx-btn" onClick={share}><Share2 />Share</button>
                         </div>
                     </div>
