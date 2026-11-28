@@ -28,6 +28,8 @@ export interface QuickScore {
     goals?: [number, number]; fouls?: [number, number]; clock?: QuickClock;
     /** A penalty shootout in progress (or done) for the current game. */
     phase?: 'play' | 'pens'; pens?: PenKick[];
+    /** The side the referee picked (after the toss) to take the first shootout kick. */
+    pensFirst?: QuickSide;
     /** Winner stays sessions only. */
     rot?: Rotation;
 }
@@ -166,10 +168,12 @@ export const pensTally = (kicks: PenKick[] = []) => {
     kicks.forEach(k => { if (k.side === 'home') { t.th++; if (k.scored) t.h++; } else { t.ta++; if (k.scored) t.a++; } });
     return t;
 };
-/** The side to kick next: the first side keeps going first. */
-export const pensNext = (kicks: PenKick[] = []): QuickSide => {
+/** The side to kick next: the referee's pick from the toss, then the first side keeps going first. */
+export const pensNext = (kicks: PenKick[] = [], pensFirst: QuickSide = 'home'): QuickSide => {
+    const first = kicks[0]?.side || pensFirst;
     const { th, ta } = pensTally(kicks);
-    return th > ta ? 'away' : 'home';
+    const [f, o] = first === 'home' ? [th, ta] : [ta, th];
+    return f > o ? (first === 'home' ? 'away' : 'home') : first;
 };
 /** True once one side can't be caught in the first N kicks, or a sudden-death round is decided. */
 export const pensDecided = (kicks: PenKick[] = [], bestOf = 5) => {
@@ -212,7 +216,7 @@ export const finishGame = (m: QuickMatch): { score: QuickScore; winner: number |
     const since = rot.since.map((x, i) => (i === next && next !== off ? games.length : x));
     const queue = rot.queue.length ? [...rot.queue.slice(1), off] : [];
     return {
-        score: { ...m.score, goals: [0, 0], fouls: [0, 0], phase: 'play', pens: [], clock: { period: 1, running: false, elapsed: 0 }, rot: { on, queue, since, games } },
+        score: { ...m.score, goals: [0, 0], fouls: [0, 0], phase: 'play', pens: [], pensFirst: undefined, clock: { period: 1, running: false, elapsed: 0 }, rot: { on, queue, since, games } },
         winner, off, on: next,
     };
 };

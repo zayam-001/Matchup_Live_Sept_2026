@@ -3,7 +3,7 @@ import { ChevronDown, Flag, Pause, Play, RotateCcw, Square, Star, Undo2, X } fro
 import { loginReferee } from '../../services/storage';
 import {
     addEvent, adjustClock, displayClock, cardsFor, undoLast, clockMs, isKnockout, endPeriod, finishMatch, fmtClock, forfeitMatch, foulsFor, nextAction, pauseClock,
-    periodLengthMs, phaseLabel, resetMatch, resolveSlots, resumeClock, scoreOf, shootoutDecided, shootoutNext, shortHanded, startPeriod, timeoutsLeft,
+    periodLengthMs, phaseLabel, resetMatch, resolveSlots, resumeClock, scoreOf, shootoutDecided, shootoutKicks, shootoutNext, shortHanded, startPeriod, timeoutsLeft,
 } from '../engine';
 import { GOAL_TYPES, goalTypeLabel } from '../presets';
 import { isDemo, saveFutsalMatch, saveFutsalMatches } from '../store';
@@ -251,6 +251,15 @@ export const Console: React.FC<{ t: FutsalTournament; cat: FutsalCategory; teams
                         </div>
                         {onBack ? <button type="button" className="fx-btn fx-sc__big" onClick={onBack}>Next match</button> : <a className="fx-btn fx-sc__big" href={`#${scorePath(t)}`}>Next match</a>}
                     </div>
+                ) : m.periodState === 'SHOOTOUT' && !m.shootoutFirst && !shootoutKicks(m).length ? (
+                    <div className="fx-stack" style={{ marginTop: 12 }}>
+                        <div className="fx-note">Penalty shootout. After the toss, pick the team that kicks first.</div>
+                        <div className="fx-sc__main">
+                            {(['home', 'away'] as const).map(side => (
+                                <button key={side} type="button" className="fx-sc__btn" style={{ minHeight: 72, fontSize: 20 }} onClick={() => commit({ ...m, shootoutFirst: side, updatedAt: Date.now() }, `${team(side).name} kick first`)}>{team(side).name}</button>
+                            ))}
+                        </div>
+                    </div>
                 ) : m.periodState === 'SHOOTOUT' ? (
                     <div className="fx-stack" style={{ marginTop: 12 }}>
                         <div className="fx-note">Penalty shootout. Next kick: <b>{team(shootoutNext(m)).name}</b></div>
@@ -260,7 +269,7 @@ export const Console: React.FC<{ t: FutsalTournament; cat: FutsalCategory; teams
                         </div>
                         <ShootoutDots m={m} home={home} away={away} />
                         {shootoutDecided(m) && <button type="button" className="fx-btn fx-btn--primary" onClick={() => commit(finishMatch(m, 'penalties'))}>Confirm result</button>}
-                        <button type="button" className="fx-btn" onClick={() => commit(undoLastPen(m))}><Undo2 />Undo last kick</button>
+                        <button type="button" className="fx-btn" onClick={() => commit(undoLastPen(m), 'Undone')}><Undo2 />{shootoutKicks(m).length ? 'Undo last kick' : 'Undo: pick who kicks first again'}</button>
                     </div>
                 ) : (
                     <>
@@ -539,10 +548,12 @@ const RatingsForm: React.FC<{ home: FutsalTeam; away: FutsalTeam; m: FutsalMatch
     );
 };
 
+/** Take back the last kick; with no kicks left, take back the referee's pick of who kicks first. */
 const undoLastPen = (m: FutsalMatch): FutsalMatch => {
     let i = m.events.length - 1;
     while (i >= 0 && m.events[i].type !== 'PEN_SCORED' && m.events[i].type !== 'PEN_MISSED') i--;
-    return i < 0 ? m : { ...m, events: m.events.filter((_, k) => k !== i), updatedAt: Date.now() };
+    if (i < 0) return { ...m, shootoutFirst: undefined, updatedAt: Date.now() };
+    return { ...m, events: m.events.filter((_, k) => k !== i), updatedAt: Date.now() };
 };
 
 const ShootoutDots: React.FC<{ m: FutsalMatch; home: FutsalTeam; away: FutsalTeam }> = ({ m, home, away }) => (

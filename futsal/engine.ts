@@ -201,10 +201,10 @@ export const nextAction = (m: FutsalMatch, rules: FutsalRules): { label: string;
 export const shootoutKicks = (m: FutsalMatch) => (m.events || []).filter(e => e.type === 'PEN_SCORED' || e.type === 'PEN_MISSED');
 const kicks = shootoutKicks;
 
-/** Which side kicks next; the side that kicked first keeps going first. */
+/** Which side kicks next: the referee's pick from the toss, then whoever kicked first keeps going first. */
 export const shootoutNext = (m: FutsalMatch): Side => {
     const k = kicks(m);
-    if (!k.length) return 'home';
+    if (!k.length) return m.shootoutFirst || 'home';
     const first = k[0].side;
     const h = k.filter(e => e.side === first).length, a = k.length - h;
     return h > a ? other(first) : first;
@@ -270,7 +270,7 @@ export const forfeitMatch = (m: FutsalMatch, rules: FutsalRules, by: Side): Futs
 
 export const resetMatch = (m: FutsalMatch): FutsalMatch => stamp({
     ...m, status: 'SCHEDULED', period: 0, periodState: 'PRE', clock: { elapsedMs: 0, runningSince: null },
-    events: [], winnerId: null, decidedBy: undefined, forfeitBy: undefined, motm: undefined, ratings: undefined,
+    events: [], winnerId: null, decidedBy: undefined, shootoutFirst: undefined, forfeitBy: undefined, motm: undefined, ratings: undefined,
 });
 
 // ---------------------------------------------------------------- fixtures

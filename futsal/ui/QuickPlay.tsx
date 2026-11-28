@@ -879,7 +879,10 @@ const TeamBoard: React.FC<{ m: QuickMatch; canScore: boolean; save: Save } & Boa
         if (!(await confirmDialog({ title: `End the ${periodName(c.period).toLowerCase()}?`, body: `${goals[0]}-${goals[1]}. The clock resets for the ${periodName(c.period + 1).toLowerCase()}${futsal ? ' and fouls go back to zero' : ''}.`, confirmLabel: 'End period' }))) return;
         save(log(m, { ...m.score, clock: { period: c.period + 1, running: false, elapsed: 0 }, ...(futsal ? { fouls: [0, 0] as [number, number] } : {}) }, { side: 'home', kind: 'period' }));
     };
-    const toPens = () => save(log(m, { ...m.score, phase: 'pens', pens: [], clock: stopClock }, { side: 'home', kind: 'period' }));
+    const toPens = () => save(log(m, { ...m.score, phase: 'pens', pens: [], pensFirst: undefined, clock: stopClock }, { side: 'home', kind: 'period' }));
+    // The referee picks the first kicker after the toss; logged like any action so Undo takes it back.
+    const pickFirst = (side: QuickSide) => save(log(m, { ...m.score, pensFirst: side }, { side, kind: 'period' }));
+    const needsToss = shootout && !kicks.length && !m.score.pensFirst;
     const endGame = async () => {
         if (level && !kicks.length && m.format.drawRule === 'pens') {
             if (!(await confirmDialog({ title: 'Level: penalties', body: `It’s ${goals[0]}-${goals[1]}. A best-of-${best} shootout decides who stays on.`, confirmLabel: 'Start shootout' }))) return;
@@ -923,7 +926,7 @@ const TeamBoard: React.FC<{ m: QuickMatch; canScore: boolean; save: Save } & Boa
         if (f[i] === 5) toast.info(`${team(side).name}: 5 fouls`, 'From the next foul the other team gets a 10-metre free kick.');
     };
     const kick = (scored: boolean, name?: string) => {
-        const side = pensNext(kicks);
+        const side = pensNext(kicks, m.score.pensFirst);
         const next = [...kicks, { side, scored, ...(name ? { name } : {}) }];
         setPick(null);
         save(log(m, { ...m.score, pens: next }, { side, kind: 'period' }));
@@ -986,13 +989,20 @@ const TeamBoard: React.FC<{ m: QuickMatch; canScore: boolean; save: Save } & Boa
                             );
                         })}
                     </div>
-                    {canScore && live && (decided
+                    {canScore && live && (needsToss
+                        ? <>
+                            <span className="qx-shoot__next">After the toss, pick the team that kicks first</span>
+                            <div className="qx-shoot__btns">
+                                {(['home', 'away'] as const).map(side => <button key={side} type="button" className="qx-score-btn" onClick={() => pickFirst(side)}>{team(side).name}</button>)}
+                            </div>
+                        </>
+                        : decided
                         ? <button type="button" className="qx-cta qx-cta--wide" onClick={confirmPens}><Check size={16} /> Confirm: {(pt.h > pt.a ? team('home') : team('away')).name} win on penalties</button>
                         : <>
-                            <span className="qx-shoot__next">Kick {pt.th + pt.ta + 1}{pt.th >= best && pt.ta >= best ? ' · sudden death' : ''}: <b>{team(pensNext(kicks)).name}</b></span>
+                            <span className="qx-shoot__next">Kick {pt.th + pt.ta + 1}{pt.th >= best && pt.ta >= best ? ' · sudden death' : ''}: <b>{team(pensNext(kicks, m.score.pensFirst)).name}</b></span>
                             <div className="qx-shoot__btns">
-                                <button type="button" className="qx-score-btn" onClick={() => { setPenIn(true); setPick({ side: pensNext(kicks), kind: 'shoot' }); }}>Scored</button>
-                                <button type="button" className="qx-score-btn qx-score-btn--miss" onClick={() => { setPenIn(false); setPick({ side: pensNext(kicks), kind: 'shoot' }); }}>Missed / saved</button>
+                                <button type="button" className="qx-score-btn" onClick={() => { setPenIn(true); setPick({ side: pensNext(kicks, m.score.pensFirst), kind: 'shoot' }); }}>Scored</button>
+                                <button type="button" className="qx-score-btn qx-score-btn--miss" onClick={() => { setPenIn(false); setPick({ side: pensNext(kicks, m.score.pensFirst), kind: 'shoot' }); }}>Missed / saved</button>
                             </div>
                         </>)}
                 </div>

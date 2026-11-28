@@ -199,6 +199,8 @@ export interface FutsalMatch {
     lineups?: { home?: Lineup; away?: Lineup };
     winnerId?: string | null;
     decidedBy?: DecidedBy;
+    /** The side the referee picked (after the toss) to take the first shootout kick. */
+    shootoutFirst?: Side;
     forfeitBy?: Side;
     motm?: string;
     /** Optional referee ratings after full time, 1–5 per player id. */
